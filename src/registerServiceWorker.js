@@ -4,16 +4,25 @@ import { register } from 'register-service-worker';
 if (process.env.NODE_ENV === 'production') {
   register(`${process.env.BASE_URL}service-worker.js`, {
     registered(registration) {
-      // Poll for updates every hour while the app is open. This catches
-      // updates the user might miss because iOS keeps the standalone PWA
-      // alive for days at a time.
-      if (registration) {
-        setInterval(() => {
-          registration.update().catch(() => {
-            /* ignore */
-          });
-        }, 60 * 60 * 1000);
-      }
+      if (!registration) return;
+
+      // Aggressive update detection so a user who hits the deployed URL
+      // gets the latest build without having to manually clear caches.
+      // Check immediately on registration, again whenever the tab regains
+      // focus (covering iOS PWAs that stay alive for days), and as a final
+      // safety net once an hour.
+      const tryUpdate = () =>
+        registration.update().catch(() => {
+          /* ignore — offline, server hiccup, etc. */
+        });
+
+      tryUpdate();
+      setInterval(tryUpdate, 60 * 60 * 1000);
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') tryUpdate();
+      });
+      window.addEventListener('focus', tryUpdate);
     },
 
     updated() {

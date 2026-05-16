@@ -182,7 +182,7 @@ import waypointwaypoints from '@/assets/font-awesome-custom/js/waypoint/waypoint
 import waypointweather_station from '@/assets/font-awesome-custom/js/waypoint/weather_station';
 import waypointwebcam from '@/assets/font-awesome-custom/js/waypoint/webcam';
 
-// Icons added for the V3 mobile shell (BottomNav + MoreView).
+// Icons added for the V3 mobile shell (BottomNav + MoreView + MeView).
 import { faBook as faBookV3 } from '@fortawesome/free-solid-svg-icons/faBook';
 import { faBookmark as faBookmarkV3 } from '@fortawesome/free-solid-svg-icons/faBookmark';
 import { faCircleInfo as faCircleInfoV3 } from '@fortawesome/free-solid-svg-icons/faCircleInfo';
@@ -190,8 +190,11 @@ import { faClock as faClockSolidV3 } from '@fortawesome/free-solid-svg-icons/faC
 import { faLocationDot as faLocationDotV3 } from '@fortawesome/free-solid-svg-icons/faLocationDot';
 import { faMagnifyingGlass as faMagnifyingGlassV3 } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlass';
 import { faMountain as faMountainV3 } from '@fortawesome/free-solid-svg-icons/faMountain';
+import { faRightFromBracket as faRightFromBracketV3 } from '@fortawesome/free-solid-svg-icons/faRightFromBracket';
+import { faSliders as faSlidersV3 } from '@fortawesome/free-solid-svg-icons/faSliders';
 import { faSnowflake as faSnowflakeV3 } from '@fortawesome/free-solid-svg-icons/faSnowflake';
 import { faTriangleExclamation as faTriangleExclamationV3 } from '@fortawesome/free-solid-svg-icons/faTriangleExclamation';
+import { faUserGroup as faUserGroupV3 } from '@fortawesome/free-solid-svg-icons/faUserGroup';
 
 // registered globally
 export default function install(Vue) {
@@ -203,8 +206,11 @@ export default function install(Vue) {
     faLocationDotV3,
     faMagnifyingGlassV3,
     faMountainV3,
+    faRightFromBracketV3,
+    faSlidersV3,
     faSnowflakeV3,
     faTriangleExclamationV3,
+    faUserGroupV3,
     drill,
     paragliding,
     sort,

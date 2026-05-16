@@ -1,0 +1,331 @@
+<template>
+  <section class="section me-view">
+    <div class="container">
+      <!-- Header: avatar, name, username, public profile link -->
+      <header v-if="$user.isLogged" class="me-header">
+        <div class="avatar" aria-hidden="true">{{ initial }}</div>
+        <div class="me-header-text">
+          <h1 class="title is-5">{{ $user.name || $user.userName }}</h1>
+          <p class="subtitle is-7">@{{ $user.userName }}</p>
+          <router-link
+            v-if="$user.id"
+            :to="{ name: 'profiles', params: { id: $user.id, lang: $user.lang || 'fr' } }"
+            class="public-profile-link"
+          >
+            {{ $gettext('Voir mon profil public') }}
+            <fa-icon icon="chevron-right" />
+          </router-link>
+        </div>
+      </header>
+
+      <!-- Not logged in: just the sign-in CTA -->
+      <div v-else class="me-header me-header--guest">
+        <div class="avatar avatar--guest" aria-hidden="true">
+          <fa-icon icon="user" />
+        </div>
+        <div class="me-header-text">
+          <h1 class="title is-5">{{ $gettext('Non connecté') }}</h1>
+          <p class="subtitle is-7">{{ $gettext('Connecte-toi pour retrouver tes sorties et tes itinéraires.') }}</p>
+          <router-link :to="{ name: 'auth' }" class="button is-primary is-small">
+            {{ $gettext('Se connecter') }}
+          </router-link>
+        </div>
+      </div>
+
+      <!-- My content: only when logged in. Each card sends to the existing
+           V1 listing prefiltered by the current user's id. -->
+      <template v-if="$user.isLogged && $user.id">
+        <h2 class="section-label">{{ $gettext('Mes contributions') }}</h2>
+        <ul class="action-grid">
+          <li v-for="action in myContent" :key="action.key">
+            <router-link :to="action.to" class="action-link">
+              <span class="action-icon" :style="{ background: action.color }">
+                <fa-icon :icon="action.icon" />
+              </span>
+              <span class="action-text">
+                <span class="action-label">{{ action.label }}</span>
+                <span class="action-desc">{{ action.desc }}</span>
+              </span>
+              <fa-icon icon="chevron-right" class="action-chevron" />
+            </router-link>
+          </li>
+        </ul>
+
+        <h2 class="section-label">{{ $gettext('Mon compte') }}</h2>
+        <ul class="action-grid">
+          <li v-for="action in myAccount" :key="action.key">
+            <router-link :to="action.to" class="action-link">
+              <span class="action-icon" :style="{ background: action.color }">
+                <fa-icon :icon="action.icon" />
+              </span>
+              <span class="action-text">
+                <span class="action-label">{{ action.label }}</span>
+                <span class="action-desc">{{ action.desc }}</span>
+              </span>
+              <fa-icon icon="chevron-right" class="action-chevron" />
+            </router-link>
+          </li>
+        </ul>
+
+        <button class="button is-light is-fullwidth signout" @click="signOut">
+          <fa-icon icon="right-from-bracket" />
+          <span>&nbsp;{{ $gettext('Déconnexion') }}</span>
+        </button>
+      </template>
+    </div>
+  </section>
+</template>
+
+<script>
+import c2c from '@/js/apis/c2c';
+
+export default {
+  name: 'MeView',
+
+  computed: {
+    initial() {
+      const src = this.$user.name || this.$user.userName || '?';
+      return src.charAt(0).toUpperCase();
+    },
+
+    myContent() {
+      const u = this.$user.id;
+      return [
+        {
+          key: 'my-outings',
+          label: this.$gettext('Mes sorties'),
+          desc: this.$gettext('Toutes les sorties que j\'ai publiées'),
+          icon: ['fas', 'route'],
+          color: '#fef3c7',
+          to: { name: 'outings', query: { u: String(u) } },
+        },
+        {
+          key: 'my-routes',
+          label: this.$gettext('Mes itinéraires'),
+          desc: this.$gettext('Itinéraires que j\'ai contribué à créer'),
+          icon: ['fas', 'route'],
+          color: '#ede9fe',
+          to: { name: 'routes', query: { u: String(u) } },
+        },
+        {
+          key: 'my-waypoints',
+          label: this.$gettext('Mes points'),
+          desc: this.$gettext('Points de passage que j\'ai édités'),
+          icon: ['fas', 'location-dot'],
+          color: '#fce7f3',
+          to: { name: 'waypoints', query: { u: String(u) } },
+        },
+        {
+          key: 'my-images',
+          label: this.$gettext('Mes photos'),
+          desc: this.$gettext('Toutes les photos que j\'ai ajoutées'),
+          icon: ['fas', 'image'],
+          color: '#cffafe',
+          to: { name: 'images', query: { u: String(u) } },
+        },
+        {
+          key: 'my-xreports',
+          label: this.$gettext('Mes récits Sérac'),
+          desc: this.$gettext('Récits d\'incidents que j\'ai partagés'),
+          icon: ['fas', 'triangle-exclamation'],
+          color: '#ffe4e6',
+          to: { name: 'xreports', query: { u: String(u) } },
+        },
+        {
+          key: 'offline',
+          label: this.$gettext('Mes topos hors-ligne'),
+          desc: this.$gettext('Sauvegardes pour usage terrain'),
+          icon: ['fas', 'bookmark'],
+          color: '#dcfce7',
+          to: { name: 'offline' },
+        },
+      ];
+    },
+
+    myAccount() {
+      return [
+        {
+          key: 'preferences',
+          label: this.$gettext('Préférences'),
+          desc: this.$gettext('Activités suivies, filtres par défaut'),
+          icon: ['fas', 'sliders'],
+          color: '#e0f2fe',
+          to: { name: 'preferences' },
+        },
+        {
+          key: 'following',
+          label: this.$gettext('Personnes suivies'),
+          desc: this.$gettext('Voir mes amis et mentors'),
+          icon: ['fas', 'user-group'],
+          color: '#fef9c3',
+          to: { name: 'following' },
+        },
+        {
+          key: 'account',
+          label: this.$gettext('Compte'),
+          desc: this.$gettext('Email, mot de passe, paramètres'),
+          icon: ['fas', 'gear'],
+          color: '#e5e7eb',
+          to: { name: 'account' },
+        },
+        {
+          key: 'trackers',
+          label: this.$gettext('Trackers'),
+          desc: this.$gettext('Strava, Suunto, Polar, Garmin…'),
+          icon: ['fas', 'plug'],
+          color: '#fae8ff',
+          to: { name: 'trackers' },
+        },
+      ];
+    },
+  },
+
+  methods: {
+    signOut() {
+      c2c.userProfile
+        .logout()
+        .then(() => {
+          this.$user.signout();
+          this.$router.push({ name: 'home' });
+        })
+        .catch(() => {
+          // Fall back to local sign-out even if the server logout fails.
+          this.$user.signout();
+          this.$router.push({ name: 'home' });
+        });
+    },
+  },
+};
+</script>
+
+<style lang="scss" scoped>
+.me-view {
+  padding-bottom: calc(80px + env(safe-area-inset-bottom));
+}
+
+.me-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.avatar {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff9933, #b26f1e);
+  color: white;
+  font-size: 1.4rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar--guest {
+  background: #e5e7eb;
+  color: #6b7280;
+  font-size: 1.6rem;
+}
+
+.me-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  margin-bottom: 0.15rem !important;
+}
+
+.subtitle {
+  color: #6b6b6b;
+  margin-bottom: 0.4rem !important;
+}
+
+.public-profile-link {
+  font-size: 0.8rem;
+  color: #337ab7;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b6b6b;
+  margin: 1rem 0 0.4rem;
+}
+
+.action-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.action-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: #4a4a4a;
+  text-decoration: none;
+  transition: box-shadow 0.15s;
+
+  &:hover,
+  &:focus {
+    text-decoration: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    color: #4a4a4a;
+  }
+}
+
+.action-icon {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: #4a4a4a;
+}
+
+.action-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.action-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.action-desc {
+  font-size: 0.7rem;
+  color: #6b6b6b;
+}
+
+.action-chevron {
+  color: #9ca3af;
+  flex: 0 0 auto;
+}
+
+.signout {
+  margin-top: 1.2rem;
+}
+</style>

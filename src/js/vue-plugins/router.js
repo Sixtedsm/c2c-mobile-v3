@@ -16,6 +16,7 @@ import WaypointView from '@/views/document/WaypointView';
 import XreportView from '@/views/document/XreportView';
 import DocumentsPrintingView from '@/views/documents/DocumentsPrintingView';
 import MoreView from '@/views/MoreView';
+import MeView from '@/views/user/MeView';
 import OfflineView from '@/views/offline/OfflineView';
 import HomeView from '@/views/portals/HomeView';
 import ItinevertView from '@/views/portals/ItinevertView.vue';
@@ -76,6 +77,7 @@ const routes = [
   { path: '/sophie-picture-contest/:year(\\d+)?', name: 'sophie-picture-contest', component: SophiePictureContestView },
   { path: '/offline', name: 'offline', component: OfflineView },
   { path: '/more', name: 'more', component: MoreView },
+  { path: '/me', name: 'me', component: MeView },
 
   {
     path: '/forum',

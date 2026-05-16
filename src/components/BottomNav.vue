@@ -49,8 +49,11 @@ export default {
           key: 'me',
           label: this.$gettext('Moi'),
           icon: ['fas', 'user'],
-          to: isLoggedIn ? { name: 'account' } : { name: 'auth' },
-          match: ['account', 'auth', 'auth-sso', 'preferences', 'following', 'trackers'],
+          // /me is the V3 dashboard. Logged-out users see a sign-in CTA;
+          // logged-in users get cards for their outings/routes/contributions
+          // plus the account settings shortcuts.
+          to: { name: 'me' },
+          match: ['me', 'account', 'auth', 'auth-sso', 'preferences', 'following', 'trackers'],
         },
         {
           key: 'more',
