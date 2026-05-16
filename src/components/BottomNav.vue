@@ -32,8 +32,11 @@ export default {
           key: 'recent',
           label: this.$gettext('Récent'),
           icon: ['fas', 'clock'],
-          to: { name: 'outings' },
-          match: ['outings', 'home'],
+          // The c2c.org homepage feed is the real activity feed (latest
+          // outings + topo edits + Discourse posts). /outings is just the
+          // raw outings listing — Sixte explicitly wants the feed.
+          to: { name: 'home' },
+          match: ['home'],
         },
         {
           key: 'saved',
@@ -54,7 +57,9 @@ export default {
           label: this.$gettext('Plus'),
           icon: ['fas', 'bars'],
           to: { name: 'more' },
-          match: ['more', 'serac', 'topoguide', 'books', 'articles', 'xreports'],
+          // Curated subset matching MoreView (Itinéraires / Articles /
+          // Sérac / Yeti / Forum). 'topoguide' lives under the search tab.
+          match: ['more', 'articles', 'xreports', 'yeti', 'serac'],
         },
       ];
     },

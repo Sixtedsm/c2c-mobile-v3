@@ -213,16 +213,24 @@ body,
   min-height: 100vh;
   display: flex;
   flex-flow: column;
+  // V3 reserves bottom space for the BottomNav on every viewport so
+  // no content is hidden under it.
+  padding-bottom: calc(56px + env(safe-area-inset-bottom));
 }
 
-// Leave room below for the V3 bottom nav on mobile + tablet so floating
-// elements and the last list row aren't hidden behind it.
+// V3 ditches the V1 desktop SideMenu and top Navigation in favor of the
+// BottomNav-only shell. Hide them everywhere so we don't end up with two
+// navigation systems and a duplicated "Plus" entry.
 @media screen {
-  [data-width='mobile'],
-  [data-width='tablet'] {
-    .page-content {
-      padding-bottom: calc(56px + env(safe-area-inset-bottom));
-    }
+  .side-menu,
+  .navigation {
+    display: none !important;
+  }
+  // Remove the top padding that the original layout reserved for the
+  // (now hidden) navbar.
+  .page-content,
+  .home-topoguide .page-content {
+    padding-top: 0 !important;
   }
 }
 

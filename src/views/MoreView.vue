@@ -2,7 +2,7 @@
   <section class="section more-view">
     <div class="container">
       <h1 class="title is-5">{{ $gettext('Plus') }}</h1>
-      <p class="subtitle is-7">{{ $gettext('Tout le contenu Camptocamp, à portée de pouce.') }}</p>
+      <p class="subtitle is-7">{{ $gettext('Accès aux autres sections Camptocamp') }}</p>
 
       <ul class="tile-grid">
         <li v-for="tile in tiles" :key="tile.key">
@@ -37,6 +37,8 @@ export default {
 
   computed: {
     tiles() {
+      // Curated set — anything that's already exposed in the BottomNav
+      // (Recherche / Récent / Mes topos / Moi) is not duplicated here.
       return [
         {
           key: 'routes',
@@ -45,22 +47,6 @@ export default {
           icon: ['fas', 'route'],
           color: '#fef3c7',
           to: { name: 'routes' },
-        },
-        {
-          key: 'waypoints',
-          label: this.$gettext('Points de passage'),
-          desc: this.$gettext('Sommets, cols, refuges, lacs…'),
-          icon: ['fas', 'location-dot'],
-          color: '#fce7f3',
-          to: { name: 'waypoints' },
-        },
-        {
-          key: 'books',
-          label: this.$gettext('Livres'),
-          desc: this.$gettext('Topoguides référencés'),
-          icon: ['fas', 'book'],
-          color: '#dcfce7',
-          to: { name: 'books' },
         },
         {
           key: 'articles',
@@ -73,34 +59,10 @@ export default {
         {
           key: 'xreports',
           label: this.$gettext('Sérac'),
-          desc: this.$gettext("Récits d'accidents et d'incidents"),
+          desc: this.$gettext("Incidents et accidents"),
           icon: ['fas', 'triangle-exclamation'],
           color: '#ffe4e6',
           to: { name: 'xreports' },
-        },
-        {
-          key: 'forum',
-          label: this.$gettext('Forum'),
-          desc: this.$gettext('Discussions de la communauté'),
-          icon: ['fas', 'comments'],
-          color: '#dbeafe',
-          href: config.urls.forum,
-        },
-        {
-          key: 'images',
-          label: this.$gettext('Photos'),
-          desc: this.$gettext('Galerie de la communauté'),
-          icon: ['fas', 'image'],
-          color: '#cffafe',
-          to: { name: 'images' },
-        },
-        {
-          key: 'areas',
-          label: this.$gettext('Massifs'),
-          desc: this.$gettext('Régions et zones'),
-          icon: ['fas', 'mountain'],
-          color: '#fef9c3',
-          to: { name: 'areas' },
         },
         {
           key: 'yeti',
@@ -111,20 +73,12 @@ export default {
           to: { name: 'yeti' },
         },
         {
-          key: 'outings-stats',
-          label: this.$gettext('Statistiques'),
-          desc: this.$gettext('Statistiques des sorties'),
-          icon: ['fas', 'chart-bar'],
-          color: '#f3e8ff',
-          to: { name: 'outings-stats' },
-        },
-        {
-          key: 'serac-info',
-          label: this.$gettext('À propos de Sérac'),
-          desc: this.$gettext('Présentation du module Sérac'),
-          icon: ['fas', 'circle-info'],
-          color: '#fee2e2',
-          to: { name: 'serac' },
+          key: 'forum',
+          label: this.$gettext('Forum'),
+          desc: this.$gettext('Discussions de la communauté'),
+          icon: ['fas', 'comments'],
+          color: '#dbeafe',
+          href: config.urls.forum,
         },
       ];
     },
