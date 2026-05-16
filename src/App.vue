@@ -26,12 +26,15 @@
     <alert-window ref="alertWindow" />
     <div v-if="alternativeSideMenu" class="alternative-side-menu-shader" @click="alternativeSideMenu = false" />
 
+    <!-- V3 mobile top bar — sticky title + back button. Replaces the V1
+         desktop navbar that we hide everywhere via CSS below. -->
+    <mobile-top-bar />
+
     <!-- keep router view in last -->
     <div class="page-content is-block-print">
       <router-view class="router-view" />
     </div>
     <gdpr-banner></gdpr-banner>
-    <!-- V3 mobile bottom nav — only rendered on mobile/tablet, see component. -->
     <bottom-nav />
   </div>
 </template>
@@ -42,6 +45,7 @@ import BottomNav from './components/BottomNav.vue';
 import GdprBanner from './components/gdpr/GdprBanner.vue';
 import HelperWindow from './components/helper/HelperWindow';
 import ImageViewer from './components/image-viewer/ImageViewer';
+import MobileTopBar from './components/MobileTopBar.vue';
 import DfmAdSmall from './views/DfmAdSmall.vue';
 import Navigation from './views/Navigation';
 import SideMenu from './views/SideMenu';
@@ -60,6 +64,7 @@ export default {
     ImageViewer,
     AlertWindow,
     GdprBanner,
+    MobileTopBar,
   },
 
   data() {

@@ -120,7 +120,11 @@ export default {
     }
     return {
       isPersonal: this.$localStorage.get('isPersonal', false),
-      feed: this.$localStorage.get('feed', false),
+      // V3 lands the user on the actual activity feed (latest outings, edits,
+      // forum activity) rather than the dashboard widget grid — that's what
+      // they expect when they tap "Récent" in the bottom nav. They can still
+      // flip the switch back to dashboard if they want.
+      feed: this.$localStorage.get('feed', true),
       visible: state,
     };
   },
