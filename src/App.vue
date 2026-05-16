@@ -218,8 +218,9 @@ body,
   min-height: 100vh;
   display: flex;
   flex-flow: column;
-  // V3 reserves bottom space for the BottomNav on every viewport so
-  // no content is hidden under it.
+  // V3 reserves top space for the fixed MobileTopBar and bottom space
+  // for the fixed BottomNav so content is never hidden behind either.
+  padding-top: calc(48px + env(safe-area-inset-top));
   padding-bottom: calc(56px + env(safe-area-inset-bottom));
 }
 
@@ -231,12 +232,21 @@ body,
   .navigation {
     display: none !important;
   }
-  // Remove the top padding that the original layout reserved for the
-  // (now hidden) navbar.
-  .page-content,
+  // V1 also reserved padding-top for its navbar in some routes; override.
   .home-topoguide .page-content {
-    padding-top: 0 !important;
+    padding-top: calc(48px + env(safe-area-inset-top)) !important;
   }
+}
+
+// V1 tables (WhatsNew, AssociationsHistory, etc.) are wide desktop layouts.
+// Wrap them so they scroll horizontally on small screens instead of pushing
+// content off-screen and forcing the whole page to swipe.
+.section table,
+.page-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .home-topoguide {

@@ -9,6 +9,12 @@
         <span v-if="!isDraftView" class="is-pulled-right button-bar no-print">
           <gotop-button v-if="isPrintingView" />
           <follow-button v-if="!isPrintingView" :document="document" />
+          <offline-header-button
+            v-if="!isPrintingView && offlineSupportedType"
+            :document="document"
+            :document-type="documentType"
+            :lang="lang"
+          />
           <tags-button v-if="!isPrintingView" :document="document" />
 
           <social-network-sharing v-if="documentType != 'profile' && isNormalView" />
@@ -56,6 +62,7 @@
 import DocumentVersionBanner from './DocumentVersionBanner';
 import FollowButton from './FollowButton';
 import GotopButton from './GotopButton';
+import OfflineHeaderButton from './OfflineHeaderButton.vue';
 import SocialNetworkSharing from './SocialNetworkSharing';
 import TagsButton from './TagsButton';
 
@@ -67,6 +74,7 @@ export default {
   components: {
     ImagesUploader,
     FollowButton,
+    OfflineHeaderButton,
     GotopButton,
     TagsButton,
     SocialNetworkSharing,
@@ -89,6 +97,20 @@ export default {
 
     title() {
       return this.$documentUtils.getDocumentTitle(this.document, this.lang);
+    },
+
+    offlineSupportedType() {
+      // Areas / maps / profiles aren't useful to save for field use and the
+      // offline plugin doesn't model them — only hide-show, no logic change.
+      return [
+        'article',
+        'book',
+        'image',
+        'outing',
+        'route',
+        'waypoint',
+        'xreport',
+      ].includes(this.documentType);
     },
   },
 };

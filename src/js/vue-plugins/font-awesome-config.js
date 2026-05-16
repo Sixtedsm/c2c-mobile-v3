@@ -183,6 +183,7 @@ import waypointweather_station from '@/assets/font-awesome-custom/js/waypoint/we
 import waypointwebcam from '@/assets/font-awesome-custom/js/waypoint/webcam';
 
 // Icons added for the V3 mobile shell (BottomNav + MoreView + MeView).
+import { faBookmark as faBookmarkRegularV3 } from '@fortawesome/free-regular-svg-icons/faBookmark';
 import { faBook as faBookV3 } from '@fortawesome/free-solid-svg-icons/faBook';
 import { faBookmark as faBookmarkV3 } from '@fortawesome/free-solid-svg-icons/faBookmark';
 import { faCircleInfo as faCircleInfoV3 } from '@fortawesome/free-solid-svg-icons/faCircleInfo';
@@ -202,6 +203,7 @@ export default function install(Vue) {
   library.add(
     faBookV3,
     faBookmarkV3,
+    faBookmarkRegularV3,
     faCircleInfoV3,
     faClockSolidV3,
     faLocationDotV3,

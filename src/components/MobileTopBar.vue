@@ -94,18 +94,23 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+// Fixed (not sticky): the original layout uses body-level scroll so the
+// bar would scroll away with the rest of the page if it was sticky inside
+// the flex column. position: fixed keeps it pinned to the viewport for
+// real native-app feel.
 .mobile-top-bar {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 26;
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  height: 48px;
-  padding: 0 0.25rem;
+  min-height: 48px;
+  padding: env(safe-area-inset-top) 0.25rem 0;
   background: white;
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  padding-top: env(safe-area-inset-top);
 
   &.is-transparent {
     background: transparent;

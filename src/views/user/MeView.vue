@@ -101,6 +101,10 @@ export default {
     },
 
     myContent() {
+      // Bail out if we don't have a real user id yet — otherwise we'd build
+      // links like /outings?u=null which the API treats as "no filter" and
+      // returns everyone's data (the bug Sixte saw).
+      if (!this.$user.id) return [];
       const u = String(this.$user.id);
       return [
         {
