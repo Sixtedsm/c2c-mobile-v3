@@ -1,7 +1,7 @@
 <template>
-  <!-- Mobile bottom tab bar: only rendered on mobile/tablet widths.
-       Desktop keeps the original SideMenu. -->
-  <nav v-if="$screen.isMobile || $screen.isTablet" class="bottom-nav no-print" aria-label="Navigation principale">
+  <!-- Mobile-first bottom tab bar. Always rendered so the V3 shell is
+       visible no matter the viewport. -->
+  <nav class="bottom-nav no-print" aria-label="Navigation principale">
     <ul class="bottom-nav-list">
       <li v-for="tab in tabs" :key="tab.key" class="bottom-nav-item">
         <router-link :to="tab.to" class="bottom-nav-link" :class="{ 'is-active': isActive(tab) }">
