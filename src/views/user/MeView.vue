@@ -5,8 +5,8 @@
       <header v-if="$user.isLogged" class="me-header">
         <div class="avatar" aria-hidden="true">{{ initial }}</div>
         <div class="me-header-text">
-          <h1 class="title is-5">{{ $user.name || $user.userName }}</h1>
-          <p class="subtitle is-7">@{{ $user.userName }}</p>
+          <p class="me-display-name">{{ displayName }}</p>
+          <p class="me-username">@{{ $user.userName }}</p>
           <router-link
             v-if="$user.id"
             :to="{ name: 'profiles', params: { id: $user.id, lang: $user.lang || 'fr' } }"
@@ -18,22 +18,27 @@
         </div>
       </header>
 
-      <!-- Not logged in: just the sign-in CTA -->
+      <!-- Not logged in: sign-in CTA. -->
       <div v-else class="me-header me-header--guest">
         <div class="avatar avatar--guest" aria-hidden="true">
           <fa-icon icon="user" />
         </div>
         <div class="me-header-text">
-          <h1 class="title is-5">{{ $gettext('Non connecté') }}</h1>
-          <p class="subtitle is-7">{{ $gettext('Connecte-toi pour retrouver tes sorties et tes itinéraires.') }}</p>
-          <router-link :to="{ name: 'auth' }" class="button is-primary is-small">
+          <p class="me-display-name">{{ $gettext('Non connecté') }}</p>
+          <p class="me-username">{{ $gettext('Connecte-toi pour retrouver tes sorties et tes contributions.') }}</p>
+          <router-link :to="{ name: 'auth' }" class="button is-primary is-small me-signin">
             {{ $gettext('Se connecter') }}
           </router-link>
         </div>
       </div>
 
-      <!-- My content: only when logged in. Each card sends to the existing
-           V1 listing prefiltered by the current user's id. -->
+      <!-- My content. Only links to endpoints that actually filter by user
+           on the C2C API:
+           - /outings?u=<id> filters by participant (works).
+           - /xreports?u=<id> filters by report author (works).
+           - /whatsnew?u=<id> shows the wiki edit history of this user
+             (works, lets us aggregate routes/waypoints/photos/articles
+             that have no per-user filter on their bare listing). -->
       <template v-if="$user.isLogged && $user.id">
         <h2 class="section-label">{{ $gettext('Mes contributions') }}</h2>
         <ul class="action-grid">
@@ -88,40 +93,31 @@ export default {
       return src.charAt(0).toUpperCase();
     },
 
+    displayName() {
+      // If the user has set a "name" distinct from their login, prefer it,
+      // otherwise just use the username. We never concatenate the two — that
+      // was the source of the weird "sigDSM / @sig dsm" wrap Sixte saw.
+      return this.$user.name || this.$user.userName || '';
+    },
+
     myContent() {
-      const u = this.$user.id;
+      const u = String(this.$user.id);
       return [
         {
           key: 'my-outings',
           label: this.$gettext('Mes sorties'),
-          desc: this.$gettext('Toutes les sorties que j\'ai publiées'),
+          desc: this.$gettext('Sorties auxquelles j\'ai participé'),
           icon: ['fas', 'route'],
           color: '#fef3c7',
-          to: { name: 'outings', query: { u: String(u) } },
+          to: { name: 'outings', query: { u } },
         },
         {
-          key: 'my-routes',
-          label: this.$gettext('Mes itinéraires'),
-          desc: this.$gettext('Itinéraires que j\'ai contribué à créer'),
-          icon: ['fas', 'route'],
+          key: 'my-changes',
+          label: this.$gettext('Mes topos publiés'),
+          desc: this.$gettext('Itinéraires, points, photos, articles que j\'ai créés ou modifiés'),
+          icon: ['fas', 'pen-to-square'],
           color: '#ede9fe',
-          to: { name: 'routes', query: { u: String(u) } },
-        },
-        {
-          key: 'my-waypoints',
-          label: this.$gettext('Mes points'),
-          desc: this.$gettext('Points de passage que j\'ai édités'),
-          icon: ['fas', 'location-dot'],
-          color: '#fce7f3',
-          to: { name: 'waypoints', query: { u: String(u) } },
-        },
-        {
-          key: 'my-images',
-          label: this.$gettext('Mes photos'),
-          desc: this.$gettext('Toutes les photos que j\'ai ajoutées'),
-          icon: ['fas', 'image'],
-          color: '#cffafe',
-          to: { name: 'images', query: { u: String(u) } },
+          to: { name: 'whatsnew', query: { u } },
         },
         {
           key: 'my-xreports',
@@ -129,7 +125,7 @@ export default {
           desc: this.$gettext('Récits d\'incidents que j\'ai partagés'),
           icon: ['fas', 'triangle-exclamation'],
           color: '#ffe4e6',
-          to: { name: 'xreports', query: { u: String(u) } },
+          to: { name: 'xreports', query: { u } },
         },
         {
           key: 'offline',
@@ -189,7 +185,6 @@ export default {
           this.$router.push({ name: 'home' });
         })
         .catch(() => {
-          // Fall back to local sign-out even if the server logout fails.
           this.$user.signout();
           this.$router.push({ name: 'home' });
         });
@@ -238,13 +233,27 @@ export default {
   min-width: 0;
 }
 
-.title {
-  margin-bottom: 0.15rem !important;
+// Plain paragraphs instead of Bulma titles to avoid the responsive scaling
+// + word-break tricks that broke the display ("SixteDSM" was being split
+// awkwardly into "Sixt" / "edsm" and read as "sig" / "DSM" by users).
+.me-display-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #4a4a4a;
+  margin: 0;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.subtitle {
+.me-username {
+  font-size: 0.85rem;
   color: #6b6b6b;
-  margin-bottom: 0.4rem !important;
+  margin: 0.1rem 0 0.4rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .public-profile-link {
@@ -254,6 +263,10 @@ export default {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+}
+
+.me-signin {
+  margin-top: 0.4rem;
 }
 
 .section-label {
