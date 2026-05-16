@@ -1,0 +1,131 @@
+<template>
+  <!-- Mobile bottom tab bar: only rendered on mobile/tablet widths.
+       Desktop keeps the original SideMenu. -->
+  <nav v-if="$screen.isMobile || $screen.isTablet" class="bottom-nav no-print" aria-label="Navigation principale">
+    <ul class="bottom-nav-list">
+      <li v-for="tab in tabs" :key="tab.key" class="bottom-nav-item">
+        <router-link :to="tab.to" class="bottom-nav-link" :class="{ 'is-active': isActive(tab) }">
+          <fa-icon :icon="tab.icon" class="bottom-nav-icon" />
+          <span class="bottom-nav-label">{{ tab.label }}</span>
+        </router-link>
+      </li>
+    </ul>
+  </nav>
+</template>
+
+<script>
+export default {
+  name: 'BottomNav',
+
+  computed: {
+    tabs() {
+      const isLoggedIn = !!this.$user.isLogged;
+      return [
+        {
+          key: 'search',
+          label: this.$gettext('Recherche'),
+          icon: ['fas', 'magnifying-glass'],
+          to: { name: 'topoguide' },
+          match: ['topoguide', 'routes', 'waypoints', 'areas', 'maps', 'images'],
+        },
+        {
+          key: 'recent',
+          label: this.$gettext('Récent'),
+          icon: ['fas', 'clock'],
+          to: { name: 'outings' },
+          match: ['outings', 'home'],
+        },
+        {
+          key: 'saved',
+          label: this.$gettext('Mes topos'),
+          icon: ['fas', 'bookmark'],
+          to: { name: 'offline' },
+          match: ['offline'],
+        },
+        {
+          key: 'me',
+          label: this.$gettext('Moi'),
+          icon: ['fas', 'user'],
+          to: isLoggedIn ? { name: 'account' } : { name: 'auth' },
+          match: ['account', 'auth', 'auth-sso', 'preferences', 'following', 'trackers'],
+        },
+        {
+          key: 'more',
+          label: this.$gettext('Plus'),
+          icon: ['fas', 'bars'],
+          to: { name: 'more' },
+          match: ['more', 'serac', 'topoguide', 'books', 'articles', 'xreports'],
+        },
+      ];
+    },
+  },
+
+  methods: {
+    isActive(tab) {
+      // First tab whose match list contains the current route name wins.
+      const name = this.$route.name;
+      if (!name) return false;
+      return tab.match.includes(name);
+    },
+  },
+};
+</script>
+
+<style lang="scss" scoped>
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 28;
+  background: white;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.bottom-nav-list {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  height: 56px;
+}
+
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+}
+
+.bottom-nav-link {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: #9a9a9a;
+  text-decoration: none;
+  font-size: 0.7rem;
+  font-weight: 500;
+  transition: color 0.15s;
+
+  &:hover,
+  &:focus {
+    color: #4a4a4a;
+    text-decoration: none;
+  }
+
+  &.is-active {
+    color: #ff9933;
+  }
+}
+
+.bottom-nav-icon {
+  font-size: 1.1rem;
+}
+
+.bottom-nav-label {
+  line-height: 1;
+}
+</style>

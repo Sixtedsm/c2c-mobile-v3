@@ -1,0 +1,6 @@
+src/assets/font-awesome-custom/
+src/translations/
+dist/
+node_modules/
+.husky/
+public/swiper.css

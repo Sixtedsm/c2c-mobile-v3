@@ -1,0 +1,146 @@
+name: Continuous integration
+
+on:
+  pull_request:
+    branches:
+      - '**'
+  push:
+    branches: [master]
+    tags:
+      - '**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        node-version: [lts/*]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      - name: npm install, lint and build
+        run: |
+          npm ci
+          npm run lint:no-fix
+          npm run build
+        env:
+          CI: ${{ true }}
+      - name: Docker meta
+        id: docker_meta
+        if: "contains(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master'"
+        uses: docker/metadata-action@v5.9.0
+        with:
+          # list of Docker images to use as base name for tags
+          images: c2corg/c2c_ui
+      - name: Login to DockerHub
+        if: "contains(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master'"
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push Docker images
+        if: "contains(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master'"
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}
+      - name: Get branch name
+        id: branch-name
+        uses: tj-actions/branch-names@v9
+      - name: Create clean branch name
+        id: clean_branch
+        run: echo "CLEAN_BRANCH=${BRANCH/\//-}" >> $GITHUB_OUTPUT
+        env:
+          BRANCH: ${{ steps.branch-name.outputs.current_branch }}
+      - name: Build for github pages
+        run: npm run build:github
+        env:
+          GITHUB_PAGES_BRANCH: ${{ steps.clean_branch.outputs.CLEAN_BRANCH }}
+      - name: Upload artifact for github pages
+        uses: actions/upload-artifact@v5
+        with:
+          name: github-pages
+          path: dist/*
+
+  github-pages:
+    needs: build
+    if: "!github.event.pull_request.head.repo.fork && github.actor != 'dependabot[bot]'"
+    runs-on: ubuntu-latest
+    concurrency: github-pages
+    permissions:
+      contents: write
+    steps:
+      - name: Get branch name
+        id: branch-name
+        uses: tj-actions/branch-names@v9
+      - name: Create clean branch name
+        id: clean_branch
+        run: echo CLEAN_BRANCH=${BRANCH/\//-} >> $GITHUB_OUTPUT
+        env:
+          BRANCH: ${{ steps.branch-name.outputs.current_branch || steps.branch-name.outputs.tag }}
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: gh-pages
+      - name: Remove current branch files
+        run: rm -rf ${{ steps.clean_branch.outputs.CLEAN_BRANCH }}
+      - name: Retrieve github pages artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: github-pages
+          path: ${{ steps.clean_branch.outputs.CLEAN_BRANCH }}
+      - name: Commit files
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          git add .
+          git commit -m "Deploy ${{ steps.branch-name.outputs.current_branch }} branch"
+      - name: Push changes
+        uses: ad-m/github-push-action@v1.0.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: gh-pages
+
+  create-release:
+    needs: build
+    if: "startsWith(github.ref, 'refs/tags/v')"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  push-i18n:
+    needs: build
+    if: "github.ref == 'refs/heads/master' && github.repository == 'c2corg/c2c_ui'"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Push translations to Transifex
+        run: |
+          echo "::add-mask::$TOKEN"
+          npm i
+          npm run messages:extract
+          curl --location --fail --request POST 'https://rest.api.transifex.com/resource_strings_async_uploads' --header 'Content-Type: multipart/form-data' --header "Authorization: Bearer $TOKEN" --form 'content=@"src/translations/c2corg_ui-client.pot"' --form 'resource="o:camptocamp-association:p:c2corg_ui:r:main"'
+        env:
+          TOKEN: ${{ secrets.TRANSIFEX_TOKEN }}

@@ -1,0 +1,28 @@
+// iOS Safari zooms in automatically when the user focuses any input whose
+// font-size is less than 16px. Forcing 16px on form controls prevents the zoom
+// without disabling pinch-to-zoom (which would break accessibility).
+@include mobile {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+// Make sure modals and overlays don't trigger horizontal scroll on small
+// devices when iOS rotates the input zoom heuristics.
+body {
+  -webkit-text-size-adjust: 100%;
+}
+
+// Friendlier tap targets on mobile: a 44x44 minimum is Apple's accessibility
+// guideline. Apply only to interactive elements that don't already define a
+// larger size, and only where it doesn't clash with C2C's existing layout
+// (tight nav bars and similar).
+@include mobile {
+  .button,
+  a.toolbox-button,
+  .menu-item {
+    min-height: 44px;
+  }
+}
