@@ -227,10 +227,26 @@ export default {
       this.searchOpen = false;
     },
 
-    onSearchPick() {
-      // The InputDocument router-pushes the picked result itself; this hook
-      // just ensures the search bar collapses behind it.
+    onSearchPick(document) {
+      // InputDocument emits the picked doc via @input but does NOT navigate
+      // by itself (it's a generic selector — used in filters too). When it's
+      // wired as a search bar, we have to do the router.push ourselves.
       this.searchOpen = false;
+      if (!document || !document.document_id || !document.type) return;
+      const docType = this.$documentUtils.getDocumentType(document.type);
+      if (!docType) return;
+      this.$router
+        .push({
+          name: docType,
+          params: {
+            id: String(document.document_id),
+            lang: this.$language?.current || this.$route.params.lang || 'fr',
+          },
+        })
+        .catch(() => {
+          // Navigating to the page we're already on throws NavigationDuplicated;
+          // benign, swallow it.
+        });
     },
   },
 };

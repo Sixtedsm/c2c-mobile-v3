@@ -4,14 +4,24 @@
       type="button"
       class="button is-small bulk-offline-btn"
       :disabled="busy || !documents.length"
+      :title="busy ? $gettext('Saving') + ' ' + savedCount + '/' + total : $gettext('Save page offline')"
+      :aria-label="$gettext('Save page offline')"
       @click="open"
     >
       <fa-icon :icon="busy ? 'rotate' : 'bookmark'" :class="{ 'fa-spin': busy }" />
-      <span class="bulk-offline-label">
+      <!-- Label hidden on mobile so the button stays compact in the
+           header (tap-target = the whole button via title/aria-label). -->
+      <span class="bulk-offline-label is-hidden-mobile">
         &nbsp;{{ busy
           ? $gettext('Saving') + ' ' + savedCount + '/' + total
           : $gettext('Save page offline')
         }}
+      </span>
+      <!-- On mobile during a bulk save, show the count next to the icon
+           so the user gets progress feedback without taking up the
+           "Save page offline" text room. -->
+      <span v-if="busy" class="bulk-offline-progress-mobile is-hidden-tablet">
+        &nbsp;{{ savedCount }}/{{ total }}
       </span>
     </button>
 
@@ -125,16 +135,27 @@ export default {
 
 <style lang="scss" scoped>
 .bulk-offline-btn {
-  background: #fff5e6;
+  background: transparent;
   color: #ff9933;
   border: 1px solid #ff9933;
+  // Tighten on mobile (icon-only mode) so it fits next to the other
+  // header chips without forcing a new line.
+  @media screen and (max-width: 768px) {
+    padding-left: 0.45rem;
+    padding-right: 0.45rem;
+  }
 
   &:hover:not([disabled]),
   &:focus:not([disabled]) {
-    background: #ffe7c2;
+    background: #fff5e6;
     color: #cc7a29;
     border-color: #cc7a29;
   }
+}
+
+.bulk-offline-progress-mobile {
+  font-size: 0.7rem;
+  font-weight: 600;
 }
 
 .bulk-offline-modal {

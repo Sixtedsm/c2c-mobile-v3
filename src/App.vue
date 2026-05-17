@@ -122,6 +122,8 @@ export default {
         if (el) el.scrollTop = this.scrollPositions[to.fullPath] || 0;
       });
     });
+
+    this.warmCriticalChunks();
   },
 
   beforeDestroy() {
@@ -133,6 +135,49 @@ export default {
   methods: {
     hideSideMenuOnMobile() {
       this.alternativeSideMenu = false;
+    },
+
+    // Lazy-loaded routes (router.js) split the bundle into chunks that
+    // load on demand. That's fine online, but a user who has never
+    // visited the edit views and then goes offline can't open them —
+    // the chunk fetch fails silently and the navigation hangs. We warm
+    // the critical chunks (outing creation in particular: deferred-sync
+    // depends on it) once the browser is idle so they're cached by the
+    // SW for offline use.
+    warmCriticalChunks() {
+      const warm = () => {
+        // Outing creation — feeds into the offline queue (#21). Pulling
+        // any one component from wiki-tools / view-account pulls the
+        // whole named chunk into the SW cache.
+        import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/OutingEditionView').catch(
+          () => {}
+        );
+        import(/* webpackChunkName: "view-account" */ '@/views/user/LoginView').catch(() => {});
+      };
+      if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(warm, { timeout: 5000 });
+      } else {
+        setTimeout(warm, 2000);
+      }
+
+      // Network-failed lazy imports (offline + chunk not yet cached)
+      // reject silently and the navigation just hangs. Surface it so
+      // the user knows why the page didn't open.
+      this.$router.onError((error) => {
+        const msg = error?.message || '';
+        if (/Loading chunk|ChunkLoadError|Failed to fetch/i.test(msg)) {
+          import('bulma-toast').then(({ toast }) => {
+            toast({
+              type: 'is-warning',
+              position: 'bottom-center',
+              duration: 4000,
+              message: this.$gettext(
+                'Cette page n\'est pas disponible hors-ligne. Reconnectez-vous au réseau et réessayez.'
+              ),
+            });
+          });
+        }
+      });
     },
     updateWidth() {
       // allows reactive css when body width changes because map is pinned
