@@ -3,34 +3,46 @@ import Router from 'vue-router';
 
 import config from '@/js/config';
 import constants from '@/js/constants';
+
+// Task 3 (latency): synchronously import only the views the user is
+// likely to hit during the first 30 seconds — Home (Récent), the four
+// big-doc detail views (RouteView/OutingView/WaypointView/XreportView),
+// DocumentsView (used by every listing route), OfflineView (Mes topos),
+// MoreView and MeView (BottomNav). Everything else lazy-loads on demand
+// so the initial JS bundle stops dragging the cold start.
 import DocumentsView from '@/views//documents/DocumentsView';
-import AreaView from '@/views/document/AreaView';
-import ArticleView from '@/views/document/ArticleView';
-import BookView from '@/views/document/BookView';
-import ImageView from '@/views/document/ImageView';
-import MapView from '@/views/document/MapView';
 import OutingView from '@/views/document/OutingView';
-import ProfileView from '@/views/document/ProfileView';
 import RouteView from '@/views/document/RouteView';
 import WaypointView from '@/views/document/WaypointView';
 import XreportView from '@/views/document/XreportView';
-import DocumentsPrintingView from '@/views/documents/DocumentsPrintingView';
 import MoreView from '@/views/MoreView';
 import MeView from '@/views/user/MeView';
 import OfflineView from '@/views/offline/OfflineView';
 import HomeView from '@/views/portals/HomeView';
-import ItinevertView from '@/views/portals/ItinevertView.vue';
-import SophiePictureContestView from '@/views/portals/SophiePictureContestView';
-import OutingsStatsView from '@/views/portals/outings-stats/OutingsStatsView';
 import NotFoundView from '@/views/static-views/NotFoundView';
-import SeracView from '@/views/static-views/SeracView';
-import TopoguideView from '@/views/static-views/TopoguideView';
-import AccountView from '@/views/user/AccountView';
-import FollowingView from '@/views/user/FollowingView';
-import LoginView from '@/views/user/LoginView';
-import PreferencesView from '@/views/user/PreferencesView';
-import TrackersExchangeTokenView from '@/views/user/TrackersExchangeTokenView';
-import TrackersView from '@/views/user/TrackersView';
+
+// Rarely-visited or post-login views — lazy chunks so they don't bloat
+// the initial bundle. Grouped into a few named chunks for cache reuse.
+const AreaView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/document/AreaView');
+const ArticleView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/document/ArticleView');
+const BookView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/document/BookView');
+const ImageView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/document/ImageView');
+const MapView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/document/MapView');
+const ProfileView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/document/ProfileView');
+const DocumentsPrintingView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/documents/DocumentsPrintingView');
+const ItinevertView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/portals/ItinevertView.vue');
+const SophiePictureContestView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/portals/SophiePictureContestView');
+const OutingsStatsView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/portals/outings-stats/OutingsStatsView');
+const SeracView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/static-views/SeracView');
+const TopoguideView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/static-views/TopoguideView');
+
+// Auth / account views — gated behind auth most of the time.
+const AccountView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/AccountView');
+const FollowingView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/FollowingView');
+const LoginView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/LoginView');
+const PreferencesView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/PreferencesView');
+const TrackersExchangeTokenView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/TrackersExchangeTokenView');
+const TrackersView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/TrackersView');
 
 // lazy-load components
 // actually, only diff is quite big, because of diff computation

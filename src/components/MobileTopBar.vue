@@ -110,47 +110,6 @@
 <script>
 const TAB_ROUTES = new Set(['topoguide', 'home', 'offline', 'me', 'more']);
 
-const ROUTE_TITLES = {
-  topoguide: 'Recherche',
-  home: 'Récent',
-  offline: 'Mes topos',
-  me: 'Moi',
-  more: 'Plus',
-  outings: 'Sorties',
-  routes: 'Itinéraires',
-  waypoints: 'Points de passage',
-  articles: 'Articles',
-  books: 'Livres',
-  xreports: 'Sérac',
-  areas: 'Massifs',
-  images: 'Photos',
-  maps: 'Cartes',
-  profiles: 'Profils',
-  profile: 'Profil',
-  outing: 'Sortie',
-  route: 'Itinéraire',
-  waypoint: 'Point de passage',
-  article: 'Article',
-  book: 'Livre',
-  xreport: 'Récit',
-  area: 'Massif',
-  image: 'Photo',
-  map: 'Carte',
-  account: 'Compte',
-  preferences: 'Préférences',
-  following: 'Personnes suivies',
-  trackers: 'Trackers',
-  auth: 'Connexion',
-  'auth-sso': 'Connexion',
-  yeti: 'Yeti',
-  serac: 'À propos de Sérac',
-  whatsnew: 'Nouveautés',
-  'outings-stats': 'Statistiques',
-  'sophie-picture-contest': 'Concours photo',
-  'associations-history': 'Historique des associations',
-  itinevert: 'Itinevert',
-};
-
 export default {
   name: 'MobileTopBar',
 
@@ -172,7 +131,50 @@ export default {
     },
 
     title() {
-      return ROUTE_TITLES[this.routeName] || 'Camptocamp';
+      // Route → translated label. Strings wrapped in $gettext so the V1
+      // gettext extractor picks them up and they get translated to en/de/
+      // it/es/ca/eu like the rest of the V1 strings.
+      const titles = {
+        topoguide: this.$gettext('Recherche'),
+        home: this.$gettext('Récent'),
+        offline: this.$gettext('Mes topos'),
+        me: this.$gettext('Moi'),
+        more: this.$gettext('Plus'),
+        outings: this.$gettext('Sorties'),
+        routes: this.$gettext('Itinéraires'),
+        waypoints: this.$gettext('Points de passage'),
+        articles: this.$gettext('Articles'),
+        books: this.$gettext('Livres'),
+        xreports: this.$gettext('Sérac'),
+        areas: this.$gettext('Massifs'),
+        images: this.$gettext('Photos'),
+        maps: this.$gettext('Cartes'),
+        profiles: this.$gettext('Profils'),
+        profile: this.$gettext('Profil'),
+        outing: this.$gettext('Sortie'),
+        route: this.$gettext('Itinéraire'),
+        waypoint: this.$gettext('Point de passage'),
+        article: this.$gettext('Article'),
+        book: this.$gettext('Livre'),
+        xreport: this.$gettext('Récit'),
+        area: this.$gettext('Massif'),
+        image: this.$gettext('Photo'),
+        map: this.$gettext('Carte'),
+        account: this.$gettext('Compte'),
+        preferences: this.$gettext('Préférences'),
+        following: this.$gettext('Personnes suivies'),
+        trackers: this.$gettext('Trackers'),
+        auth: this.$gettext('Connexion'),
+        'auth-sso': this.$gettext('Connexion'),
+        yeti: this.$gettext('Yeti'),
+        serac: this.$gettext('À propos de Sérac'),
+        whatsnew: this.$gettext('Nouveautés'),
+        'outings-stats': this.$gettext('Statistiques'),
+        'sophie-picture-contest': this.$gettext('Concours photo'),
+        'associations-history': this.$gettext('Historique des associations'),
+        itinevert: this.$gettext('Itinevert'),
+      };
+      return titles[this.routeName] || 'Camptocamp';
     },
 
     addableTypes() {

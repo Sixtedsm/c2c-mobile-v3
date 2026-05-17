@@ -1,3 +1,5 @@
+import router from '@/js/vue-plugins/router';
+
 import c2c from '@/js/apis/c2c';
 import trackingService from '@/js/apis/tracking-service';
 import config from '@/js/config';
@@ -69,6 +71,7 @@ export default function install(Vue) {
 
     created() {
       this.commitToLocaleStorage_();
+      this.installExpiredTokenInterceptor();
     },
 
     methods: {
@@ -119,6 +122,38 @@ export default function install(Vue) {
       updateToken() {
         c2c.setAuthorizationToken(this.token);
         trackingService.setAuthorizationToken(this.token);
+      },
+
+      installExpiredTokenInterceptor() {
+        // Task 13: when the server rejects an authenticated request with
+        // 401, the local token is no longer valid — invalidated by a
+        // password change, role revoked, account banned, or simply the
+        // server-side session expired earlier than our `expire` timestamp.
+        // Sign the user out locally and bounce them to the login page so
+        // they can re-auth, with the current path stored for redirect.
+        c2c.axios.interceptors.response.use(
+          (response) => response,
+          (error) => {
+            const status = error?.response?.status;
+            const requestUrl = error?.config?.url || '';
+            // Only react when we actually thought we were logged in. Don't
+            // react on the login endpoint itself (bad credentials would
+            // otherwise auto-redirect to /auth in a loop).
+            const looksLikeLoginCall = /\/users\/(login|register|validate_)/.test(requestUrl);
+            if (status === 401 && this.isLogged && !looksLikeLoginCall) {
+              this.signout();
+              const current = router.currentRoute?.fullPath;
+              const isOnAuth = router.currentRoute?.name === 'auth';
+              if (!isOnAuth) {
+                router.push({
+                  name: 'auth',
+                  query: current && current !== '/' ? { redirect: current } : undefined,
+                });
+              }
+            }
+            return Promise.reject(error);
+          },
+        );
       },
 
       saveLangPreference(lang) {
