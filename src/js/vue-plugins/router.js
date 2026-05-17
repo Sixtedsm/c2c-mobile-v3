@@ -38,6 +38,7 @@ const TopoguideView = () => import(/* webpackChunkName: "view-secondary" */ '@/v
 
 // Auth / account views — gated behind auth most of the time.
 const AccountView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/AccountView');
+const AppSettingsView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/AppSettingsView');
 const FollowingView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/FollowingView');
 const LoginView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/LoginView');
 const PreferencesView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/PreferencesView');
@@ -90,6 +91,7 @@ const routes = [
   { path: '/offline', name: 'offline', component: OfflineView },
   { path: '/more', name: 'more', component: MoreView },
   { path: '/me', name: 'me', component: MeView },
+  { path: '/app-settings', name: 'app-settings', component: AppSettingsView },
 
   // V3 native forum client (Discourse JSON API). Stays inside the app
   // instead of redirecting to forum.camptocamp.org.

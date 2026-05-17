@@ -7,6 +7,7 @@ import VueHead from 'vue-head';
 
 import App from '@/App.vue';
 import config from '@/js/config';
+import appSettings from '@/js/vue-plugins/app-settings';
 import dateUtils from '@/js/vue-plugins/date-utils';
 import documentUtils from '@/js/vue-plugins/document-utils';
 import fontAwesome from '@/js/vue-plugins/font-awesome-config';
@@ -36,6 +37,7 @@ Vue.config.productionTip = false;
 Vue.config.silent = false;
 
 Vue.use(localStorage); // First, vm.$localStorage property
+Vue.use(appSettings); // vm.$appSettings: V3-local theme + text size prefs
 Vue.use(offline); // vm.$offline: PWA offline storage of documents
 
 Vue.use(gdpr);

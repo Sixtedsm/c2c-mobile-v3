@@ -53,7 +53,7 @@ export default {
           // logged-in users get cards for their outings/routes/contributions
           // plus the account settings shortcuts.
           to: { name: 'me' },
-          match: ['me', 'account', 'auth', 'auth-sso', 'preferences', 'following', 'trackers'],
+          match: ['me', 'account', 'auth', 'auth-sso', 'preferences', 'following', 'trackers', 'app-settings'],
         },
         {
           key: 'more',

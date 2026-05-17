@@ -102,6 +102,18 @@
           </div>
         </div>
 
+        <!-- Without this, an empty `documents.documents` (e.g. /outings?u=<id>
+             returning 0 rows) renders nothing — list mode shows ag-grid's
+             "No Rows" overlay and map shows a blank map, but cards looked
+             silently broken. -->
+        <div
+          v-if="documents && !listMode && documentType !== 'image' && documents.documents && !documents.documents.length"
+          class="empty-state has-text-centered"
+        >
+          <fa-icon icon="folder-open" class="empty-state-icon" />
+          <p>{{ $gettext('No results') }}</p>
+        </div>
+
         <documents-table
           v-if="listMode"
           :documents="documents ? documents : {}"
@@ -413,6 +425,21 @@ $cards-gap: 0.25rem;
 // V3 mobile FAB: thumb-reachable toggle between list and map. Pinned
 // above the BottomNav (56px + safe-area) via position:fixed so it
 // stays visible no matter how the user scrolls inside the listing.
+.empty-state {
+  padding: 2.5rem 1rem;
+  color: #6b6b6b;
+
+  .empty-state-icon {
+    font-size: 2.5rem;
+    color: #d1d5db;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    font-size: 0.95rem;
+  }
+}
+
 .map-list-fab {
   position: fixed;
   right: 0.75rem;

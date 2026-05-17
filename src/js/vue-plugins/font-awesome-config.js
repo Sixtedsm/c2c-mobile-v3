@@ -109,6 +109,8 @@ import { faSortAmountDownAlt } from '@fortawesome/free-solid-svg-icons/faSortAmo
 import { faSortAmountUp } from '@fortawesome/free-solid-svg-icons/faSortAmountUp';
 import { faSquare } from '@fortawesome/free-solid-svg-icons/faSquare';
 import { faStar } from '@fortawesome/free-solid-svg-icons/faStar';
+import { faMoon } from '@fortawesome/free-solid-svg-icons/faMoon';
+import { faPalette } from '@fortawesome/free-solid-svg-icons/faPalette';
 import { faSun } from '@fortawesome/free-solid-svg-icons/faSun';
 import { faTachometerAlt } from '@fortawesome/free-solid-svg-icons/faTachometerAlt';
 import { faTag } from '@fortawesome/free-solid-svg-icons/faTag';
@@ -198,6 +200,7 @@ import { faSliders as faSlidersV3 } from '@fortawesome/free-solid-svg-icons/faSl
 import { faSnowflake as faSnowflakeV3 } from '@fortawesome/free-solid-svg-icons/faSnowflake';
 import { faTriangleExclamation as faTriangleExclamationV3 } from '@fortawesome/free-solid-svg-icons/faTriangleExclamation';
 import { faUserGroup as faUserGroupV3 } from '@fortawesome/free-solid-svg-icons/faUserGroup';
+import { faXmark as faXmarkV3 } from '@fortawesome/free-solid-svg-icons/faXmark';
 
 // registered globally
 export default function install(Vue) {
@@ -217,6 +220,7 @@ export default function install(Vue) {
     faSnowflakeV3,
     faTriangleExclamationV3,
     faUserGroupV3,
+    faXmarkV3,
     drill,
     paragliding,
     sort,
@@ -375,6 +379,8 @@ export default function install(Vue) {
     faSortAmountUp,
     faSquare,
     faStar,
+    faMoon,
+    faPalette,
     faSun,
     faTachometerAlt,
     faTag,

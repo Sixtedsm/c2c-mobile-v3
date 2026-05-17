@@ -32,10 +32,20 @@
 
     <!-- keep router view in last -->
     <div class="page-content is-block-print">
-      <router-view class="router-view" />
+      <!-- Slide-fade transition on route change (#8). Only the entering
+           view animates (translate + fade in); leaving view disappears
+           instantly — avoids two views overlapping inside the
+           position-absolute scroll container and the layout glitches
+           that come with it. Keying by $route.name means filter/query
+           updates (same component, different querystring) don't replay
+           the animation — only real navigation does. -->
+      <transition name="route-slide">
+        <router-view class="router-view" :key="$route.name || $route.path" />
+      </transition>
     </div>
     <gdpr-banner></gdpr-banner>
     <bottom-nav />
+    <onboarding-tour />
   </div>
 </template>
 
@@ -46,6 +56,7 @@ import GdprBanner from './components/gdpr/GdprBanner.vue';
 import HelperWindow from './components/helper/HelperWindow';
 import ImageViewer from './components/image-viewer/ImageViewer';
 import MobileTopBar from './components/MobileTopBar.vue';
+import OnboardingTour from './components/OnboardingTour.vue';
 import DfmAdSmall from './views/DfmAdSmall.vue';
 import Navigation from './views/Navigation';
 import SideMenu from './views/SideMenu';
@@ -65,6 +76,7 @@ export default {
     AlertWindow,
     GdprBanner,
     MobileTopBar,
+    OnboardingTour,
   },
 
   data() {
@@ -160,11 +172,88 @@ html {
   height: 100%;
   text-rendering: optimizeLegibility;
   text-size-adjust: 100%;
-  // Task 11: V3 mirrors the camptocamp.org website which is light-only.
-  // Force the light scheme so the browser doesn't auto-darken form inputs,
-  // scrollbars or default backgrounds when the OS is in dark mode. Avoids
-  // the half-broken dark experience V1 has in places.
-  color-scheme: light only;
+  // color-scheme is set dynamically by the appSettings plugin from
+  // localStorage (light/dark/auto). Default light keeps prior behavior
+  // when the plugin hasn't run yet (first paint before JS).
+  color-scheme: light;
+
+  // Text size preference (#6) — applied as data-text-size on <html>.
+  // Scales the root font-size; rem-based UI follows naturally.
+  &[data-text-size='small'] { font-size: 14px; }
+  &[data-text-size='large'] { font-size: 18px; }
+}
+
+// V3 shell dark theme (#4) — scoped to data-theme="dark" so V1's
+// content keeps its tested light look. We only repaint the chrome:
+// page-content bg, MobileTopBar, BottomNav, MeView/MoreView surfaces.
+// V1 cards and document detail views stay light; doing a real dark
+// re-theme of V1 is out of scope (and the maintenance cost would be
+// huge). Selectors use html[data-theme] so they out-specify scoped
+// component styles (which only carry .class[data-v-xxx]).
+html[data-theme='dark'] {
+  body {
+    background: #1a1a1a;
+    color: #e5e5e5;
+  }
+  .page-content {
+    background: #1a1a1a;
+    color: #e5e5e5;
+  }
+  // Top bar
+  .mobile-top-bar {
+    background: #232323;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+  .top-bar-btn,
+  .top-bar-title {
+    color: #e5e5e5;
+  }
+  .top-bar-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+  }
+  // Bottom nav
+  .bottom-nav {
+    background: #232323;
+    border-top-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.4);
+  }
+  .bottom-nav-link {
+    color: #8a8a8a;
+    &:hover, &:focus { color: #ccc; }
+    &.is-active { color: #ff9933; }
+  }
+  // MeView dashboard
+  .me-view .me-header,
+  .me-view .action-link {
+    background: #2a2a2a;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #e5e5e5;
+  }
+  .me-view .me-display-name { color: #f5f5f5; }
+  .me-view .me-username,
+  .me-view .action-desc,
+  .me-view .section-label,
+  .me-view .footer-links { color: #9a9a9a; }
+  .me-view .action-icon { background: #3a2f1a; }
+  .me-view .footer-links { border-top-color: rgba(255, 255, 255, 0.1); }
+  .me-view .action-link:hover,
+  .me-view .action-link:focus {
+    color: #f5f5f5;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+  // MoreView tiles
+  .more-view .tile-link {
+    background: #2a2a2a;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #e5e5e5;
+    &:hover, &:focus { color: #f5f5f5; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4); }
+  }
+  .more-view .tile-icon { background: #3a2f1a; }
+  .more-view .subtitle,
+  .more-view .tile-desc { color: #9a9a9a; }
+  // Empty state (DocumentsView)
+  .documents-view .empty-state { color: #9a9a9a; }
 }
 
 html,
@@ -393,6 +482,30 @@ body {
 
 .router-view {
   flex-grow: 1;
+}
+
+// Route slide-fade (#8). Subtle 200ms slide-from-bottom + opacity.
+// `enter` only — leave is instant to dodge layout flicker inside the
+// position-absolute .page-content.
+.route-slide-enter-active {
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+.route-slide-enter {
+  transform: translateY(10px);
+  opacity: 0;
+}
+.route-slide-enter-to {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-slide-enter-active {
+    transition: none;
+  }
+  .route-slide-enter {
+    transform: none;
+  }
 }
 
 @media print {

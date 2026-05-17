@@ -78,9 +78,23 @@
         </button>
       </template>
 
-      <!-- Always visible (logged in or not): help + report a problem +
-           footer links to legal articles. Mirrors what the V1 SideMenu
-           footer exposed. -->
+      <!-- Always visible (logged in or not): app settings + help +
+           report a problem + footer links to legal articles. Mirrors
+           what the V1 SideMenu footer exposed. -->
+      <h2 class="section-label support-label">{{ $gettext('Application') }}</h2>
+      <ul class="action-grid">
+        <li>
+          <router-link :to="{ name: 'app-settings' }" class="action-link">
+            <span class="action-icon"><fa-icon icon="palette" /></span>
+            <span class="action-text">
+              <span class="action-label">{{ $gettext('Paramètres de l\'application') }}</span>
+              <span class="action-desc">{{ $gettext('Thème, taille du texte') }}</span>
+            </span>
+            <fa-icon icon="chevron-right" class="action-chevron" />
+          </router-link>
+        </li>
+      </ul>
+
       <h2 class="section-label support-label">{{ $gettext('Aide et support') }}</h2>
       <ul class="action-grid">
         <li>

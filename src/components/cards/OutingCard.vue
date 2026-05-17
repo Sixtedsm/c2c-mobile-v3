@@ -8,7 +8,7 @@
     <card-row>
       <card-region-item :document="document" />
 
-      <span class="is-nowrap">
+      <span v-if="document.author" class="is-nowrap">
         <fa-icon class="card-icon" icon="pen" />
         <span> {{ document.author.name | uppercaseFirstLetter }}</span>
       </span>
@@ -35,7 +35,7 @@
       <span class="card-icon is-nowrap">
         <marker-soft-mobility v-if="document.public_transport" />
         &nbsp;
-        <marker-gps-trace v-if="document.geometry.has_geom_detail" />
+        <marker-gps-trace v-if="document.geometry && document.geometry.has_geom_detail" />
         &nbsp;
         <marker-image-count :image-count="document.img_count" />
       </span>
