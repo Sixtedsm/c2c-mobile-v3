@@ -145,6 +145,50 @@ export default {
   }
 }
 
+// V3 mobile fix (task 9): the 5 action buttons (Follow, Save offline,
+// Share, Add photo, Edit) were colliding with the title (right-pulled
+// next to it). On a narrow screen the title got pushed under the bar
+// and read as garbled. Stack them below the title and let the title
+// own its full line.
+@media screen and (max-width: 768px) {
+  .box {
+    display: flex;
+    flex-direction: column;
+  }
+  .button-bar {
+    float: none !important;
+    order: 2;
+    align-self: flex-end;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    font-size: 1.25rem;
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .button-bar > span,
+  .button-bar > a {
+    margin-left: 0;
+  }
+  .title.is-1 {
+    order: 1;
+    font-size: 1.3rem;
+    line-height: 1.25;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+  .title .outing-date {
+    display: block;
+    margin-left: 0;
+    margin-top: 0.2rem;
+    font-size: 0.85rem !important;
+    color: #6b6b6b;
+  }
+}
+
 @media print {
   .title {
     font-size: 1.5rem !important;

@@ -160,6 +160,11 @@ html {
   height: 100%;
   text-rendering: optimizeLegibility;
   text-size-adjust: 100%;
+  // Task 11: V3 mirrors the camptocamp.org website which is light-only.
+  // Force the light scheme so the browser doesn't auto-darken form inputs,
+  // scrollbars or default backgrounds when the OS is in dark mode. Avoids
+  // the half-broken dark experience V1 has in places.
+  color-scheme: light only;
 }
 
 html,
