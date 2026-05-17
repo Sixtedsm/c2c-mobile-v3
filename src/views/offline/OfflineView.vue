@@ -149,6 +149,8 @@
 <script>
 import ModalWindow from '@/components/generics/modals/ModalWindow';
 
+import pullRefreshMixin from '@/js/pull-refresh-mixin';
+
 const TYPE_ICONS = {
   route: 'route',
   waypoint: 'map-marker-alt',
@@ -163,6 +165,8 @@ export default {
   name: 'OfflineView',
 
   components: { ModalWindow },
+
+  mixins: [pullRefreshMixin],
 
   data() {
     return {
@@ -213,6 +217,12 @@ export default {
   },
 
   methods: {
+    // Pull-to-refresh handler (#7) — re-reads from IDB and re-checks
+    // pending uploads. Returned for the mixin's done-event.
+    pullRefresh() {
+      return this.$offline.refresh();
+    },
+
     entryKey(entry) {
       return `${entry.type}/${entry.id}/${entry.lang}`;
     },

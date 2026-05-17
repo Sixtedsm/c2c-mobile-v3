@@ -23,10 +23,12 @@
           <div style="clear: both" />
         </div>
 
+        <!-- Local flex row replaces Bulma's .level so we can drop the
+             bulma/sass/components/level.sass import (#23). -->
         <div class="box no-print">
-          <div class="level is-mobile">
+          <div class="area-doc-types-row">
             <div
-              class="level-item has-text-centered"
+              class="area-doc-type-item has-text-centered"
               v-for="documentType of ['waypoint', 'image', 'route', 'outing']"
               :key="documentType"
             >
@@ -63,3 +65,16 @@ export default {
   mixins: [documentViewMixin],
 };
 </script>
+
+<style scoped lang="scss">
+.area-doc-types-row {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  gap: 0.5rem;
+}
+.area-doc-type-item {
+  flex: 1 1 0;
+  min-width: 0;
+}
+</style>

@@ -33,8 +33,13 @@ $button-padding-horizontal: 0.75em;
 //
 @import '~bulma/sass/components/card.sass';
 @import '~bulma/sass/components/dropdown.sass';
-@import '~bulma/sass/components/level.sass';
-@import '~bulma/sass/components/media.sass';
+// Task #23 (tree-shake): level + media dropped. Their only V3 callers
+// (AreaView doc-types row, QueryItem orientations, ApplicationCard
+// avatar layout) were rewritten with local flex — saves ~6 KB of CSS.
+// Other Bulma submodules were audited and kept: tag (3 callers but
+// trivial CSS), tabs/progress/notification (heavily used), card/
+// dropdown/columns/form/helpers (foundational). Further pruning would
+// need component-level refactors with diminishing returns.
 @import '~bulma/sass/components/modal.sass';
 @import '~bulma/sass/components/tabs.sass';
 //

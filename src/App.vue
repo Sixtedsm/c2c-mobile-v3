@@ -46,6 +46,7 @@
     <gdpr-banner></gdpr-banner>
     <bottom-nav />
     <onboarding-tour />
+    <pull-to-refresh />
   </div>
 </template>
 
@@ -57,6 +58,7 @@ import HelperWindow from './components/helper/HelperWindow';
 import ImageViewer from './components/image-viewer/ImageViewer';
 import MobileTopBar from './components/MobileTopBar.vue';
 import OnboardingTour from './components/OnboardingTour.vue';
+import PullToRefresh from './components/PullToRefresh.vue';
 import DfmAdSmall from './views/DfmAdSmall.vue';
 import Navigation from './views/Navigation';
 import SideMenu from './views/SideMenu';
@@ -77,6 +79,7 @@ export default {
     GdprBanner,
     MobileTopBar,
     OnboardingTour,
+    PullToRefresh,
   },
 
   data() {
@@ -222,6 +225,11 @@ html[data-theme='dark'] {
     color: #8a8a8a;
     &:hover, &:focus { color: #ccc; }
     &.is-active { color: #ff9933; }
+  }
+  // Recolor the pending-sync badge halo to match the dark bottom nav
+  // — keeps the orange dot from getting a white ring against #232323.
+  .bottom-nav-badge {
+    box-shadow: 0 0 0 2px #232323;
   }
   // MeView dashboard
   .me-view .me-header,

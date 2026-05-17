@@ -33,8 +33,10 @@
       />
     </div>
 
-    <div v-else-if="field.queryMode === 'orientations'" class="level">
-      <input-orientation v-model="value" class="level-item" />
+    <!-- Local flex centering replaces Bulma's .level so we can drop the
+         bulma/sass/components/level.sass import (#23). -->
+    <div v-else-if="field.queryMode === 'orientations'" class="orientations-row">
+      <input-orientation v-model="value" />
     </div>
 
     <div v-else-if="field.queryMode === 'input'" class="control">
@@ -157,5 +159,11 @@ set z-index to 6 (5 is the highest slider z-index value) to fix this
 */
 .multiselect--active {
   z-index: 6;
+}
+
+.orientations-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 </style>

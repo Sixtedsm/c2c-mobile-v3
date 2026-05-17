@@ -12,6 +12,7 @@ import infiniteScroll from 'vue-infinite-scroll';
 
 import FeedCard from '@/components/cards/FeedCard';
 import c2c from '@/js/apis/c2c';
+import pullRefreshMixin from '@/js/pull-refresh-mixin';
 
 export default {
   components: {
@@ -19,6 +20,8 @@ export default {
   },
 
   directives: { infiniteScroll },
+
+  mixins: [pullRefreshMixin],
 
   props: {
     type: {
@@ -72,6 +75,14 @@ export default {
       this.initializeColumns();
 
       this.load();
+    },
+
+    // Called by pull-to-refresh (#7). `load()` appends to the feed; this
+    // resets and reloads from scratch, then resolves when the data lands
+    // so the spinner stops on cue.
+    pullRefresh() {
+      this.initialize();
+      return this.promise;
     },
 
     initializeColumns() {

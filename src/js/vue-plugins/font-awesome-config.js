@@ -11,6 +11,7 @@ import { faHourglass as faHourglassRegular } from '@fortawesome/free-regular-svg
 import { faTrashAlt as faTrashAltRegular } from '@fortawesome/free-regular-svg-icons/faTrashAlt';
 import { faWindowMaximize as faWindowMaximizeRegular } from '@fortawesome/free-regular-svg-icons/faWindowMaximize';
 import { faAngleDown } from '@fortawesome/free-solid-svg-icons/faAngleDown';
+import { faArrowDown } from '@fortawesome/free-solid-svg-icons/faArrowDown';
 import { faArrowLeft } from '@fortawesome/free-solid-svg-icons/faArrowLeft';
 import { faArrowRight } from '@fortawesome/free-solid-svg-icons/faArrowRight';
 import { faArrowUp } from '@fortawesome/free-solid-svg-icons/faArrowUp';
@@ -281,6 +282,7 @@ export default function install(Vue) {
 
     // solid icons
     faAngleDown,
+    faArrowDown,
     faArrowsAltV,
     faArrowLeft,
     faArrowRight,

@@ -1,3 +1,4 @@
+import { toast } from 'bulma-toast';
 import Vue from 'vue';
 
 import c2c from '@/js/apis/c2c';
@@ -424,13 +425,14 @@ export default function install(Vue) {
         }
         this.syncing = true;
         const remaining = [];
+        let published = 0;
         for (const item of queue) {
           try {
             const response = await c2c.outing.create(item.payload);
-            // success: drop from queue
-            // optionally we could notify the UI here
             if (!response?.data?.document_id) {
               remaining.push({ ...item, attempts: item.attempts + 1, lastError: 'no-id' });
+            } else {
+              published += 1;
             }
           } catch (error) {
             remaining.push({
@@ -443,6 +445,29 @@ export default function install(Vue) {
         await store.replacePendingOutings(remaining);
         this.pendingOutings = remaining;
         this.syncing = false;
+
+        // Toast feedback (#21). Auto-sync runs silently in the background
+        // — without a notification, users have no idea their outings made
+        // it to the server. We only chirp when something actually moved.
+        if (published > 0) {
+          toast({
+            type: 'is-success',
+            position: 'bottom-center',
+            message:
+              published === 1
+                ? `1 sortie publiée en ligne.`
+                : `${published} sorties publiées en ligne.`,
+          });
+        }
+        if (remaining.length && published === 0 && queue.length) {
+          // Every attempt failed — surface it so the user can act (likely
+          // a server-side validation issue or auth expiry).
+          toast({
+            type: 'is-warning',
+            position: 'bottom-center',
+            message: `Échec de la synchronisation. Ouvrez « Mes topos » pour réessayer.`,
+          });
+        }
       },
 
       async removePendingOuting(id) {

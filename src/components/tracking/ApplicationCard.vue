@@ -1,18 +1,18 @@
 <template>
   <div class="card" :class="{ 'has-background-light': application.status === 'not-configured' }">
     <div class="card-content">
-      <div class="media">
-        <div class="media-left">
-          <figure class="image is-48x48">
-            <img
-              :src="require(`@/assets/img/tracking/${application.name}.png`)"
-              :alt="$gettext(application.name)"
-              class="rounded"
-              :class="{ 'grayed-out': application.status === 'not-configured' }"
-            />
-          </figure>
-        </div>
-        <div class="media-content">
+      <!-- Local flex layout replaces Bulma's .media so we can drop the
+           bulma/sass/components/media.sass import (#23). -->
+      <div class="app-card-media">
+        <figure class="app-card-media-left image is-48x48">
+          <img
+            :src="require(`@/assets/img/tracking/${application.name}.png`)"
+            :alt="$gettext(application.name)"
+            class="rounded"
+            :class="{ 'grayed-out': application.status === 'not-configured' }"
+          />
+        </figure>
+        <div class="app-card-media-content">
           <p class="is-4 has-text-weight-bold">{{ $gettext(application.name) }}</p>
           <a :href="application.website" class="is-6" target="_blank" v-translate>Go to website</a>
           <span
@@ -75,6 +75,19 @@ export default {
 </script>
 
 <style scoped lang="scss">
+.app-card-media {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.app-card-media-left {
+  flex: 0 0 auto;
+}
+.app-card-media-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .rounded {
   border-radius: 6px;
 }

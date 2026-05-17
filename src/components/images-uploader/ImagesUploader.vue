@@ -41,6 +41,26 @@
           <!-- eslint-disable-next-line vue/no-v-html -->
           <span v-html="$gettext('Drop images here or click to upload')" />
         </div>
+
+        <!-- Camera capture (#22): on mobile, `capture="environment"` opens
+             the rear camera directly instead of the file picker.
+             Desktop browsers ignore the attribute and fall back to the
+             file picker, which is the same as the drop zone above. -->
+        <div class="images-uploader-camera">
+          <input
+            ref="cameraInput"
+            type="file"
+            @change="onFilesChange"
+            accept="image/*"
+            capture="environment"
+            class="input-file"
+            aria-hidden="true"
+          />
+          <button type="button" class="button is-primary is-fullwidth camera-btn" @click="openCamera">
+            <fa-icon icon="camera" />
+            <span>&nbsp;{{ $gettext('Prendre une photo') }}</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -162,6 +182,16 @@ export default {
 
     hide() {
       this.$refs.modalWindow.hide();
+    },
+
+    // Camera capture (#22). The hidden cameraInput uses capture="environment"
+    // so iOS/Android opens the rear camera directly. We reset .value first
+    // so the same photo can be retaken after delete without onChange being
+    // silently skipped (browsers dedupe identical paths).
+    openCamera() {
+      if (!this.$refs.cameraInput) return;
+      this.$refs.cameraInput.value = '';
+      this.$refs.cameraInput.click();
     },
 
     clean() {
@@ -338,6 +368,25 @@ export default {
   .images-uploader-message-dragover {
     background: rgb(184, 238, 177);
     border: 5px dashed green;
+  }
+
+  // Camera capture button + hidden input (#22). The input is visually
+  // hidden but tap-targetable via the button's click() forwarding.
+  .images-uploader-camera {
+    margin-top: 0.75rem;
+
+    .input-file {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .camera-btn {
+      width: 100%;
+    }
   }
 }
 </style>

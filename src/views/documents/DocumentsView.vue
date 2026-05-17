@@ -27,6 +27,14 @@
           <page-selector :documents="documents" />
         </span>
         <span class="is-pulled-right is-flex header-right" v-if="documentType != 'profile'">
+          <!-- Bulk save current page for offline use (#11). Component
+               auto-hides for non-savable types (images, profiles). -->
+          <bulk-offline-button
+            v-if="documents && documents.documents"
+            :documents="documents.documents"
+            :document-type="documentType"
+            class="header-item"
+          />
           <load-user-preferences-button class="is-hidden-mobile" />
 
           <span @click="toogleProperty('listMode')" class="header-item is-size-3 has-cursor-pointer is-hidden-mobile">
@@ -154,6 +162,7 @@
 </template>
 
 <script>
+import BulkOfflineButton from './utils/BulkOfflineButton';
 import DisplayModeSwitch from './utils/DisplayModeSwitch';
 import ImageCards from './utils/ImageCards';
 import LoadUserPreferencesButton from './utils/LoadUserPreferencesButton';
@@ -162,6 +171,7 @@ import QueryItems from './utils/QueryItems';
 
 import c2c from '@/js/apis/c2c';
 import constants from '@/js/constants';
+import pullRefreshMixin from '@/js/pull-refresh-mixin';
 
 const DocumentsTable = () => import(/* webpackChunkName: "data-table" */ '@/components/datatable/DocumentsTable');
 
@@ -175,7 +185,10 @@ export default {
     ImageCards,
     DisplayModeSwitch,
     LoadUserPreferencesButton,
+    BulkOfflineButton,
   },
+
+  mixins: [pullRefreshMixin],
 
   data() {
     return {
@@ -254,6 +267,9 @@ export default {
       }
 
       this.promise = c2c[this.documentType].getAll(this.$route.query);
+      // Returned so the pull-to-refresh mixin can await the fetch and
+      // stop the spinner exactly when the data lands.
+      return this.promise;
     },
 
     toogleProperty(property) {

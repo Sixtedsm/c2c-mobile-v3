@@ -5,7 +5,16 @@
     <ul class="bottom-nav-list">
       <li v-for="tab in tabs" :key="tab.key" class="bottom-nav-item">
         <router-link :to="tab.to" class="bottom-nav-link" :class="{ 'is-active': isActive(tab) }">
-          <fa-icon :icon="tab.icon" class="bottom-nav-icon" />
+          <span class="bottom-nav-icon-wrap">
+            <fa-icon :icon="tab.icon" class="bottom-nav-icon" />
+            <!-- Pending-sync badge (#21) — shows on the "Mes topos" tab when
+                 outings created offline are waiting to be published. -->
+            <span
+              v-if="tab.key === 'saved' && pendingCount"
+              class="bottom-nav-badge"
+              :aria-label="$gettext('Sorties en attente de publication')"
+            >{{ pendingCount > 9 ? '9+' : pendingCount }}</span>
+          </span>
           <span class="bottom-nav-label">{{ tab.label }}</span>
         </router-link>
       </li>
@@ -18,6 +27,12 @@ export default {
   name: 'BottomNav',
 
   computed: {
+    pendingCount() {
+      // #21 badge — visible when outings created offline are queued.
+      // Defensive: $offline may not exist in dev/test contexts.
+      return this.$offline?.pendingOutings?.length || 0;
+    },
+
     tabs() {
       const isLoggedIn = !!this.$user.isLogged;
       return [
@@ -133,8 +148,34 @@ export default {
   }
 }
 
+.bottom-nav-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .bottom-nav-icon {
   font-size: 1.1rem;
+}
+
+// Pending-sync badge (#21). Anchored top-right of the icon, small and
+// orange so it reads as a notification without dominating the tab.
+.bottom-nav-badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: #ff9933;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  border-radius: 7px;
+  text-align: center;
+  box-shadow: 0 0 0 2px white;
 }
 
 .bottom-nav-label {
