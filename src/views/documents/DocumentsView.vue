@@ -120,6 +120,21 @@
         />
       </div>
     </div>
+
+    <!-- V3 mobile FAB: tap to toggle between results list and full-screen
+         map. Discoverable, thumb-reachable, and stays visible while
+         scrolling because position:fixed leaves it nailed to the viewport
+         (above the BottomNav). -->
+    <button
+      v-if="documentAreGeoLocalized"
+      type="button"
+      class="map-list-fab is-hidden-tablet"
+      :aria-label="displayMode === 'map' ? $gettext('Voir la liste') : $gettext('Voir la carte')"
+      @click="setProperty('displayMode', displayMode === 'map' ? 'both' : 'map')"
+    >
+      <fa-icon :icon="displayMode === 'map' ? 'list' : 'map-marked-alt'" />
+      <span>{{ displayMode === 'map' ? $gettext('Liste') : $gettext('Carte') }}</span>
+    </button>
   </div>
 </template>
 
@@ -387,6 +402,34 @@ $cards-gap: 0.25rem;
       padding-top: 0;
       padding-bottom: 0;
     }
+  }
+}
+
+// V3 mobile FAB: thumb-reachable toggle between list and map. Pinned
+// above the BottomNav (56px + safe-area) via position:fixed so it
+// stays visible no matter how the user scrolls inside the listing.
+.map-list-fab {
+  position: fixed;
+  right: 0.75rem;
+  bottom: calc(70px + env(safe-area-inset-bottom));
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.95rem;
+  background: #4a4a4a;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+
+  &:hover,
+  &:focus {
+    background: #2f2f2f;
+    outline: none;
   }
 }
 </style>
