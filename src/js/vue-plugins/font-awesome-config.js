@@ -188,6 +188,7 @@ import { faBook as faBookV3 } from '@fortawesome/free-solid-svg-icons/faBook';
 import { faBookmark as faBookmarkV3 } from '@fortawesome/free-solid-svg-icons/faBookmark';
 import { faCircleInfo as faCircleInfoV3 } from '@fortawesome/free-solid-svg-icons/faCircleInfo';
 import { faClock as faClockSolidV3 } from '@fortawesome/free-solid-svg-icons/faClock';
+import { faEnvelope as faEnvelopeV3 } from '@fortawesome/free-solid-svg-icons/faEnvelope';
 import { faLocationDot as faLocationDotV3 } from '@fortawesome/free-solid-svg-icons/faLocationDot';
 import { faMagnifyingGlass as faMagnifyingGlassV3 } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlass';
 import { faMountain as faMountainV3 } from '@fortawesome/free-solid-svg-icons/faMountain';
@@ -206,6 +207,7 @@ export default function install(Vue) {
     faBookmarkRegularV3,
     faCircleInfoV3,
     faClockSolidV3,
+    faEnvelopeV3,
     faLocationDotV3,
     faMagnifyingGlassV3,
     faMountainV3,

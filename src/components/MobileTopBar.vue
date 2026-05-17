@@ -49,6 +49,15 @@
 
       <!-- Right: action buttons -->
       <div class="top-bar-actions">
+        <!-- Help: same target as the V1 SideMenu, the C2C help article. -->
+        <router-link
+          :to="{ name: 'article', params: { id: 106732 } }"
+          class="top-bar-btn"
+          :aria-label="$gettext('Aide')"
+          :title="$gettext('Aide')"
+        >
+          <fa-icon icon="circle-info" />
+        </router-link>
         <button
           type="button"
           class="top-bar-btn"

@@ -316,18 +316,20 @@ $cards-gap: 0.25rem;
   $mobile-header-height: 56px;
   $mobile-filters-height: 25px;
 
+  // V3 shell already handles fixed top bar + scroll inside .page-content.
+  // The legacy V1 trick of position:fixed-ing the filter bar against the
+  // (now hidden) V1 navbar caused it to float over the first card and
+  // hide its title — that was the "rogné" Sixte saw. Let the filter bar
+  // scroll with the rest of the content.
   .search-infos {
-    position: fixed;
-    top: $navbar-height;
-    left: 0;
-    right: 0;
-    z-index: 24;
-    background-color: $body-background-color;
+    position: static;
+    z-index: auto;
+    background-color: transparent;
     padding-top: $mobile-section-padding;
   }
 
   .result-section {
-    padding-top: calc(2 * #{$mobile-section-padding} + #{$mobile-header-height} + #{$mobile-filters-height});
+    padding-top: $mobile-section-padding;
   }
 
   .documents-view {

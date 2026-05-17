@@ -77,6 +77,41 @@
           <span>&nbsp;{{ $gettext('Déconnexion') }}</span>
         </button>
       </template>
+
+      <!-- Always visible (logged in or not): help + report a problem +
+           footer links to legal articles. Mirrors what the V1 SideMenu
+           footer exposed. -->
+      <h2 class="section-label support-label">{{ $gettext('Aide et support') }}</h2>
+      <ul class="action-grid">
+        <li>
+          <router-link :to="{ name: 'article', params: { id: 106732 } }" class="action-link">
+            <span class="action-icon"><fa-icon icon="circle-info" /></span>
+            <span class="action-text">
+              <span class="action-label">{{ $gettext('Aide') }}</span>
+              <span class="action-desc">{{ $gettext('Guide d\'utilisation Camptocamp') }}</span>
+            </span>
+            <fa-icon icon="chevron-right" class="action-chevron" />
+          </router-link>
+        </li>
+        <li>
+          <router-link :to="{ name: 'article', params: { id: 106727 } }" class="action-link">
+            <span class="action-icon"><fa-icon icon="envelope" /></span>
+            <span class="action-text">
+              <span class="action-label">{{ $gettext('Contact / Signaler un problème') }}</span>
+              <span class="action-desc">secretariat@camptocamp.org</span>
+            </span>
+            <fa-icon icon="chevron-right" class="action-chevron" />
+          </router-link>
+        </li>
+      </ul>
+
+      <footer class="footer-links">
+        <router-link :to="{ name: 'article', params: { id: 106731 } }">{{ $gettext('Conditions') }}</router-link>
+        <span>·</span>
+        <router-link :to="{ name: 'article', params: { id: 106728 } }">{{ $gettext('Licences') }}</router-link>
+        <span>·</span>
+        <router-link :to="{ name: 'article', params: { id: 106726 } }">{{ $gettext('Association') }}</router-link>
+      </footer>
     </div>
   </section>
 </template>
@@ -337,5 +372,24 @@ export default {
 
 .signout {
   margin-top: 1.2rem;
+}
+
+.support-label {
+  margin-top: 1.5rem;
+}
+
+.footer-links {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  text-align: center;
+  font-size: 0.75rem;
+  color: #6b6b6b;
+
+  a {
+    color: #337ab7;
+    text-decoration: none;
+    padding: 0 0.25rem;
+  }
 }
 </style>
