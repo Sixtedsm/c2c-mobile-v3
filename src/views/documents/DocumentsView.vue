@@ -51,7 +51,10 @@
               @input="setProperty('displayMode', arguments[0])"
             />
 
-            <span class="is-size-3 is-hidden-tablet">
+            <!-- V1 mini map toggle was visible on mobile (is-hidden-tablet)
+                 — duplicates the new V3 floating .map-list-fab below.
+                 Hidden across all viewports now; the FAB owns this. -->
+            <span v-if="false" class="is-size-3 is-hidden-tablet">
               <fa-icon
                 :icon="displayMode === 'map' ? 'th' : 'map-marked-alt'"
                 class="has-text-primary"

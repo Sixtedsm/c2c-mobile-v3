@@ -91,12 +91,24 @@ const routes = [
   { path: '/more', name: 'more', component: MoreView },
   { path: '/me', name: 'me', component: MeView },
 
+  // V3 native forum client (Discourse JSON API). Stays inside the app
+  // instead of redirecting to forum.camptocamp.org.
   {
     path: '/forum',
     name: 'forum',
-    beforeEnter() {
-      location.href = config.urls.forum;
-    },
+    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumView'),
+  },
+  {
+    path: '/forum/c/:slug/:id(\\d+)',
+    name: 'forum-category',
+    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumCategoryView'),
+    props: true,
+  },
+  {
+    path: '/forum/t/:id(\\d+)/:slug?',
+    name: 'forum-topic',
+    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumTopicView'),
+    props: true,
   },
 ];
 

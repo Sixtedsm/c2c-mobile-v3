@@ -76,7 +76,7 @@ export default {
           label: this.$gettext('Forum'),
           desc: this.$gettext('Discussions de la communauté'),
           icon: 'speech-bubbles',
-          href: config.urls.forum,
+          to: { name: 'forum' },
         },
       ];
     },
