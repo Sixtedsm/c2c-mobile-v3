@@ -9,10 +9,10 @@
           <p class="me-username">@{{ $user.userName }}</p>
           <router-link
             v-if="$user.id"
-            :to="{ name: 'profiles', params: { id: $user.id, lang: $user.lang || 'fr' } }"
+            :to="{ name: 'my-profile' }"
             class="public-profile-link"
           >
-            {{ $gettext('Voir mon profil public') }}
+            {{ $gettext('Voir mon profil') }}
             <fa-icon icon="chevron-right" />
           </router-link>
         </div>
