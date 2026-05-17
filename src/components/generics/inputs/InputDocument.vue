@@ -204,16 +204,76 @@ export default {
     }, 300),
 
     loadOptions() {
-      this.promise = c2c
-        .search({
-          q: this.searchText,
-          t: this.letterTypes.join(','),
-          limit: 7,
-        })
-        .then((response) => {
-          response.data.profiles = response.data.users;
-          this.$emit('load-options', response.data);
-        });
+      const apiSearch = c2c.search({
+        q: this.searchText,
+        t: this.letterTypes.join(','),
+        limit: 7,
+      });
+      this.promise = apiSearch;
+
+      apiSearch.then((response) => {
+        // Backfill missing types from the offline cache so the user can
+        // still pick e.g. a saved route when the C2C API returned other
+        // types but not the one we're filtering on.
+        response.data.profiles = response.data.users;
+        const merged = this.augmentResponseWithOfflineDocs(response.data);
+        this.$emit('load-options', merged);
+      });
+
+      // Network failure (offline / DNS / 5xx) → swap in a synthetic
+      // ApiData built from the offline cache so the dropdown can still
+      // surface results.
+      apiSearch.catch(() => {
+        const synthetic = this.buildOfflineOnlyResponse();
+        this.promise = { data: synthetic, loading: false };
+        this.$emit('load-options', synthetic);
+      });
+    },
+
+    // Build a {profiles: {...}, routes: {...}, ...} response from the
+    // offline cache matching this.documentTypes_ and this.searchText.
+    buildOfflineOnlyResponse() {
+      const data = {};
+      for (const type of this.documentTypes_) {
+        data[type === 'profile' ? 'users' : type + 's'] = {
+          documents: this.offlineMatchesForType(type),
+        };
+      }
+      data.profiles = data.users || { documents: [] };
+      return data;
+    },
+
+    // Add cached docs to the response for types whose API result was
+    // empty or short. Doesn't replace existing API hits — only fills gaps.
+    augmentResponseWithOfflineDocs(data) {
+      for (const type of this.documentTypes_) {
+        const key = type === 'profile' ? 'users' : type + 's';
+        const apiHits = data[key]?.documents || [];
+        if (apiHits.length >= 3) continue; // API already returned plenty
+        const offlineHits = this.offlineMatchesForType(type);
+        if (!offlineHits.length) continue;
+        const seen = new Set(apiHits.map((d) => d.document_id));
+        const fresh = offlineHits.filter((d) => !seen.has(d.document_id));
+        data[key] = { documents: [...apiHits, ...fresh] };
+      }
+      data.profiles = data.users || { documents: [] };
+      return data;
+    },
+
+    offlineMatchesForType(type) {
+      if (!this.$offline?.savedDocs) return [];
+      const needle = (this.searchText || '').toLowerCase();
+      const docs = this.$offline.savedDocs.filter((entry) => entry.type === type && entry.data);
+      const matches = [];
+      for (const entry of docs) {
+        const doc = entry.data;
+        const title = this.$documentUtils.getDocumentTitle(doc, entry.lang) || '';
+        if (title.toLowerCase().includes(needle)) {
+          matches.push(doc);
+          if (matches.length >= 7) break;
+        }
+      }
+      return matches;
     },
 
     isSelected(value) {

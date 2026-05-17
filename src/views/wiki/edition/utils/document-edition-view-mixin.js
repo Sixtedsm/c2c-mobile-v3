@@ -148,19 +148,38 @@ export default {
           }
         };
 
-        // Auto-associate the current user on a new outing. Failures are
-        // tolerated — the form still works without an auto participant.
+        // Auto-associate the current user on a new outing. Two-step:
+        // (1) immediately add a stub from local $user data so the form
+        //     is submittable offline without waiting on the API; (2) try
+        //     to fetch the full profile to replace the stub with richer
+        //     metadata. The stub alone is sufficient for the API
+        //     validation (participant required).
         if (this.documentType === 'outing' && this.$user.id) {
+          const userStub = {
+            type: 'u',
+            document_id: this.$user.id,
+            name: this.$user.name || this.$user.userName || '',
+            forum_username: this.$user.forumUsername,
+          };
+          this.$documentUtils.addAssociation(document, userStub);
+
           pending += 1;
           this.promise.loading = pending;
           const profileFetch = c2c.profile.get(this.$user.id);
           profileFetch.then((response) => {
+            // Replace the stub with the full profile so the displayed
+            // card shows avatar + activities + etc.
+            this.$documentUtils.removeAssociation(document, userStub);
             this.$documentUtils.addAssociation(document, response.data);
           });
           profileFetch.promise_.then(settleOne, settleOne);
         }
 
-        // Pre-fill associations from URL query (e.g. ?r=12345 → preselect route)
+        // Pre-fill associations from URL query (e.g. ?r=12345 → preselect
+        // route). Tries the API first; on failure, falls back to the
+        // offline cache if the user saved that doc — important when the
+        // user lands on /outings/add from a saved route's detail page
+        // without network.
         for (const letter of Object.keys(this.$route.query)) {
           const associationType = this.$documentUtils.getDocumentType(letter);
 
@@ -174,7 +193,10 @@ export default {
               fetcher.then((response) => {
                 this.$documentUtils.addAssociation(document, response.data);
               });
-              fetcher.promise_.then(settleOne, settleOne);
+              fetcher.promise_.then(settleOne, () => {
+                // API failed (offline / 404 / etc.) — try the offline cache.
+                this.tryOfflineAssociation(document, associationType, documentId).finally(settleOne);
+              });
             }
           }
         }
@@ -188,6 +210,26 @@ export default {
           this.modified = true;
           this.afterLoad();
         }
+      }
+    },
+
+    // Offline fallback for ?r=<id> / ?w=<id> / ?u=<id> preselection in
+    // create mode. If the C2C API isn't reachable but the doc is in the
+    // user's offline cache, build an association entry from the cached
+    // data. Returns a resolved promise either way — the caller threads
+    // it into `settleOne` without caring about the outcome.
+    async tryOfflineAssociation(document, associationType, documentId) {
+      if (!this.$offline) return;
+      try {
+        const lang = this.lang || this.$user?.lang || 'fr';
+        const entry = await this.$offline.getDocument(associationType, documentId, lang);
+        if (entry?.data) {
+          this.$documentUtils.addAssociation(document, entry.data);
+        }
+      } catch {
+        // No offline copy either — give up silently. The user can still
+        // submit (some associations are optional, and the form already
+        // surfaces validation errors at save time).
       }
     },
 
