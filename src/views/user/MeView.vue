@@ -9,7 +9,7 @@
           <p class="me-username">@{{ $user.userName }}</p>
           <router-link
             v-if="$user.id"
-            :to="{ name: 'profiles', params: { id: $user.id, lang: $user.lang || 'fr' } }"
+            :to="{ name: 'profile', params: { id: $user.id, lang: $user.lang || 'fr' } }"
             class="public-profile-link"
           >
             {{ $gettext('Voir mon profil') }}
