@@ -41,7 +41,7 @@
         class="top-bar-logo"
         aria-label="Camptocamp.org"
       >
-        <img src="@/assets/img/logo.svg" alt="" />
+        <logo-ctc />
       </router-link>
 
       <!-- Center: current tab/page title -->
@@ -117,10 +117,14 @@
 </template>
 
 <script>
+import LogoCtc from './LogoCtc.vue';
+
 const TAB_ROUTES = new Set(['topoguide', 'home', 'offline', 'me', 'more']);
 
 export default {
   name: 'MobileTopBar',
+
+  components: { LogoCtc },
 
   props: {
     transparent: { type: Boolean, default: false },
@@ -285,7 +289,9 @@ export default {
   height: 38px;
   padding: 0 0.4rem;
 
-  img {
+  // Sizes both the old <img> path (now removed) and the new LogoCtc SVG.
+  img,
+  .logo-ctc {
     height: 28px;
     width: auto;
     display: block;

@@ -1,10 +1,10 @@
 // V3-local user preferences stored in localStorage under v3.appSettings.
 // Exposed as vm.$appSettings.{theme,textSize} and toggled via
 // setTheme()/setTextSize(). Applies as data-theme + data-text-size on
-// <html>; the V3 shell SCSS reacts to those attributes. We intentionally
-// only repaint the shell (top bar, bottom nav, MeView/MoreView surfaces)
-// because V1 has no real dark mode and a full re-theme is out of scope —
-// the volunteer maintenance cost would dwarf the benefit.
+// <html>; the global SCSS in App.vue reacts to those attributes,
+// repainting both the V3 shell and the V1 content surfaces (cards,
+// boxes, forms, tables, dropdowns, ag-grid). Spot overrides for
+// components that bake their own colors live next to those components.
 
 import Vue from 'vue';
 

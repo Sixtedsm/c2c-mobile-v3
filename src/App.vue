@@ -186,13 +186,16 @@ html {
   &[data-text-size='large'] { font-size: 18px; }
 }
 
-// V3 shell dark theme (#4) — scoped to data-theme="dark" so V1's
-// content keeps its tested light look. We only repaint the chrome:
-// page-content bg, MobileTopBar, BottomNav, MeView/MoreView surfaces.
-// V1 cards and document detail views stay light; doing a real dark
-// re-theme of V1 is out of scope (and the maintenance cost would be
-// huge). Selectors use html[data-theme] so they out-specify scoped
-// component styles (which only carry .class[data-v-xxx]).
+// Dark theme (#4) — html[data-theme='dark'] selector out-specifies
+// scoped component styles (whose attribute selector .class[data-v-xxx]
+// has the same specificity as a class without an element prefix). We
+// paint both the V3 shell AND the V1 content surfaces so dark mode
+// looks coherent end-to-end — the original "shell-only" approach left
+// every feed card glaring white in dark mode and was rejected.
+// Approach: remap Bulma's white backgrounds (.card, .box) and the
+// generic text colors to a dark palette; keep the orange/blue accents
+// intact. Specific V1 surfaces that bake their own colors get spot
+// fixes below.
 html[data-theme='dark'] {
   body {
     background: #1a1a1a;
@@ -262,6 +265,178 @@ html[data-theme='dark'] {
   .more-view .tile-desc { color: #9a9a9a; }
   // Empty state (DocumentsView)
   .documents-view .empty-state { color: #9a9a9a; }
+
+  // ── V1 content surfaces ────────────────────────────────────────────
+  // Bulma .card (FeedCard, DocumentCard wrappers, OutingCard etc.)
+  .card {
+    background: #2a2a2a;
+    color: #e5e5e5;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .card-content,
+  .card-header,
+  .card-footer {
+    background: transparent;
+    color: inherit;
+  }
+  .card-footer { border-top-color: rgba(255, 255, 255, 0.08); }
+  .card-footer-item { border-right-color: rgba(255, 255, 255, 0.08); }
+  // FeedCard alternating row separator (Bulma .card-content + custom .row)
+  .feed-card .row,
+  .feed-card .columns:not(:last-child) {
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  // .box (used in document detail boxes, profile sidebar, etc.)
+  .box {
+    background: #2a2a2a;
+    color: #e5e5e5;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  // Generic text utilities (Bulma)
+  .has-text-grey-darker,
+  .has-text-grey-dark,
+  .has-text-dark,
+  .has-text-black { color: #e5e5e5 !important; }
+  .has-text-grey { color: #b5b5b5 !important; }
+  .has-text-grey-light { color: #8a8a8a !important; }
+
+  // Background utilities (Bulma)
+  .has-background-light,
+  .has-background-white { background-color: #2a2a2a !important; }
+  .has-background-white-print { background-color: transparent !important; }
+
+  // Tags (Bulma)
+  .tag:not(.is-primary):not(.is-info):not(.is-success):not(.is-warning):not(.is-danger) {
+    background: #3a3a3a;
+    color: #e5e5e5;
+  }
+  .tag.is-light {
+    background: #3a3a3a !important;
+    color: #d5d5d5 !important;
+  }
+
+  // Notifications — invert the light "info" panel that V1 uses on edit
+  // forms and "no result" boxes.
+  .notification {
+    background: #2f2f2f;
+    color: #e5e5e5;
+  }
+  .notification.is-info { background: #1e3a5f; color: #d8e6f5; }
+  .notification.is-warning { background: #5a4a1f; color: #f5e8c8; }
+  .notification.is-danger { background: #5a2222; color: #f5d6d6; }
+
+  // Titles / subtitles (Bulma) — keep them visible
+  .title { color: #f5f5f5; }
+  .subtitle { color: #b5b5b5; }
+
+  // Forms (Bulma inputs/selects/textareas)
+  .input,
+  .textarea,
+  .select select {
+    background: #1f1f1f;
+    color: #e5e5e5;
+    border-color: rgba(255, 255, 255, 0.15);
+    &::placeholder { color: #6b6b6b; }
+    &:focus { border-color: #ff9933; box-shadow: 0 0 0 0.125em rgba(255, 153, 51, 0.25); }
+  }
+  .label { color: #e5e5e5; }
+  .help { color: #9a9a9a; }
+
+  // Buttons — only the "light" / "text" / undecorated variants need a
+  // dark surface; .is-primary/.is-info etc. already pop against any bg.
+  .button:not(.is-primary):not(.is-info):not(.is-success):not(.is-warning):not(.is-danger):not(.is-link) {
+    background: #2a2a2a;
+    color: #e5e5e5;
+    border-color: rgba(255, 255, 255, 0.15);
+    &:hover, &:focus { background: #353535; color: #fff; border-color: rgba(255, 255, 255, 0.25); }
+  }
+  .button.is-text {
+    background: transparent;
+    color: #e5e5e5;
+    &:hover, &:focus { background: rgba(255, 255, 255, 0.06); color: #fff; }
+  }
+  .button.is-light {
+    background: #2a2a2a !important;
+    color: #e5e5e5 !important;
+  }
+
+  // Dropdowns (Bulma) — used in DocumentsView document-type picker, etc.
+  .dropdown-content {
+    background: #2a2a2a;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  }
+  .dropdown-item {
+    color: #e5e5e5;
+    &:hover, &.is-active { background: #3a3a3a; color: #fff; }
+  }
+  .dropdown-divider { background-color: rgba(255, 255, 255, 0.08); }
+
+  // Modals (Bulma)
+  .modal-card-head,
+  .modal-card-foot {
+    background: #232323;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .modal-card-body { background: #2a2a2a; color: #e5e5e5; }
+  .modal-card-title { color: #f5f5f5; }
+  .modal-background { background-color: rgba(0, 0, 0, 0.7); }
+
+  // Tabs
+  .tabs a { color: #b5b5b5; border-bottom-color: rgba(255, 255, 255, 0.15); }
+  .tabs li.is-active a { color: #ff9933; border-bottom-color: #ff9933; }
+
+  // Tables — V1 WhatsNew, AssociationsHistory etc.
+  table,
+  .table {
+    background: transparent;
+    color: #e5e5e5;
+  }
+  .table th { background: #232323; color: #f5f5f5; border-color: rgba(255, 255, 255, 0.08); }
+  .table td { border-color: rgba(255, 255, 255, 0.06); }
+  .table tr:hover td { background: rgba(255, 255, 255, 0.04); }
+
+  // V1 ag-grid table (DocumentsView list mode) — its CSS is loaded
+  // by the data-table chunk and uses a fixed light palette. Override
+  // the surfaces and text so it doesn't burn the user's eyes.
+  .ag-theme-balham {
+    --ag-background-color: #2a2a2a;
+    --ag-header-background-color: #232323;
+    --ag-odd-row-background-color: #2a2a2a;
+    --ag-foreground-color: #e5e5e5;
+    --ag-header-foreground-color: #f5f5f5;
+    --ag-border-color: rgba(255, 255, 255, 0.08);
+    --ag-row-hover-color: rgba(255, 255, 255, 0.05);
+    --ag-secondary-foreground-color: #b5b5b5;
+  }
+
+  // Offline view surfaces
+  .offline-card,
+  .pending-outings {
+    background: #2a2a2a;
+    color: #e5e5e5;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  // Generic small-text/muted classes used across V1
+  .has-text-info,
+  .has-text-link { color: #6db4ff; }
+
+  // Document-detail surfaces (route/outing/waypoint header rows are
+  // already inside .card / .box overrides, but the inner separators
+  // and dotted lines need a darker contrast).
+  hr { background-color: rgba(255, 255, 255, 0.08); }
+
+  // Markdown content inside topo descriptions
+  .markdown-section,
+  .markdown-content {
+    color: #e5e5e5;
+    a { color: #6db4ff; }
+    code { background: #1a1a1a; color: #ffd17a; }
+    pre { background: #1a1a1a; }
+    blockquote { border-left-color: rgba(255, 255, 255, 0.2); color: #b5b5b5; }
+  }
 }
 
 html,

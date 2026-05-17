@@ -21,7 +21,7 @@
           <span>{{ opt.label }}</span>
         </button>
       </div>
-      <p class="note">{{ $gettext('Le mode sombre s\'applique à l\'enveloppe mobile uniquement (barres, accueil, plus). Les contenus topo restent en clair.') }}</p>
+      <p class="note">{{ $gettext('« Auto » suit le réglage de votre système.') }}</p>
 
       <!-- Text size -->
       <h2 class="section-label">{{ $gettext('Taille du texte') }}</h2>
