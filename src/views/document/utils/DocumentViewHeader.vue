@@ -17,7 +17,10 @@
           />
           <tags-button v-if="!isPrintingView" :document="document" />
 
-          <social-network-sharing v-if="documentType != 'profile' && isNormalView" />
+          <!-- ShareButton uses the Web Share API (native sheet on mobile)
+               with a clipboard fallback — no AddThis / GDPR dependency. -->
+          <share-button v-if="documentType != 'profile' && isNormalView" :document="document" />
+          <social-network-sharing v-if="false" />
 
           <span
             :title="$gettext('Add images')"
@@ -63,6 +66,7 @@ import DocumentVersionBanner from './DocumentVersionBanner';
 import FollowButton from './FollowButton';
 import GotopButton from './GotopButton';
 import OfflineHeaderButton from './OfflineHeaderButton.vue';
+import ShareButton from './ShareButton.vue';
 import SocialNetworkSharing from './SocialNetworkSharing';
 import TagsButton from './TagsButton';
 
@@ -75,6 +79,7 @@ export default {
     ImagesUploader,
     FollowButton,
     OfflineHeaderButton,
+    ShareButton,
     GotopButton,
     TagsButton,
     SocialNetworkSharing,
