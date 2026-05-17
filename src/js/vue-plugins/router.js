@@ -17,7 +17,6 @@ import XreportView from '@/views/document/XreportView';
 import DocumentsPrintingView from '@/views/documents/DocumentsPrintingView';
 import MoreView from '@/views/MoreView';
 import MeView from '@/views/user/MeView';
-import MyProfileView from '@/views/user/MyProfileView';
 import OfflineView from '@/views/offline/OfflineView';
 import HomeView from '@/views/portals/HomeView';
 import ItinevertView from '@/views/portals/ItinevertView.vue';
@@ -79,7 +78,6 @@ const routes = [
   { path: '/offline', name: 'offline', component: OfflineView },
   { path: '/more', name: 'more', component: MoreView },
   { path: '/me', name: 'me', component: MeView },
-  { path: '/me/profile', name: 'my-profile', component: MyProfileView, meta: { requiresAuth: true } },
 
   {
     path: '/forum',

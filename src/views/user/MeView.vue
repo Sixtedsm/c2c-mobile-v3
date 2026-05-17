@@ -9,7 +9,7 @@
           <p class="me-username">@{{ $user.userName }}</p>
           <router-link
             v-if="$user.id"
-            :to="{ name: 'my-profile' }"
+            :to="{ name: 'profiles', params: { id: $user.id, lang: $user.lang || 'fr' } }"
             class="public-profile-link"
           >
             {{ $gettext('Voir mon profil') }}
@@ -124,13 +124,11 @@ export default {
           icon: 'mountain-pencil',
           to: { name: 'whatsnew', query: { u } },
         },
-        {
-          key: 'my-xreports',
-          label: this.$gettext('Mes récits Sérac'),
-          desc: this.$gettext('Récits d\'incidents que j\'ai partagés'),
-          icon: 'notebook-warning',
-          to: { name: 'xreports', query: { u } },
-        },
+        // "Mes récits Sérac" retiré: l'API /xreports?u=<id> ignore le
+        // filtre et renvoie toute la base — le lien promettait des
+        // récits qui n'existaient pas. Les xreports créés par l'user
+        // apparaissent dans "Mes topos publiés" (whatsnew couvre tous
+        // les types).
         {
           key: 'offline',
           label: this.$gettext('Mes topos hors-ligne'),
