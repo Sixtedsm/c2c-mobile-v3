@@ -71,6 +71,9 @@ export default {
     return {
       alternativeSideMenu: false,
       offlineBannerDismissed: false,
+      // Per-route scroll positions inside .page-content. Lets a user open
+      // a topo, hit Back, and land exactly where they were in the list.
+      scrollPositions: Object.create(null),
     };
   },
 
@@ -89,10 +92,27 @@ export default {
     document.getElementById('splashscreen').style.display = 'none';
     this.updateWidth();
     window.addEventListener('resize', this.updateWidth);
+
+    // Per-route scroll restoration on the .page-content scroll surface.
+    // Vue Router's built-in scrollBehavior operates on window, but we
+    // moved scroll to the inner container — so we wire it up by hand.
+    this.removeBeforeEach = this.$router.beforeEach((to, from, next) => {
+      const el = document.querySelector('.page-content');
+      if (el) this.scrollPositions[from.fullPath] = el.scrollTop;
+      next();
+    });
+    this.removeAfterEach = this.$router.afterEach((to) => {
+      this.$nextTick(() => {
+        const el = document.querySelector('.page-content');
+        if (el) el.scrollTop = this.scrollPositions[to.fullPath] || 0;
+      });
+    });
   },
 
   beforeDestroy() {
     window.removeEventListener('resize', this.updateWidth);
+    if (this.removeBeforeEach) this.removeBeforeEach();
+    if (this.removeAfterEach) this.removeAfterEach();
   },
 
   methods: {
@@ -132,9 +152,12 @@ export default {
 <style lang="scss">
 $body-height: calc(100vh - #{$navbar-height});
 
+// V3 native-app feel: html/body lock at 100% height, no scroll on the
+// document itself. The page-content below scrolls independently so the
+// MobileTopBar and BottomNav stay nailed in place during navigation.
 html {
-  overflow-x: hidden;
-  overflow-y: scroll;
+  overflow: hidden;
+  height: 100%;
   text-rendering: optimizeLegibility;
   text-size-adjust: 100%;
 }
@@ -142,7 +165,17 @@ html {
 html,
 body,
 #app {
-  min-height: $body-height;
+  height: 100%;
+  min-height: 0;
+}
+
+body {
+  overflow: hidden;
+}
+
+#app {
+  position: relative;
+  overflow: hidden;
 }
 
 .navigation {
@@ -214,14 +247,23 @@ body,
   box-shadow: 0 5px 10px 0px rgba(10, 10, 10, 0.5);
 }
 
+// V3 page-content is the single scroll surface — pinned between the
+// fixed MobileTopBar and BottomNav. Everything else (decor) stays put,
+// like a native app's main content area.
 .page-content {
-  min-height: 100vh;
+  position: absolute;
+  top: calc(52px + env(safe-area-inset-top));
+  bottom: calc(56px + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  // Native-feel: only this surface scrolls. Disable rubber-band bounce
+  // outside the content area (some webviews leak it).
+  overscroll-behavior: contain;
   display: flex;
   flex-flow: column;
-  // V3 reserves top space for the fixed MobileTopBar and bottom space
-  // for the fixed BottomNav so content is never hidden behind either.
-  padding-top: calc(48px + env(safe-area-inset-top));
-  padding-bottom: calc(56px + env(safe-area-inset-bottom));
 }
 
 // V3 ditches the V1 desktop SideMenu and top Navigation in favor of the
@@ -232,9 +274,9 @@ body,
   .navigation {
     display: none !important;
   }
-  // V1 also reserved padding-top for its navbar in some routes; override.
+  // Home-topoguide used to reserve padding for the V1 navbar; not needed.
   .home-topoguide .page-content {
-    padding-top: calc(48px + env(safe-area-inset-top)) !important;
+    padding-top: 0 !important;
   }
 }
 
