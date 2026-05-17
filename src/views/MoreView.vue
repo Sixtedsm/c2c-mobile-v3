@@ -14,8 +14,8 @@
             :rel="tile.href ? 'noopener' : undefined"
             class="tile-link"
           >
-            <span class="tile-icon" :style="{ background: tile.color }">
-              <fa-icon :icon="tile.icon" />
+            <span class="tile-icon">
+              <custom-icon :name="tile.icon" :size="34" />
             </span>
             <span class="tile-text">
               <span class="tile-label">{{ tile.label }}</span>
@@ -30,10 +30,13 @@
 </template>
 
 <script>
+import CustomIcon from '@/components/CustomIcon.vue';
 import config from '@/js/config';
 
 export default {
   name: 'MoreView',
+
+  components: { CustomIcon },
 
   computed: {
     tiles() {
@@ -44,40 +47,35 @@ export default {
           key: 'routes',
           label: this.$gettext('Itinéraires'),
           desc: this.$gettext('Voies, courses, parcours'),
-          icon: ['fas', 'route'],
-          color: '#fef3c7',
+          icon: 'mountain-trail',
           to: { name: 'routes' },
         },
         {
           key: 'articles',
           label: this.$gettext('Articles'),
           desc: this.$gettext('Techniques, conseils, récits'),
-          icon: ['fas', 'newspaper'],
-          color: '#ede9fe',
+          icon: 'notebook',
           to: { name: 'articles' },
         },
         {
           key: 'xreports',
           label: this.$gettext('Sérac'),
           desc: this.$gettext("Incidents et accidents"),
-          icon: ['fas', 'triangle-exclamation'],
-          color: '#ffe4e6',
+          icon: 'serac-warning',
           to: { name: 'xreports' },
         },
         {
           key: 'yeti',
           label: this.$gettext('Yeti'),
           desc: this.$gettext('Préparation de course ski/alpi'),
-          icon: ['fas', 'snowflake'],
-          color: '#e0f2fe',
+          icon: 'snowflake-compass',
           to: { name: 'yeti' },
         },
         {
           key: 'forum',
           label: this.$gettext('Forum'),
           desc: this.$gettext('Discussions de la communauté'),
-          icon: ['fas', 'comments'],
-          color: '#dbeafe',
+          icon: 'speech-bubbles',
           href: config.urls.forum,
         },
       ];
@@ -130,13 +128,13 @@ export default {
 
 .tile-icon {
   flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
-  color: #4a4a4a;
+  background: #fff5e6;
+  border-radius: 4px;
 }
 
 .tile-text {

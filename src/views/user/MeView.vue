@@ -44,8 +44,8 @@
         <ul class="action-grid">
           <li v-for="action in myContent" :key="action.key">
             <router-link :to="action.to" class="action-link">
-              <span class="action-icon" :style="{ background: action.color }">
-                <fa-icon :icon="action.icon" />
+              <span class="action-icon">
+                <custom-icon :name="action.icon" :size="28" />
               </span>
               <span class="action-text">
                 <span class="action-label">{{ action.label }}</span>
@@ -60,8 +60,8 @@
         <ul class="action-grid">
           <li v-for="action in myAccount" :key="action.key">
             <router-link :to="action.to" class="action-link">
-              <span class="action-icon" :style="{ background: action.color }">
-                <fa-icon :icon="action.icon" />
+              <span class="action-icon">
+                <custom-icon :name="action.icon" :size="28" />
               </span>
               <span class="action-text">
                 <span class="action-label">{{ action.label }}</span>
@@ -83,9 +83,12 @@
 
 <script>
 import c2c from '@/js/apis/c2c';
+import CustomIcon from '@/components/CustomIcon.vue';
 
 export default {
   name: 'MeView',
+
+  components: { CustomIcon },
 
   computed: {
     initial() {
@@ -111,32 +114,28 @@ export default {
           key: 'my-outings',
           label: this.$gettext('Mes sorties'),
           desc: this.$gettext('Sorties auxquelles j\'ai participé'),
-          icon: ['fas', 'route'],
-          color: '#fef3c7',
+          icon: 'footprint-arrow',
           to: { name: 'outings', query: { u } },
         },
         {
           key: 'my-changes',
           label: this.$gettext('Mes topos publiés'),
           desc: this.$gettext('Itinéraires, points, photos, articles que j\'ai créés ou modifiés'),
-          icon: ['fas', 'pen-to-square'],
-          color: '#ede9fe',
+          icon: 'mountain-pencil',
           to: { name: 'whatsnew', query: { u } },
         },
         {
           key: 'my-xreports',
           label: this.$gettext('Mes récits Sérac'),
           desc: this.$gettext('Récits d\'incidents que j\'ai partagés'),
-          icon: ['fas', 'triangle-exclamation'],
-          color: '#ffe4e6',
+          icon: 'notebook-warning',
           to: { name: 'xreports', query: { u } },
         },
         {
           key: 'offline',
           label: this.$gettext('Mes topos hors-ligne'),
           desc: this.$gettext('Sauvegardes pour usage terrain'),
-          icon: ['fas', 'bookmark'],
-          color: '#dcfce7',
+          icon: 'bookmark-download',
           to: { name: 'offline' },
         },
       ];
@@ -148,32 +147,28 @@ export default {
           key: 'preferences',
           label: this.$gettext('Préférences'),
           desc: this.$gettext('Activités suivies, filtres par défaut'),
-          icon: ['fas', 'sliders'],
-          color: '#e0f2fe',
+          icon: 'sliders',
           to: { name: 'preferences' },
         },
         {
           key: 'following',
           label: this.$gettext('Personnes suivies'),
           desc: this.$gettext('Voir mes amis et mentors'),
-          icon: ['fas', 'user-group'],
-          color: '#fef9c3',
+          icon: 'two-hikers',
           to: { name: 'following' },
         },
         {
           key: 'account',
           label: this.$gettext('Compte'),
           desc: this.$gettext('Email, mot de passe, paramètres'),
-          icon: ['fas', 'gear'],
-          color: '#e5e7eb',
+          icon: 'user-settings',
           to: { name: 'account' },
         },
         {
           key: 'trackers',
           label: this.$gettext('Trackers'),
           desc: this.$gettext('Strava, Suunto, Polar, Garmin…'),
-          icon: ['fas', 'plug'],
-          color: '#fae8ff',
+          icon: 'gps-pin',
           to: { name: 'trackers' },
         },
       ];
@@ -311,13 +306,13 @@ export default {
 
 .action-icon {
   flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
-  color: #4a4a4a;
+  background: #fff5e6;
+  border-radius: 4px;
 }
 
 .action-text {
