@@ -88,11 +88,11 @@ export default {
   z-index: 28;
   background: white;
   border-top: 1px solid rgba(0, 0, 0, 0.12);
-  // Sixte: labels were sitting flush against the screen edge on Android
-  // (safe-area-inset-bottom is 0 there). Adds a base 6px breathing room
-  // and keeps the iOS home-indicator dodge via env() on top.
-  padding-bottom: calc(6px + env(safe-area-inset-bottom));
-  padding-top: 4px;
+  // Padding-bottom keeps a 4px floor (Android where safe-area is 0)
+  // plus the env() inset (iOS home indicator). Total nav height ~52px
+  // on Android, ~52 + indicator on iPhones with notches.
+  padding-bottom: calc(4px + env(safe-area-inset-bottom));
+  padding-top: 2px;
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
 }
 
@@ -101,7 +101,7 @@ export default {
   list-style: none;
   margin: 0;
   padding: 0;
-  height: 52px;
+  height: 46px;
 }
 
 .bottom-nav-item {

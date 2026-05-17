@@ -258,7 +258,7 @@ body {
 .page-content {
   position: absolute;
   top: calc(52px + env(safe-area-inset-top));
-  bottom: calc(62px + env(safe-area-inset-bottom));
+  bottom: calc(52px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
   overflow-y: auto;
