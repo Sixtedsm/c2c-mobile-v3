@@ -226,8 +226,13 @@ html {
   color-scheme: light;
 
   // Text size preference (#6) — applied as data-text-size on <html>.
-  // Scales the root font-size; rem-based UI follows naturally.
-  &[data-text-size='small'] { font-size: 14px; }
+  // Bulma's $body-size (variables.scss) sets html { font-size: 14px }
+  // out of the box, so "small" at 14px was indistinguishable from the
+  // default and "normal" (no override) silently fell back to 14px too —
+  // only "large" was visibly different. Explicit values now, with clear
+  // 2/4 px gaps so each step actually shifts the rem-based UI.
+  &[data-text-size='small'] { font-size: 12px; }
+  &[data-text-size='normal'] { font-size: 14px; }
   &[data-text-size='large'] { font-size: 18px; }
 }
 
