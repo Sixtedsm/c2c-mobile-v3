@@ -316,6 +316,16 @@ html[data-theme='dark'] {
   // Empty state (DocumentsView)
   .documents-view .empty-state { color: #9a9a9a; }
 
+  // V3 mobile map quick-toggle pill — keep readable on dark
+  .ol-control-quick-layers {
+    background: rgba(40, 40, 40, 0.92);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    button {
+      color: #e5e5e5;
+      &:hover { background: rgba(255, 255, 255, 0.08); }
+    }
+  }
+
   // ── V1 content surfaces ────────────────────────────────────────────
   // Bulma .card (FeedCard, DocumentCard wrappers, OutingCard etc.)
   // Card text contrast: V1 scoped CSS on .card-row (CardRow.vue) and

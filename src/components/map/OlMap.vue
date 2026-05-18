@@ -12,6 +12,28 @@
       </button>
     </div>
 
+    <!-- V3 mobile quick-toggle for the 3 most-used base layers. Visible
+         only on small screens (the full layer switcher panel covers most
+         of the map there and is overkill for a quick OTM↔IGN↔Sat
+         change). Each button toggles the corresponding layer in
+         mapLayers — same `visibleLayer` setter the full panel uses. -->
+    <div
+      v-if="quickLayers.length"
+      class="ol-control ol-control-quick-layers is-hidden-tablet"
+      :aria-label="$gettext('Choisir une couche de carte')"
+    >
+      <button
+        v-for="entry in quickLayers"
+        :key="entry.layer.get('title')"
+        type="button"
+        :class="{ 'is-active': entry.layer === visibleLayer }"
+        :title="entry.layer.get('title')"
+        @click="visibleLayer = entry.layer"
+      >
+        {{ entry.label }}
+      </button>
+    </div>
+
     <div
       v-show="showPinToTopButton && !isFullscreen"
       ref="togglePinToTopButton"
@@ -406,6 +428,25 @@ export default {
         this.visibleLayer.setVisible(false);
         layer.setVisible(true);
       },
+    },
+
+    // V3 quick-toggle (mobile): pick the three most useful base layers
+    // for the c2c audience by title. Falls back to whatever's available
+    // — if a layer was removed via cartoLayers_.filter('restricted'),
+    // the entry is just dropped silently.
+    quickLayers() {
+      if (!this.mapLayers) return [];
+      const wanted = [
+        { title: 'OpenTopoMap', label: 'OTM' },
+        { title: 'IGN maps', label: 'IGN' },
+        { title: 'ESRI World Imagery', label: 'Sat' },
+      ];
+      return wanted
+        .map((w) => {
+          const layer = this.mapLayers.find((l) => l.get('title') === w.title);
+          return layer ? { layer, label: w.label } : null;
+        })
+        .filter(Boolean);
     },
 
     osmLayer() {
@@ -1733,6 +1774,64 @@ $control-margin: 0.5em;
 .ol-control-layer-switcher-button {
   bottom: $control-margin;
   left: $control-margin;
+}
+
+// V3 mobile improvements (#10 map controls): the V1 controls were
+// sized for desktop (22px tap targets, planqued at the very bottom-
+// left of the map). On a small screen with a 52px BottomNav and a
+// safe-area inset at the bottom, the layer button was either too
+// close to the nav to tap reliably or hidden behind it entirely. Lift
+// it above the safe-area and grow the tap surfaces. Same treatment
+// for the geoloc/compass/pin column on the top-left.
+@media screen and (max-width: 768px) {
+  .ol-control-layer-switcher-button {
+    bottom: calc($control-margin + 60px + env(safe-area-inset-bottom));
+  }
+  .ol-control button {
+    width: 2.4em;
+    height: 2.4em;
+    font-size: 1.05em;
+  }
+  // The full side-panel takes 60% of a 375px screen — fine to keep,
+  // but bump the background opacity so the user can still see they're
+  // over the map. Tap anywhere outside closes it (existing logic).
+  .ol-control-layer-switcher {
+    width: min(225px, 70vw);
+  }
+  .ol-control-layer-switcher-layers {
+    width: calc(min(225px, 70vw) - 20px);
+    background-color: rgba(0, 59, 136, 0.85);
+  }
+}
+
+// V3 quick-toggle pill (OTM / IGN / Sat) at the top-right of the map.
+// Always present in the markup, hidden on tablet+ via `is-hidden-tablet`.
+.ol-control-quick-layers {
+  top: $control-margin;
+  right: $control-margin;
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+
+  button {
+    padding: 0.4rem 0.7rem;
+    border: none;
+    background: transparent;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #4a4a4a;
+    cursor: pointer;
+    line-height: 1;
+    min-width: 38px;
+
+    &:hover { background: rgba(0, 0, 0, 0.06); }
+    &.is-active {
+      background: #ff9933;
+      color: white;
+    }
+  }
 }
 
 .ol-control-use-map-as-filter {
