@@ -244,11 +244,11 @@ html {
 html[data-theme='dark'] {
   body {
     background: #1a1a1a;
-    color: #e5e5e5;
+    color: #f0f0f0;
   }
   .page-content {
     background: #1a1a1a;
-    color: #e5e5e5;
+    color: #f0f0f0;
   }
   // Top bar
   .mobile-top-bar {
@@ -313,16 +313,33 @@ html[data-theme='dark'] {
 
   // ── V1 content surfaces ────────────────────────────────────────────
   // Bulma .card (FeedCard, DocumentCard wrappers, OutingCard etc.)
+  // Card text contrast: V1 scoped CSS on .card-row (CardRow.vue) and
+  // FeedCard `.row` hardcode `color: $text` (#4a4a4a from Bulma) which
+  // disappears on a dark card. The `.card div` rule below + the
+  // html[data-theme='dark'] prefix gives us a (0,1,2) specificity that
+  // beats the (0,1,1) of scoped `div[data-v-xxx] { color: ... }`, so
+  // every descendant inherits the light text. Same trick for the feed
+  // author/info rows.
   .card {
     background: #2a2a2a;
-    color: #e5e5e5;
+    color: #f0f0f0;
     border-color: rgba(255, 255, 255, 0.08);
+  }
+  .card div,
+  .card p,
+  .card span,
+  .card a:not(.button):not(.tag):not(.has-text-primary):not(.has-text-info):not(.has-text-link):not(.has-text-success):not(.has-text-warning):not(.has-text-danger) {
+    color: #f0f0f0;
+  }
+  .card .has-text-grey,
+  .card .has-text-grey-light,
+  .card .has-text-grey-dark {
+    color: #c5c5c5 !important;
   }
   .card-content,
   .card-header,
   .card-footer {
     background: transparent;
-    color: inherit;
   }
   .card-footer { border-top-color: rgba(255, 255, 255, 0.08); }
   .card-footer-item { border-right-color: rgba(255, 255, 255, 0.08); }
@@ -330,6 +347,10 @@ html[data-theme='dark'] {
   .feed-card .row,
   .feed-card .columns:not(:last-child) {
     border-color: rgba(255, 255, 255, 0.06);
+  }
+  .feed-card .row,
+  .feed-card .row * {
+    color: #f0f0f0;
   }
 
   // .box (used in document detail boxes, profile sidebar, etc.)
@@ -339,13 +360,15 @@ html[data-theme='dark'] {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
   }
 
-  // Generic text utilities (Bulma)
+  // Generic text utilities (Bulma) — bumped a few stops up from the
+  // initial pass so dim labels (timestamps, "added an outing" hint
+  // text, distance/elevation metadata) actually read on dark cards.
   .has-text-grey-darker,
   .has-text-grey-dark,
   .has-text-dark,
-  .has-text-black { color: #e5e5e5 !important; }
-  .has-text-grey { color: #b5b5b5 !important; }
-  .has-text-grey-light { color: #8a8a8a !important; }
+  .has-text-black { color: #f0f0f0 !important; }
+  .has-text-grey { color: #c5c5c5 !important; }
+  .has-text-grey-light { color: #a0a0a0 !important; }
 
   // Background utilities (Bulma)
   .has-background-light,
