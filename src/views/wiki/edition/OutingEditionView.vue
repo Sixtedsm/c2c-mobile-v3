@@ -77,6 +77,36 @@
         </span>
       </div>
 
+      <!-- Offline-saved routes picker. Always available so a user can
+           grab a topo they prepared before going on a trip even if
+           they're back online. Critical for the offline flow: when the
+           map-based search can't reach the API, this is the only way to
+           associate a route with the outing. -->
+      <div v-if="offlineRoutes.length" class="field offline-routes-field">
+        <label class="label offline-routes-label">
+          <fa-icon icon="bookmark" />&nbsp;{{ $gettext('Mes itinéraires hors-ligne') }}
+          <span class="tag is-light">{{ offlineRoutes.length }}</span>
+        </label>
+        <div class="offline-routes-list">
+          <div v-for="route of offlineRoutes" :key="route.document_id" class="offline-route-item">
+            <input-checkbox
+              :value="routeIsAssociated(route.document_id)"
+              @input="changeRouteAssociation($event, route)"
+            >
+              <activities
+                v-if="route.activities && route.activities.length"
+                :activities="route.activities"
+                class="is-size-4 has-text-secondary"
+              />
+              <document-title :document="route" />
+              <span v-if="route.elevation_max" class="offline-route-meta">
+                · {{ route.elevation_max }} m
+              </span>
+            </input-checkbox>
+          </div>
+        </div>
+      </div>
+
       <div class="columns is-multiline">
         <form-field :document="document" :field="fields.title" />
         <form-field class="is-narrow" :document="document" :field="fields.partial_trip" />
@@ -256,6 +286,17 @@ export default {
 
       return null;
     },
+
+    // Routes the user has saved offline — surfaced as a pickable list
+    // in the form so the outing can be associated with a route without
+    // having to find it through the map / API search (which fails
+    // offline anyway). Sorted by most-recently-saved first.
+    offlineRoutes() {
+      const saved = this.$offline?.savedDocs || [];
+      const routes = saved.filter((entry) => entry.type === 'route' && entry.data);
+      routes.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+      return routes.map((entry) => entry.data);
+    },
   },
 
   watch: {
@@ -421,3 +462,67 @@ export default {
   },
 };
 </script>
+
+<style lang="scss" scoped>
+.offline-routes-field {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 153, 51, 0.4);
+  border-radius: 6px;
+  background: #fff8ee;
+}
+
+.offline-routes-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem !important;
+  color: #b26f1e;
+  font-weight: 600;
+
+  .tag {
+    margin-left: auto;
+  }
+}
+
+.offline-routes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.offline-route-item {
+  padding: 0.4rem 0.5rem;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+}
+
+.offline-route-meta {
+  color: #6b6b6b;
+  font-size: 0.85rem;
+  margin-left: 0.25rem;
+}
+</style>
+
+<style lang="scss">
+// Dark mode counterparts — out-specifies the scoped rules above via
+// html[data-theme] attribute selector.
+html[data-theme='dark'] {
+  .offline-routes-field {
+    background: #3a2f1a;
+    border-color: rgba(255, 153, 51, 0.5);
+  }
+  .offline-routes-label {
+    color: #ffb866;
+  }
+  .offline-route-item {
+    background: #2a2a2a;
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #e5e5e5;
+  }
+  .offline-route-meta { color: #b5b5b5; }
+}
+</style>
