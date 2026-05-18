@@ -245,6 +245,26 @@ function extractEmbeddedImageIds(cooked) {
   return [...ids];
 }
 
+// PWA app badge (#18): mirrors the offline-outing queue length on the
+// PWA's home-screen icon when the user has the app installed. Uses the
+// standard Badging API (Chrome / Edge / Safari 16.4+). Quietly no-ops
+// elsewhere — there is no browser-prompt or permission to request.
+function updateAppBadge(count) {
+  try {
+    if ('setAppBadge' in navigator && 'clearAppBadge' in navigator) {
+      if (count > 0) {
+        navigator.setAppBadge(count).catch(() => {});
+      } else {
+        navigator.clearAppBadge().catch(() => {});
+      }
+    }
+  } catch {
+    // Older Safari: setAppBadge exists but throws synchronously when the
+    // page isn't a PWA / not installed. Ignore — the badge just won't
+    // appear, which is the correct fallback.
+  }
+}
+
 export default function install(Vue) {
   const vm = new Vue({
     name: 'OfflinePlugin',
@@ -258,6 +278,16 @@ export default function install(Vue) {
         downloading: new Set(),
         syncing: false,
       };
+    },
+
+    watch: {
+      // Keep the PWA app badge in sync with the queue.
+      'pendingOutings.length': {
+        handler(count) {
+          updateAppBadge(count);
+        },
+        immediate: true,
+      },
     },
 
     async created() {
