@@ -1,8 +1,13 @@
 <template>
   <section class="section app-settings-view">
     <div class="container">
-      <h1 class="title is-5">{{ $gettext('Paramètres de l\'application') }}</h1>
-      <p class="subtitle is-7">
+      <!-- Custom heading classes (not Bulma .title/.subtitle) — Bulma
+           applies a negative `margin-top: -1.25rem` on `.title +
+           .subtitle` which dragged the subtitle visibly onto the title
+           on iOS Safari with a 14px base font. Plain heading + lede is
+           predictable. -->
+      <h1 class="app-settings-heading">{{ $gettext('Paramètres de l\'application') }}</h1>
+      <p class="app-settings-lede">
         {{ $gettext('Réglages locaux à cet appareil — pas synchronisés avec votre compte Camptocamp.') }}
       </p>
 
@@ -93,13 +98,19 @@ export default {
   padding-bottom: calc(80px + env(safe-area-inset-bottom));
 }
 
-.title {
-  margin-bottom: 0.25rem;
+.app-settings-heading {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #4a4a4a;
+  margin: 0 0 0.3rem;
+  line-height: 1.25;
 }
 
-.subtitle {
-  margin-bottom: 1.25rem;
+.app-settings-lede {
+  font-size: 0.82rem;
   color: #6b6b6b;
+  margin: 0 0 1.25rem;
+  line-height: 1.45;
 }
 
 .section-label {
@@ -156,7 +167,8 @@ export default {
 // Dark mode counterparts — out-specifies the scoped rules above via the
 // html[data-theme='dark'] attribute selector.
 html[data-theme='dark'] {
-  .app-settings-view .subtitle,
+  .app-settings-view .app-settings-heading { color: #f5f5f5; }
+  .app-settings-view .app-settings-lede,
   .app-settings-view .section-label,
   .app-settings-view .note { color: #9a9a9a; }
   .app-settings-view .option-btn {

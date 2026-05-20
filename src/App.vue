@@ -340,6 +340,19 @@ html[data-theme='dark'] {
     color: #f0f0f0;
     border-color: rgba(255, 255, 255, 0.08);
   }
+  // Pressed / hover / highlighted states (CardContainer.vue scoped):
+  // V1 forces a near-white `$hover-background` (#f2f2f2). That made
+  // the card unreadable on tap because the text stayed white. Override
+  // with a slightly-lifted dark shade and keep the existing box-shadow.
+  // Specificity bump: html[data-theme] + .card:hover[data-v-xxx]
+  // matches (0,2,2) vs the scoped (0,2,1).
+  .card:hover,
+  .card:focus,
+  .card:active,
+  .card.is-highlighted {
+    background: #353535;
+    color: #f5f5f5;
+  }
   .card div,
   .card p,
   .card span,
@@ -519,6 +532,54 @@ html[data-theme='dark'] {
     code { background: #1a1a1a; color: #ffd17a; }
     pre { background: #1a1a1a; }
     blockquote { border-left-color: rgba(255, 255, 255, 0.2); color: #b5b5b5; }
+  }
+
+  // c2c embedded figure widgets — the legendary white blocks in dark
+  // mode. Markdown.vue scopes `figure[c2c\:role='embedded-figure']`
+  // with #fafafa background + 1px solid #ddd which renders as a white
+  // card-on-dark-page (with the caption text turning unreadable). The
+  // descendant prefix `.markdown-content` here bumps specificity to
+  // (0,2,2), beating the scoped (0,2,1) and applying a dark surface.
+  .markdown-content figure[c2c\:role='embedded-figure'],
+  .markdown-section figure[c2c\:role='embedded-figure'],
+  .topo-cooked figure[c2c\:role='embedded-figure'] {
+    background: #2a2a2a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e5e5e5;
+  }
+  .markdown-content figcaption,
+  .markdown-section figcaption,
+  .topo-cooked figcaption,
+  .markdown-content figure,
+  .markdown-section figure,
+  .topo-cooked figure {
+    color: #d5d5d5;
+  }
+  // The page that surrounds the description sections itself can leak
+  // a .section / .container with white background on some V1 views.
+  // Cover the common targets so the doc detail pages don't end up
+  // half-light.
+  .section,
+  .documents-view,
+  .container {
+    background: transparent;
+  }
+  // Bulma generic `.content` (the wrapper used for cooked markdown
+  // sections) inherits text color from .card but its child p / li /
+  // span get explicit colors elsewhere. Push them light.
+  .content,
+  .content p,
+  .content li,
+  .content blockquote {
+    color: #e5e5e5;
+  }
+  .content h1,
+  .content h2,
+  .content h3,
+  .content h4,
+  .content h5,
+  .content h6 {
+    color: #f5f5f5;
   }
 }
 
