@@ -19,8 +19,26 @@
           'pinned-to-top': pinnedSide === 'top',
           'pinned-to-right': pinnedSide === 'right',
           'fill-parent': !pinnedMode,
+          'mobile-fullscreen': mobileFullscreen,
         }"
       >
+        <!-- Mobile-only close button when the map is taken full-screen
+             via the pin-to-top control. The legacy `pinned-to-top` mode
+             relied on `body { padding-top: 45vh }` which is silently
+             killed by the V3 shell (body { overflow:hidden, height:100% }
+             and the actual scroll is `.page-content` position:absolute).
+             Result was a "white map block at the top". On mobile we now
+             flip into a true full-viewport overlay with this Reduce
+             button; on desktop the original pin-to-side logic stays. -->
+        <button
+          v-if="mobileFullscreen"
+          type="button"
+          class="map-mobile-close"
+          :aria-label="$gettext('Réduire la carte')"
+          @click="exitMobileFullscreen"
+        >
+          <fa-icon icon="compress" />
+        </button>
         <map-view
           ref="mapView"
           :documents="new Array(document)"
@@ -80,6 +98,11 @@ export default {
       elevationProfileHidden: false,
       pinnedMode: 0,
       pinnedSide: '',
+      // V3 mobile: real full-viewport overlay replacing the broken
+      // pin-to-top behavior (body padding-top doesn't apply with the
+      // V3 shell). Toggled by the pin button on mobile, dismissed by
+      // the Reduce button rendered on top of the map.
+      mobileFullscreen: false,
     };
   },
 
@@ -129,6 +152,29 @@ export default {
 
   methods: {
     togglePinToSide(toggle) {
+      // V3 mobile path: pin button → true full-screen overlay. Avoids
+      // the broken body-padding mechanism the legacy desktop logic
+      // relied on (V3 body is overflow:hidden/height:100%, so any
+      // padding-top on it is invisible — the page-content scroll surface
+      // is position:absolute and ignores it). Show the close button on
+      // top of the map and skip the pin-mode cycle entirely on mobile.
+      if (toggle && this.$screen?.isMobile) {
+        this.mobileFullscreen = !this.mobileFullscreen;
+        this.$nextTick(() => {
+          const mv = this.$refs.mapView;
+          mv?.map?.updateSize();
+          if (this.mobileFullscreen) {
+            // Give OL a beat to reflow before fitting — without it OL
+            // sometimes fits to a 0×0 viewport and the tiles look blank.
+            setTimeout(() => {
+              mv?.map?.updateSize();
+              mv?.fitMapToDocuments?.();
+            }, 60);
+          }
+        });
+        return;
+      }
+
       const previousPinnedMode = this.pinnedMode;
       const width = window.innerWidth;
       const height = window.innerHeight;
@@ -174,6 +220,14 @@ export default {
 
     resizePin() {
       this.togglePinToSide(false);
+    },
+
+    exitMobileFullscreen() {
+      this.mobileFullscreen = false;
+      this.$nextTick(() => {
+        const mv = this.$refs.mapView;
+        mv?.map?.updateSize();
+      });
     },
 
     hasDataChanged(value) {
@@ -277,5 +331,42 @@ export default {
     max-height: calc(100% - 200px);
     min-height: calc(100% - 350px);
   }
+}
+
+// V3 mobile full-viewport overlay (Sixte's "carte en grand" use case).
+// Replaces the legacy half-screen pin-to-top that rendered as a white
+// block because the body-padding trick is no-op under the V3 shell.
+.map-container.mobile-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  z-index: 50; // above MobileTopBar (26) and BottomNav (28)
+  background: #000;
+}
+
+.map-mobile-close {
+  position: absolute;
+  top: calc(0.6rem + env(safe-area-inset-top));
+  right: 0.6rem;
+  z-index: 60;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: white;
+  color: #4a4a4a;
+  font-size: 1.05rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover, &:focus { background: #f0f4f8; outline: none; }
 }
 </style>

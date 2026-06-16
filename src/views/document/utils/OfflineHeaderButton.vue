@@ -46,6 +46,15 @@ export default {
     async toggle() {
       if (this.isBusy || !this.docId) return;
       if (this.isSaved) {
+        // Destructive: on a small tap-target, an accidental press
+        // (e.g. while opening a topo on the trail) would wipe the
+        // only copy available offline — exactly the wrong moment to
+        // lose data. Confirm before removing. OfflineView's bin button
+        // and ToolBox's offline action use the same guard.
+        const msg = this.$gettext(
+          'Retirer ce topo des sauvegardes hors-ligne ? Vous ne pourrez plus l\'ouvrir sans réseau.'
+        );
+        if (!window.confirm(msg)) return;
         await this.$offline.removeDocument(this.documentType, this.docId, this.lang);
       } else {
         await this.$offline.saveDocument({

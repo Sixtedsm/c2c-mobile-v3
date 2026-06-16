@@ -1318,19 +1318,38 @@ export default {
       this.orientationHandler = (event) => {
         let heading;
         if (typeof event.webkitCompassHeading === 'number') {
-          // iOS Safari: clockwise from magnetic north, already what we want.
+          // iOS Safari: degrees clockwise from magnetic north.
           heading = event.webkitCompassHeading;
-        } else if (typeof event.alpha === 'number') {
-          // W3C: alpha is counter-clockwise from north.
-          heading = 360 - event.alpha;
+        } else if (event.absolute === true && typeof event.alpha === 'number') {
+          // W3C absolute reading: alpha is counter-clockwise from north.
+          // Without `absolute === true` the value is relative to whatever
+          // orientation the device had when the page loaded — that's the
+          // "90° off" bug Sixte saw on terrain (the page happened to load
+          // with the device pointing east, every reading was offset by 90).
+          heading = (360 - event.alpha) % 360;
         } else {
+          // Drop relative readings — better no arrow than a wrong arrow.
           return;
         }
+        // Correct for screen orientation: device "top" is not the screen
+        // "top" once the user rotates the phone. screen.orientation.angle
+        // is the rotation in degrees the screen has from its natural
+        // (portrait) orientation. window.orientation is the legacy fallback.
+        const screenAngle =
+          typeof window.screen?.orientation?.angle === 'number'
+            ? window.screen.orientation.angle
+            : typeof window.orientation === 'number'
+              ? window.orientation
+              : 0;
+        heading = (heading + screenAngle + 360) % 360;
         this.currentHeadingDeg = heading;
         this.refreshPositionStyle();
       };
-      // deviceorientationabsolute is more accurate where supported (Android),
-      // deviceorientation is the iOS fallback.
+      // Prefer `deviceorientationabsolute` (Android, anchored to magnetic
+      // north). Plain `deviceorientation` is the iOS path — we still
+      // accept it because webkitCompassHeading on iOS only rides on this
+      // event. The absolute-vs-relative guard above keeps Android's
+      // relative `deviceorientation` readings from polluting the heading.
       window.addEventListener('deviceorientationabsolute', this.orientationHandler, true);
       window.addEventListener('deviceorientation', this.orientationHandler, true);
       this.compassActive = true;
@@ -1408,7 +1427,31 @@ export default {
       this.accuracyFeature.setGeometry(geometry || null);
     },
 
-    handleGeolocationError() {
+    handleGeolocationError(err) {
+      // Surface the failure mode — silent failure was Sixte's "le bouton
+      // localiser ne marche pas tout le temps" report (it was working, the
+      // OS just denied/timed out and the UI gave no clue).
+      const code = err?.code;
+      let message;
+      if (code === 1) {
+        message = this.$gettext(
+          'Géolocalisation refusée. Autorisez-la dans les réglages du navigateur, puis réessayez.'
+        );
+      } else if (code === 2) {
+        message = this.$gettext(
+          'Position indisponible (signal GPS faible ?). Réessayez à l\'extérieur ou attendez quelques secondes.'
+        );
+      } else if (code === 3) {
+        message = this.$gettext('Délai dépassé pour récupérer la position. Réessayez.');
+      } else {
+        message = this.$gettext('Erreur de géolocalisation. Réessayez.');
+      }
+      toast({
+        type: 'is-warning',
+        position: 'bottom-center',
+        duration: 4000,
+        message,
+      });
       // Permission denied or position unavailable: turn the marker off cleanly.
       if (this.geolocationActive) {
         this.stopGeolocationTracking();
@@ -1771,22 +1814,21 @@ $control-margin: 0.5em;
   }
 }
 
+// Layer switcher button: parked in the same top-left column as the
+// pin-to-top / geoloc / compass buttons. The legacy V1 bottom-left
+// position needed a 60px lift on V3 mobile to clear the BottomNav,
+// but that lift collided with the compass (top:160px) on small
+// embedded MapBoxes (275px tall) — exactly the "le bouton calques et
+// le bouton localiser sont superposés" symptom from terrain testing.
+// Stacking them straight is collision-free at any container size.
 .ol-control-layer-switcher-button {
-  bottom: $control-margin;
+  top: 200px;
   left: $control-margin;
 }
 
-// V3 mobile improvements (#10 map controls): the V1 controls were
-// sized for desktop (22px tap targets, planqued at the very bottom-
-// left of the map). On a small screen with a 52px BottomNav and a
-// safe-area inset at the bottom, the layer button was either too
-// close to the nav to tap reliably or hidden behind it entirely. Lift
-// it above the safe-area and grow the tap surfaces. Same treatment
-// for the geoloc/compass/pin column on the top-left.
+// V3 mobile improvements (#10 map controls): grow the tap surfaces
+// so the V1 22px hit targets are actually fingerable.
 @media screen and (max-width: 768px) {
-  .ol-control-layer-switcher-button {
-    bottom: calc($control-margin + 60px + env(safe-area-inset-bottom));
-  }
   .ol-control button {
     width: 2.4em;
     height: 2.4em;
