@@ -406,6 +406,19 @@ export default function install(Vue) {
         await this.refresh();
       },
 
+      // Guarded removal used by the document-header bookmark + ToolBox
+      // "Save offline" — both used to delete silently on tap, and an
+      // accidental press on the trail wiped Sixte's only access to a
+      // saved topo. The caller passes a translated message so this
+      // plugin stays free of i18n. OfflineView keeps its own confirm
+      // dialog (different wording for the listing context), so the
+      // plugin doesn't double-prompt. Returns true if removal happened.
+      async confirmAndRemoveDocument(type, id, lang, message) {
+        if (typeof window === 'undefined' || !window.confirm(message)) return false;
+        await this.removeDocument(type, id, lang);
+        return true;
+      },
+
       async createFolder(name) {
         const id = `f_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         await store.saveFolder({ id, name });

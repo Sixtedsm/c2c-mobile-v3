@@ -195,6 +195,8 @@
 <script>
 import { toast } from 'bulma-toast';
 
+import { geolocationErrorMessage } from '@/js/geolocation-error-message';
+
 import BiodivInformation from './BiodivInformation';
 import LayerButton from './LayerButton';
 import SwissProtectionAreaInformation from './SwissProtectionAreaInformation';
@@ -1262,32 +1264,44 @@ export default {
     },
 
     refreshPositionStyle() {
+      // Style + Icon + SVG data URL allocated lazily, then reused. The
+      // compass handler fires at ~60Hz on Android — rebuilding the
+      // ol.style.Icon (which kicks off an Image decode of the data URL)
+      // every fire was the hottest avoidable allocation in the map code.
+      // We mutate `rotation` on the cached Icon instead and trigger a
+      // re-render via `feature.changed()`.
       if (this.compassActive) {
-        // SVG arrow pointing up; OL rotates it clockwise around the feature.
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+        if (!this._compassStyle) {
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
   <path d="M16 4 L25 26 L16 21 L7 26 Z" fill="#1d72ff" stroke="white" stroke-width="2" stroke-linejoin="round"/>
 </svg>`;
-        const rotation = (this.currentHeadingDeg * Math.PI) / 180;
-        this.positionFeature.setStyle(
-          new ol.style.Style({
-            image: new ol.style.Icon({
-              src: 'data:image/svg+xml;utf8,' + encodeURIComponent(svg),
-              rotation,
-              scale: 1,
-              anchor: [0.5, 0.5],
-            }),
-          })
-        );
+          this._compassIcon = new ol.style.Icon({
+            src: 'data:image/svg+xml;utf8,' + encodeURIComponent(svg),
+            rotation: 0,
+            scale: 1,
+            anchor: [0.5, 0.5],
+          });
+          this._compassStyle = new ol.style.Style({ image: this._compassIcon });
+        }
+        this._compassIcon.setRotation((this.currentHeadingDeg * Math.PI) / 180);
+        if (this.positionFeature.getStyle() !== this._compassStyle) {
+          this.positionFeature.setStyle(this._compassStyle);
+        } else {
+          this.positionFeature.changed();
+        }
       } else {
-        this.positionFeature.setStyle(
-          new ol.style.Style({
+        if (!this._dotStyle) {
+          this._dotStyle = new ol.style.Style({
             image: new ol.style.Circle({
               radius: 7,
               fill: new ol.style.Fill({ color: '#1d72ff' }),
               stroke: new ol.style.Stroke({ color: '#ffffff', width: 2 }),
             }),
-          })
-        );
+          });
+        }
+        if (this.positionFeature.getStyle() !== this._dotStyle) {
+          this.positionFeature.setStyle(this._dotStyle);
+        }
       }
     },
 
@@ -1345,22 +1359,27 @@ export default {
         this.currentHeadingDeg = heading;
         this.refreshPositionStyle();
       };
-      // Prefer `deviceorientationabsolute` (Android, anchored to magnetic
-      // north). Plain `deviceorientation` is the iOS path — we still
-      // accept it because webkitCompassHeading on iOS only rides on this
-      // event. The absolute-vs-relative guard above keeps Android's
-      // relative `deviceorientation` readings from polluting the heading.
-      window.addEventListener('deviceorientationabsolute', this.orientationHandler, true);
-      window.addEventListener('deviceorientation', this.orientationHandler, true);
+      // Pick ONE event source. If the browser exposes
+      // `deviceorientationabsolute` we use it (Android Chrome — anchored
+      // to magnetic north). Otherwise fall back to `deviceorientation`
+      // which is the only path that carries iOS's
+      // `webkitCompassHeading`. Registering both used to double the
+      // handler firing rate and let Android's non-absolute readings
+      // race the absolute ones.
+      this._orientationEvent =
+        'ondeviceorientationabsolute' in window
+          ? 'deviceorientationabsolute'
+          : 'deviceorientation';
+      window.addEventListener(this._orientationEvent, this.orientationHandler, true);
       this.compassActive = true;
       this.refreshPositionStyle();
     },
 
     disableCompass() {
-      if (this.orientationHandler) {
-        window.removeEventListener('deviceorientationabsolute', this.orientationHandler, true);
-        window.removeEventListener('deviceorientation', this.orientationHandler, true);
+      if (this.orientationHandler && this._orientationEvent) {
+        window.removeEventListener(this._orientationEvent, this.orientationHandler, true);
         this.orientationHandler = null;
+        this._orientationEvent = null;
       }
       this.compassActive = false;
       this.refreshPositionStyle();
@@ -1429,28 +1448,12 @@ export default {
 
     handleGeolocationError(err) {
       // Surface the failure mode — silent failure was Sixte's "le bouton
-      // localiser ne marche pas tout le temps" report (it was working, the
-      // OS just denied/timed out and the UI gave no clue).
-      const code = err?.code;
-      let message;
-      if (code === 1) {
-        message = this.$gettext(
-          'Géolocalisation refusée. Autorisez-la dans les réglages du navigateur, puis réessayez.'
-        );
-      } else if (code === 2) {
-        message = this.$gettext(
-          'Position indisponible (signal GPS faible ?). Réessayez à l\'extérieur ou attendez quelques secondes.'
-        );
-      } else if (code === 3) {
-        message = this.$gettext('Délai dépassé pour récupérer la position. Réessayez.');
-      } else {
-        message = this.$gettext('Erreur de géolocalisation. Réessayez.');
-      }
+      // localiser ne marche pas tout le temps" report.
       toast({
         type: 'is-warning',
         position: 'bottom-center',
         duration: 4000,
-        message,
+        message: geolocationErrorMessage(err, this.$gettext),
       });
       // Permission denied or position unavailable: turn the marker off cleanly.
       if (this.geolocationActive) {
@@ -1731,19 +1734,24 @@ export default {
 
 <style lang="scss" scoped>
 $control-margin: 0.5em;
+// Top-left control column. Buttons stack at $col-stride-px intervals
+// starting from $col-start-px so adding a 5th button is a one-liner
+// instead of guessing the next magic number.
+$col-start-px: 80px;
+$col-stride-px: 40px;
 
 .ol-control-pin-to-top {
-  top: 80px;
+  top: $col-start-px;
   left: $control-margin;
 }
 
 .ol-control-center-on-geolocation {
-  top: 120px;
+  top: $col-start-px + $col-stride-px;
   left: $control-margin;
 }
 
 .ol-control-compass {
-  top: 160px;
+  top: $col-start-px + 2 * $col-stride-px;
   left: $control-margin;
 
   &.is-active button {
@@ -1814,15 +1822,13 @@ $control-margin: 0.5em;
   }
 }
 
-// Layer switcher button: parked in the same top-left column as the
-// pin-to-top / geoloc / compass buttons. The legacy V1 bottom-left
-// position needed a 60px lift on V3 mobile to clear the BottomNav,
-// but that lift collided with the compass (top:160px) on small
-// embedded MapBoxes (275px tall) — exactly the "le bouton calques et
-// le bouton localiser sont superposés" symptom from terrain testing.
-// Stacking them straight is collision-free at any container size.
+// Layer switcher button: parked at the next slot in the top-left
+// column. The legacy V1 bottom-left position needed a 60px lift on V3
+// mobile to clear the BottomNav, but that lift collided with the
+// compass on small embedded MapBoxes (~275px tall). Stacking them
+// straight is collision-free at any container size.
 .ol-control-layer-switcher-button {
-  top: 200px;
+  top: $col-start-px + 3 * $col-stride-px;
   left: $control-margin;
 }
 

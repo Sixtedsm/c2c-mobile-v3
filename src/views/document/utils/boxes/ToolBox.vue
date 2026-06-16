@@ -463,13 +463,14 @@ export default {
         return;
       }
       if (this.isSavedOffline) {
-        // Mirror OfflineHeaderButton: confirm before deleting the
-        // offline copy so a mishit on the trail can't wipe the topo.
-        const msg = this.$gettext(
-          'Retirer ce topo des sauvegardes hors-ligne ? Vous ne pourrez plus l\'ouvrir sans réseau.'
+        await this.$offline.confirmAndRemoveDocument(
+          this.documentType,
+          this.offlineDocId,
+          this.offlineLang,
+          this.$gettext(
+            'Retirer ce topo des sauvegardes hors-ligne ? Vous ne pourrez plus l\'ouvrir sans réseau.'
+          )
         );
-        if (!window.confirm(msg)) return;
-        await this.$offline.removeDocument(this.documentType, this.offlineDocId, this.offlineLang);
       } else {
         await this.$offline.saveDocument({
           type: this.documentType,

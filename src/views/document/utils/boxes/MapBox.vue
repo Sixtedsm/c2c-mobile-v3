@@ -35,7 +35,7 @@
           type="button"
           class="map-mobile-close"
           :aria-label="$gettext('Réduire la carte')"
-          @click="exitMobileFullscreen"
+          @click="togglePinToSide(true)"
         >
           <fa-icon icon="compress" />
         </button>
@@ -156,22 +156,23 @@ export default {
       // the broken body-padding mechanism the legacy desktop logic
       // relied on (V3 body is overflow:hidden/height:100%, so any
       // padding-top on it is invisible — the page-content scroll surface
-      // is position:absolute and ignores it). Show the close button on
-      // top of the map and skip the pin-mode cycle entirely on mobile.
+      // is position:absolute and ignores it). The close button rendered
+      // in the template also calls this method, which is why the body
+      // is a pure toggle.
       if (toggle && this.$screen?.isMobile) {
         this.mobileFullscreen = !this.mobileFullscreen;
-        this.$nextTick(() => {
-          const mv = this.$refs.mapView;
-          mv?.map?.updateSize();
-          if (this.mobileFullscreen) {
-            // Give OL a beat to reflow before fitting — without it OL
-            // sometimes fits to a 0×0 viewport and the tiles look blank.
-            setTimeout(() => {
-              mv?.map?.updateSize();
-              mv?.fitMapToDocuments?.();
-            }, 60);
-          }
-        });
+        // OL needs to learn its new size after the layout swap. On the
+        // way in we also fit-to-document once the box has reflowed —
+        // a 60ms beat is enough for the position:fixed inset to settle.
+        if (this.mobileFullscreen) {
+          setTimeout(() => {
+            const mv = this.$refs.mapView;
+            mv?.map?.updateSize();
+            mv?.fitMapToDocuments?.();
+          }, 60);
+        } else {
+          this.$nextTick(() => this.$refs.mapView?.map?.updateSize());
+        }
         return;
       }
 
@@ -220,14 +221,6 @@ export default {
 
     resizePin() {
       this.togglePinToSide(false);
-    },
-
-    exitMobileFullscreen() {
-      this.mobileFullscreen = false;
-      this.$nextTick(() => {
-        const mv = this.$refs.mapView;
-        mv?.map?.updateSize();
-      });
     },
 
     hasDataChanged(value) {
