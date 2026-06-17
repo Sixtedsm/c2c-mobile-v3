@@ -20,6 +20,10 @@
     a.btn.primary { background: #ff9933; border-color: #ff9933; color: white; }
     a.btn.primary .sub { color: rgba(255,255,255,.85); }
     a.btn:hover { box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+    .lede { background: #fff5e6; border: 1px solid #ffd9a8; border-radius: 8px; padding: .65rem .8rem; margin: 0 0 1.1rem; font-size: .82rem; color: #8a5a1f; line-height: 1.5; }
+    .lede strong { color: #cc7a29; }
+    .install-tip { margin: .9rem 0 0; font-size: .78rem; color: #6b6b6b; line-height: 1.5; padding: .55rem .7rem; background: rgba(0,0,0,.025); border-radius: 6px; }
+    .install-tip strong { color: #4a4a4a; }
     .note { margin: 1rem 0 0; font-size: .72rem; color: #9a9a9a; text-align: center; line-height: 1.4; }
     .note code { background: rgba(0,0,0,.05); padding: .05rem .25rem; border-radius: 2px; }
   </style>
@@ -90,7 +94,11 @@
   </noscript>
   <div class="card">
     <h1>Camptocamp</h1>
-    <p>Sur quelle version souhaitez-vous continuer&nbsp;? Votre choix sera mémorisé sur cet appareil.</p>
+    <p class="lede">
+      📢 <strong>Nouveau&nbsp;:</strong> une version mobile de Camptocamp est désormais disponible,
+      pensée pour le terrain (hors-ligne, sauvegarde de topos, vue carte plein écran).
+      Choisissez la version qui vous convient — votre choix sera mémorisé sur cet appareil.
+    </p>
     <div class="row">
       <a class="btn primary" data-pref="desktop" href="https://www.camptocamp.org/">
         <span class="emoji">💻</span>
@@ -107,6 +115,12 @@
         </span>
       </a>
     </div>
+    <p class="install-tip">
+      💡 <strong>Pour bien profiter de la version mobile sur votre téléphone&nbsp;:</strong>
+      ouvrez le lien sur votre téléphone, puis ajoutez la page à votre écran d'accueil
+      («&nbsp;Partager → Sur l'écran d'accueil&nbsp;» sur iPhone, «&nbsp;Installer l'application&nbsp;» sur Android).
+      Vous aurez alors une vraie icône comme une app native.
+    </p>
     <p class="note">
       Pour rechoisir plus tard, ajoutez <code>?choose=1</code> à l'URL.<br />
       Forcer directement&nbsp;: <code>?force=mobile</code> ou <code>?force=desktop</code>.
