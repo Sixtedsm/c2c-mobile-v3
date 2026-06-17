@@ -10,7 +10,7 @@
             :is="tile.href ? 'a' : 'router-link'"
             :to="tile.to || undefined"
             :href="tile.href || undefined"
-            :target="tile.href ? '_blank' : undefined"
+            :target="tile.href ? (tile.targetSelf ? '_self' : '_blank') : undefined"
             :rel="tile.href ? 'noopener' : undefined"
             class="tile-link"
           >
@@ -77,6 +77,19 @@ export default {
           desc: this.$gettext('Discussions de la communauté'),
           icon: 'speech-bubbles',
           to: { name: 'forum' },
+        },
+        // Escape hatch to the desktop site — keeps the "one shared link"
+        // story tidy: a user who lands on the mobile PWA but really wants
+        // the full c2c.org UI has a single button instead of having to
+        // type a URL by hand. Opens in the current tab (target:_self) so
+        // the PWA's standalone window navigates out cleanly.
+        {
+          key: 'desktop',
+          label: this.$gettext('Version ordinateur'),
+          desc: this.$gettext('Ouvrir camptocamp.org dans le navigateur'),
+          icon: 'notebook',
+          href: 'https://www.camptocamp.org/',
+          targetSelf: true,
         },
       ];
     },

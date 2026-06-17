@@ -195,7 +195,9 @@ import { faEnvelope as faEnvelopeV3 } from '@fortawesome/free-solid-svg-icons/fa
 import { faLocationDot as faLocationDotV3 } from '@fortawesome/free-solid-svg-icons/faLocationDot';
 import { faMagnifyingGlass as faMagnifyingGlassV3 } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlass';
 import { faMountain as faMountainV3 } from '@fortawesome/free-solid-svg-icons/faMountain';
+import { faPaperPlane as faPaperPlaneV3 } from '@fortawesome/free-solid-svg-icons/faPaperPlane';
 import { faPenToSquare as faPenToSquareV3 } from '@fortawesome/free-solid-svg-icons/faPenToSquare';
+import { faSpinner as faSpinnerV3 } from '@fortawesome/free-solid-svg-icons/faSpinner';
 import { faRightFromBracket as faRightFromBracketV3 } from '@fortawesome/free-solid-svg-icons/faRightFromBracket';
 import { faSliders as faSlidersV3 } from '@fortawesome/free-solid-svg-icons/faSliders';
 import { faSnowflake as faSnowflakeV3 } from '@fortawesome/free-solid-svg-icons/faSnowflake';
@@ -215,7 +217,9 @@ export default function install(Vue) {
     faLocationDotV3,
     faMagnifyingGlassV3,
     faMountainV3,
+    faPaperPlaneV3,
     faPenToSquareV3,
+    faSpinnerV3,
     faRightFromBracketV3,
     faSlidersV3,
     faSnowflakeV3,

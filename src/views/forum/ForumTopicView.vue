@@ -35,10 +35,66 @@
           <div class="post-body prose" v-html="post.cooked" />
         </article>
 
+        <!-- Inline reply editor — POST directly to Discourse API so the
+             user stays in the PWA instead of being kicked out to Safari
+             for every reply. Discourse uses session cookies; the first
+             time the user has to log in on the forum (the link below
+             handles that). After that, the cookie is reused and the
+             reply flow stays in-app. iOS standalone PWAs may sandbox
+             cookies separately from Safari — if the call fails, we
+             surface the external-link fallback so the user is never
+             stuck. -->
+        <section class="forum-reply">
+          <button
+            v-if="!showReply"
+            type="button"
+            class="button is-primary is-small forum-reply-toggle"
+            @click="startReply"
+          >
+            <fa-icon icon="pen-to-square" />
+            &nbsp;{{ $gettext('Répondre dans l\'app') }}
+          </button>
+
+          <div v-else class="forum-reply-editor">
+            <textarea
+              ref="replyTextarea"
+              v-model="replyText"
+              :placeholder="$gettext('Votre réponse… (Markdown supporté)')"
+              rows="5"
+              :disabled="sending"
+            />
+            <div class="forum-reply-actions">
+              <button
+                type="button"
+                class="button is-text is-small"
+                :disabled="sending"
+                @click="showReply = false"
+              >
+                {{ $gettext('Annuler') }}
+              </button>
+              <button
+                type="button"
+                class="button is-primary is-small"
+                :disabled="sending || !replyText.trim()"
+                @click="sendReply"
+              >
+                <fa-icon :icon="sending ? 'spinner' : 'paper-plane'" :spin="sending" />
+                &nbsp;{{ sending ? $gettext('Envoi…') : $gettext('Envoyer') }}
+              </button>
+            </div>
+            <p v-if="needsForumLogin" class="forum-reply-hint">
+              {{ $gettext('Vous n\'êtes pas connecté au forum.') }}
+              <a :href="forumLoginUrl" target="_blank" rel="noopener">
+                {{ $gettext('Se connecter au forum') }} →
+              </a>
+            </p>
+          </div>
+        </section>
+
         <p class="forum-link-out">
           <a
             :href="topicExternalUrl"
-            target="_blank"
+            target="_self"
             rel="noopener"
           >
             {{ $gettext('Ouvrir sur le forum Camptocamp') }} →
@@ -50,6 +106,7 @@
 </template>
 
 <script>
+import { toast } from 'bulma-toast';
 import axios from 'axios';
 
 import config from '@/js/config';
@@ -57,6 +114,14 @@ import config from '@/js/config';
 const forumHttp = axios.create({
   baseURL: config.urls.forum,
   timeout: 15000,
+});
+
+// Separate axios instance for authenticated calls — sends the session
+// cookie set by forum.camptocamp.org on previous Discourse logins.
+const forumAuthHttp = axios.create({
+  baseURL: config.urls.forum,
+  timeout: 15000,
+  withCredentials: true,
 });
 
 export default {
@@ -67,6 +132,11 @@ export default {
       topic: null,
       loading: true,
       error: false,
+      // Reply editor state
+      showReply: false,
+      replyText: '',
+      sending: false,
+      needsForumLogin: false,
     };
   },
 
@@ -83,6 +153,14 @@ export default {
       const slug = this.topic?.slug || this.$route.params.slug || '';
       const id = this.$route.params.id;
       return `${config.urls.forum}/t/${slug ? slug + '/' : ''}${id}`;
+    },
+
+    forumLoginUrl() {
+      // Discourse SSO endpoint. After login, the user is returned to the
+      // topic; on the next reply attempt the session cookie is in place.
+      return `${config.urls.forum}/login?return_path=${encodeURIComponent(
+        '/t/' + this.$route.params.id
+      )}`;
     },
   },
 
@@ -128,6 +206,79 @@ export default {
         });
       } catch {
         return d;
+      }
+    },
+
+    startReply() {
+      this.showReply = true;
+      this.needsForumLogin = false;
+      this.$nextTick(() => this.$refs.replyTextarea?.focus?.());
+    },
+
+    async sendReply() {
+      const raw = this.replyText.trim();
+      if (!raw || !this.topic?.id) return;
+      this.sending = true;
+      try {
+        // Discourse expects a CSRF token alongside the cookie. We fetch
+        // one fresh per reply — cheap and avoids stale tokens.
+        const csrfResp = await forumAuthHttp.get('/session/csrf.json');
+        const csrf = csrfResp?.data?.csrf;
+        if (!csrf) throw new Error('no-csrf');
+
+        await forumAuthHttp.post(
+          '/posts.json',
+          new URLSearchParams({
+            topic_id: String(this.topic.id),
+            raw,
+          }).toString(),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-CSRF-Token': csrf,
+              'Discourse-Logged-In': 'true',
+            },
+          }
+        );
+        toast({
+          type: 'is-success',
+          position: 'bottom-center',
+          message: this.$gettext('Réponse envoyée.'),
+        });
+        this.replyText = '';
+        this.showReply = false;
+        // Reload to surface the new post inline.
+        await this.load();
+      } catch (err) {
+        const status = err?.response?.status;
+        if (status === 401 || status === 403 || status === 419) {
+          // Discourse rejected the request — the most common reason is
+          // no/expired session. Point the user at the login flow; once
+          // they come back with a fresh cookie, the next attempt works.
+          this.needsForumLogin = true;
+          toast({
+            type: 'is-warning',
+            position: 'bottom-center',
+            duration: 4500,
+            message: this.$gettext(
+              'Connectez-vous au forum (lien sous l\'éditeur) puis réessayez.'
+            ),
+          });
+        } else {
+          // Probably CORS or a network problem — the inline path can't
+          // recover, so we fall back gracefully to the external link
+          // that's always rendered just below.
+          toast({
+            type: 'is-warning',
+            position: 'bottom-center',
+            duration: 4500,
+            message: this.$gettext(
+              'Impossible d\'envoyer depuis l\'app. Utilisez « Ouvrir sur le forum ».'
+            ),
+          });
+        }
+      } finally {
+        this.sending = false;
       }
     },
   },
@@ -222,6 +373,48 @@ export default {
   }
 }
 
+.forum-reply {
+  margin-top: 0.8rem;
+}
+
+.forum-reply-toggle {
+  width: 100%;
+}
+
+.forum-reply-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  textarea {
+    width: 100%;
+    min-height: 6rem;
+    padding: 0.55rem 0.7rem;
+    background: white;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    color: #4a4a4a;
+    resize: vertical;
+    &:focus { outline: none; border-color: #ff9933; box-shadow: 0 0 0 0.125em rgba(255, 153, 51, 0.25); }
+  }
+}
+
+.forum-reply-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.forum-reply-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #6b6b6b;
+
+  a { color: #337ab7; text-decoration: none; }
+}
+
 .forum-link-out {
   margin-top: 1rem;
   text-align: center;
@@ -242,5 +435,28 @@ export default {
 
 .error-row {
   color: #b91c1c;
+}
+</style>
+
+<style lang="scss">
+// Dark mode — out-specifies the scoped white surfaces above via
+// html[data-theme] so posts and the reply editor blend into the page.
+html[data-theme='dark'] {
+  .forum-topic-view .forum-post {
+    background: #2a2a2a;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .forum-topic-view .post-author { color: #f0f0f0; }
+  .forum-topic-view .post-date { color: #9a9a9a; }
+  .forum-topic-view .post-body { color: #e5e5e5; }
+  .forum-topic-view .post-avatar { background: #3a3a3a; }
+  .forum-topic-view .forum-reply-editor textarea {
+    background: #1f1f1f;
+    color: #e5e5e5;
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+  .forum-topic-view .forum-reply-hint { color: #b5b5b5; }
+  .forum-topic-view .forum-reply-hint a,
+  .forum-topic-view .forum-link-out a { color: #6db4ff; }
 }
 </style>
