@@ -6,42 +6,74 @@
   <meta name="theme-color" content="#ff9933" />
   <title>Camptocamp — choix de la version</title>
   <style>
-    /* Tiny inline CSS — this page is meant to redirect under 100 ms, the
-       UI below is only seen if JS is disabled or the user picks the
-       "Let me choose" path. */
     :root { color-scheme: light; }
     html, body { margin: 0; padding: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #fbfaf6; color: #4a4a4a; }
     body { display: flex; align-items: center; justify-content: center; padding: 1rem; box-sizing: border-box; }
-    .card { max-width: 380px; width: 100%; background: white; border: 1px solid rgba(0,0,0,.12); border-radius: 10px; padding: 1.5rem 1.25rem; box-shadow: 0 6px 20px rgba(0,0,0,.06); }
-    h1 { margin: 0 0 .3rem; font-size: 1.05rem; color: #4a4a4a; }
-    p { margin: 0 0 1rem; font-size: .85rem; color: #6b6b6b; line-height: 1.45; }
-    .row { display: grid; gap: .5rem; }
-    a.btn { display: block; padding: .7rem .8rem; background: white; border: 1px solid rgba(0,0,0,.15); border-radius: 8px; color: #4a4a4a; text-decoration: none; font-size: .9rem; font-weight: 600; text-align: center; }
+    .card { max-width: 420px; width: 100%; background: white; border: 1px solid rgba(0,0,0,.12); border-radius: 10px; padding: 1.6rem 1.3rem; box-shadow: 0 6px 20px rgba(0,0,0,.06); }
+    h1 { margin: 0 0 .4rem; font-size: 1.1rem; color: #4a4a4a; }
+    p { margin: 0 0 1rem; font-size: .9rem; color: #6b6b6b; line-height: 1.5; }
+    .row { display: grid; gap: .6rem; }
+    a.btn { display: flex; align-items: center; gap: .65rem; padding: .85rem .9rem; background: white; border: 1px solid rgba(0,0,0,.15); border-radius: 8px; color: #4a4a4a; text-decoration: none; font-size: .95rem; font-weight: 600; text-align: left; }
+    a.btn .emoji { font-size: 1.4rem; flex: 0 0 auto; }
+    a.btn .label { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+    a.btn .sub { font-size: .75rem; font-weight: 400; color: #6b6b6b; }
     a.btn.primary { background: #ff9933; border-color: #ff9933; color: white; }
+    a.btn.primary .sub { color: rgba(255,255,255,.85); }
     a.btn:hover { box-shadow: 0 2px 6px rgba(0,0,0,.08); }
-    .note { margin-top: .9rem; font-size: .72rem; color: #9a9a9a; text-align: center; }
+    .note { margin: 1rem 0 0; font-size: .72rem; color: #9a9a9a; text-align: center; line-height: 1.4; }
+    .note code { background: rgba(0,0,0,.05); padding: .05rem .25rem; border-radius: 2px; }
   </style>
   <script>
-    // Smart redirect: communicate ONE link, the right surface opens on
-    // each device. Runs synchronously so the UI below only flashes if
-    // the redirect is bypassed (no JS / explicit ?choose=1).
+    // One shared link, two surfaces. The behavior tier-by-tier:
+    //   1. ?force=mobile|desktop   → hard override, clears stored choice
+    //   2. ?choose=1               → always show the picker (lets the
+    //                                user reset/rechoose without DevTools)
+    //   3. Stored preference       → previous explicit choice wins for
+    //                                both mobile AND desktop UAs
+    //   4. Mobile UA, no pref      → auto-redirect to the PWA
+    //   5. Desktop UA, no pref     → show the picker; clicking a tile
+    //                                stores the choice for next time
+    //
+    // The picker only shows on desktop with no prior choice (or on
+    // explicit ?choose=1). That answers Sixte's "I'm stuck on c2c.org
+    // with no way back to mobile" — going back to the landing now
+    // surfaces the choice every time until the user picks deliberately.
     (function () {
       var MOBILE_URL = '/c2c-mobile-v3/';
       var DESKTOP_URL = 'https://www.camptocamp.org/';
+      var STORE_KEY = 'c2c.landing.pref';
+
       var qs = new URLSearchParams(location.search);
-      // Manual overrides (handy when sharing the link with someone on the
-      // "wrong" device or when testing the desktop redirect from a phone).
       var force = qs.get('force');
-      if (force === 'mobile') return location.replace(MOBILE_URL);
-      if (force === 'desktop') return location.replace(DESKTOP_URL);
-      // Explicit choice screen — link out as `?choose=1` if you don't want
-      // automatic redirection.
-      if (qs.get('choose') === '1') return;
-      // UA detection: iOS / Android / mobile-class browsers → mobile PWA.
-      // Desktop or unknown → c2c.org (the established surface).
+
+      function storedPref() {
+        try { return localStorage.getItem(STORE_KEY); } catch (e) { return null; }
+      }
+      function clearPref() {
+        try { localStorage.removeItem(STORE_KEY); } catch (e) { /* ignore */ }
+      }
+
+      // Forced overrides reset any previous choice.
+      if (force === 'mobile') { clearPref(); return location.replace(MOBILE_URL); }
+      if (force === 'desktop') { clearPref(); return location.replace(DESKTOP_URL); }
+
+      // Explicit "let me choose again" — clears the stored pref AND
+      // shows the picker.
+      if (qs.get('choose') === '1') {
+        clearPref();
+        return;
+      }
+
+      var pref = storedPref();
+      if (pref === 'mobile') return location.replace(MOBILE_URL);
+      if (pref === 'desktop') return location.replace(DESKTOP_URL);
+
       var ua = navigator.userAgent || '';
       var isMobile = /Mobi|Android|iPhone|iPad|iPod|Opera Mini|IEMobile|webOS/i.test(ua);
-      location.replace(isMobile ? MOBILE_URL : DESKTOP_URL);
+      // Mobile users sharing the link want the mobile experience —
+      // auto-redirect them. Desktop users see the picker so they discover
+      // the mobile PWA exists.
+      if (isMobile) return location.replace(MOBILE_URL);
     })();
   </script>
 </head>
@@ -56,20 +88,41 @@
       </div>
     </div>
   </noscript>
-  <div class="card" id="choice" hidden>
+  <div class="card">
     <h1>Camptocamp</h1>
-    <p>Sur quelle version souhaitez-vous continuer&nbsp;?</p>
+    <p>Sur quelle version souhaitez-vous continuer&nbsp;? Votre choix sera mémorisé sur cet appareil.</p>
     <div class="row">
-      <a class="btn primary" href="/c2c-mobile-v3/">📱 Version mobile (PWA)</a>
-      <a class="btn" href="https://www.camptocamp.org/">💻 Version ordinateur (camptocamp.org)</a>
+      <a class="btn primary" data-pref="desktop" href="https://www.camptocamp.org/">
+        <span class="emoji">💻</span>
+        <span class="label">
+          <span>Version ordinateur</span>
+          <span class="sub">camptocamp.org — recommandé sur grand écran</span>
+        </span>
+      </a>
+      <a class="btn" data-pref="mobile" href="/c2c-mobile-v3/">
+        <span class="emoji">📱</span>
+        <span class="label">
+          <span>Version mobile (PWA)</span>
+          <span class="sub">interface tactile, terrain hors-ligne, sauvegarde de topos</span>
+        </span>
+      </a>
     </div>
-    <p class="note">Ajoutez ?force=mobile ou ?force=desktop à l'URL pour forcer un choix.</p>
+    <p class="note">
+      Pour rechoisir plus tard, ajoutez <code>?choose=1</code> à l'URL.<br />
+      Forcer directement&nbsp;: <code>?force=mobile</code> ou <code>?force=desktop</code>.
+    </p>
   </div>
   <script>
-    // If the auto-redirect was bypassed (?choose=1), show the picker.
-    if (new URLSearchParams(location.search).get('choose') === '1') {
-      document.getElementById('choice').hidden = false;
-    }
+    // Persist the chosen tier on click so the next visit auto-redirects.
+    Array.prototype.forEach.call(
+      document.querySelectorAll('a[data-pref]'),
+      function (a) {
+        a.addEventListener('click', function () {
+          try { localStorage.setItem('c2c.landing.pref', a.getAttribute('data-pref')); }
+          catch (e) { /* ignore — choice still works for this hop */ }
+        });
+      }
+    );
   </script>
 </body>
 </html>
