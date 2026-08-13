@@ -1,0 +1,36 @@
+{
+  "packageId": "org.camptocamp.mobile",
+  "host": "sixtedsm.github.io",
+  "name": "Camptocamp",
+  "launcherName": "Camptocamp",
+  "display": "standalone",
+  "themeColor": "#FF9933",
+  "themeColorDark": "#232323",
+  "navigationColor": "#232323",
+  "navigationColorDark": "#232323",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#FBFAF6",
+  "enableNotifications": false,
+  "startUrl": "/c2c-mobile-v3/",
+  "iconUrl": "https://sixtedsm.github.io/c2c-mobile-v3/img/icons/android-chrome-512x512.png",
+  "maskableIconUrl": "https://sixtedsm.github.io/c2c-mobile-v3/img/icons/android-chrome-maskable-512x512.png",
+  "monochromeIconUrl": "https://sixtedsm.github.io/c2c-mobile-v3/img/icons/android-chrome-512x512.png",
+  "shortcuts": [
+    {
+      "name": "Mes topos hors-ligne",
+      "shortName": "Hors-ligne",
+      "url": "/c2c-mobile-v3/offline",
+      "chosenIconUrl": "https://sixtedsm.github.io/c2c-mobile-v3/img/icons/android-chrome-192x192.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "orientation": "any",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "appVersionName": "0.1.0",
+  "appVersionCode": 1,
+  "minSdkVersion": 21,
+  "targetSdkVersion": 34
+}
