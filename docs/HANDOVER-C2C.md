@@ -132,5 +132,5 @@ first C2C-maintained release cycle:
 - [x] Documentation de publication App Store / Play Store — see the
       "if you want to publish on stores" section above
 - [x] Liste des dépendances et licences — `package.json` + `npm ls
-  --production` will produce the full tree
+--production` will produce the full tree
 - [x] Aucune dépendance bloquante à un prestataire — confirmed above
