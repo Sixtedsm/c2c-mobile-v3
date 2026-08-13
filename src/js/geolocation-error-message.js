@@ -15,7 +15,14 @@ export function geolocationErrorMessage(err, gettext) {
       return t("Position indisponible (signal GPS faible ?). Réessayez à l'extérieur ou attendez quelques secondes.");
     case 3:
       return t('Délai dépassé pour récupérer la position. Réessayez.');
-    default:
-      return t('Erreur de géolocalisation. Réessayez.');
+    default: {
+      // iOS Safari sometimes emits a PositionError without a numeric
+      // `code`, and the same helper is reused for non-Geolocation JS
+      // errors surfaced by downstream code. Append whatever detail the
+      // error object carries so the user can screenshot us something
+      // useful — the raw "Réessayez." fallback was a debugging dead-end.
+      const detail = err?.message || err?.name || (err ? String(err) : 'sans détail');
+      return t('Erreur de géolocalisation. Réessayez.') + ' (' + detail + ')';
+    }
   }
 }

@@ -110,8 +110,24 @@ export default {
     async apply() {
       this.showPicker = false;
       this.busy = true;
+      // Split the geo-permission path from the downstream path so we
+      // don't route a JS crash (bbox math, router.push, etc.) through
+      // the "Géolocalisation refusée…" branch of the toast — that used
+      // to swallow every error under the same wording.
+      let position;
       try {
-        const position = await this.getCurrentPosition();
+        position = await this.getCurrentPosition();
+      } catch (err) {
+        toast({
+          type: 'is-warning',
+          position: 'bottom-center',
+          duration: 5000,
+          message: geolocationErrorMessage(err, this.$gettext),
+        });
+        this.busy = false;
+        return;
+      }
+      try {
         const bbox = this.computeBbox(position.coords, this.selectedRadius);
         const query = {
           ...this.$route.query,
@@ -122,10 +138,10 @@ export default {
         this.$router.push({ query }).catch(() => {});
       } catch (err) {
         toast({
-          type: 'is-warning',
+          type: 'is-danger',
           position: 'bottom-center',
-          duration: 4000,
-          message: geolocationErrorMessage(err, this.$gettext),
+          duration: 5000,
+          message: this.$gettext("Impossible d'appliquer le filtre : ") + (err?.message || err?.name || String(err)),
         });
       } finally {
         this.busy = false;
