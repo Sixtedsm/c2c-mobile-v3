@@ -9,12 +9,70 @@
 // shared FormField / FormSection / SaveDocumentRow scaffolding.
 
 @include mobile {
-  // Widen the edition canvas end-to-end — the desktop
-  // `.has-edition-width { max-width: 1000px; margin: auto }` centering
-  // wastes precious room on a 375px viewport.
+  // Everything scoped under `.has-edition-width` lives in one block so
+  // stylelint's `no-duplicate-selectors` doesn't fire — each concern
+  // (canvas width, columns collapse, input sizing, checkradios) is a
+  // nested sub-rule with its own inline comment.
   .has-edition-width {
+    // Widen the edition canvas end-to-end — the desktop
+    // `max-width: 1000px; margin: auto` wastes precious room on a
+    // 375 px viewport.
     max-width: 100% !important;
     padding: 0 0.5rem;
+
+    // FormField / FormRow: full-width columns are Bulma's mobile
+    // default, but `.is-4 / .is-6 / .is-8` classes leak on some rows.
+    // Force single column so long forms never end up with two
+    // half-inputs side by side.
+    .columns:not(.is-mobile) > .column,
+    .columns:not(.is-mobile) > .column.is-narrow,
+    .columns:not(.is-mobile) > .column.is-4,
+    .columns:not(.is-mobile) > .column.is-6,
+    .columns:not(.is-mobile) > .column.is-8,
+    .columns:not(.is-mobile) > .column.is-12 {
+      flex: 0 0 100% !important;
+      max-width: 100% !important;
+    }
+
+    // Inputs: 16 px is already forced by mobile-fixes to prevent iOS
+    // zoom; add breathing room + a clearer boundary so a fat finger
+    // tap doesn't land on the next field.
+    .input,
+    .textarea,
+    .select select {
+      min-height: 44px;
+      padding: 0.55rem 0.7rem;
+    }
+    .textarea {
+      min-height: 88px;
+    }
+    label.label {
+      font-size: 0.82rem;
+      margin-bottom: 0.3rem;
+    }
+    .field:not(:last-child) {
+      margin-bottom: 0.75rem;
+    }
+    .help {
+      font-size: 0.72rem;
+    }
+
+    // Checkboxes + radios (Bulma-checkradio): grow the box + label
+    // for finger use — the original is-small style is a hard target
+    // on a phone.
+    .is-checkradio[type='checkbox'] + label,
+    .is-checkradio[type='radio'] + label {
+      font-size: 0.9rem;
+      padding-left: 2rem;
+      min-height: 28px;
+      &::before {
+        width: 22px !important;
+        height: 22px !important;
+      }
+      &::after {
+        top: 3px;
+      }
+    }
   }
 
   // Section headers act as the collapse/expand tap target on mobile.
@@ -50,69 +108,11 @@
     }
   }
 
-  // FormField / FormRow: full-width columns are already Bulma's mobile
-  // default, but the `.is-4 / .is-6 / .is-8` classes leak on some rows.
-  // Force single column so long forms never end up with two half-inputs
-  // side by side.
-  .has-edition-width {
-    .columns:not(.is-mobile) > .column,
-    .columns:not(.is-mobile) > .column.is-narrow,
-    .columns:not(.is-mobile) > .column.is-4,
-    .columns:not(.is-mobile) > .column.is-6,
-    .columns:not(.is-mobile) > .column.is-8,
-    .columns:not(.is-mobile) > .column.is-12 {
-      flex: 0 0 100% !important;
-      max-width: 100% !important;
-    }
-  }
-
-  // Inputs: 16px is already forced by mobile-fixes to prevent iOS zoom;
-  // add breathing room + a clearer boundary so a fat finger tap doesn't
-  // land on the next field.
-  .has-edition-width {
-    .input,
-    .textarea,
-    .select select {
-      min-height: 44px;
-      padding: 0.55rem 0.7rem;
-    }
-    .textarea {
-      min-height: 88px;
-    }
-    label.label {
-      font-size: 0.82rem;
-      margin-bottom: 0.3rem;
-    }
-    .field:not(:last-child) {
-      margin-bottom: 0.75rem;
-    }
-    .help {
-      font-size: 0.72rem;
-    }
-  }
-
-  // Checkboxes + radios (Bulma-checkradio): the original is-small style
-  // is a hard target on a phone. Grow the box + label for finger use.
-  .has-edition-width {
-    .is-checkradio[type='checkbox'] + label,
-    .is-checkradio[type='radio'] + label {
-      font-size: 0.9rem;
-      padding-left: 2rem;
-      min-height: 28px;
-      &::before {
-        width: 22px !important;
-        height: 22px !important;
-      }
-      &::after {
-        top: 3px;
-      }
-    }
-  }
-
   // Sticky save bar — the SaveDocumentRow sits at the very bottom of a
   // 3-screen-tall form. On mobile that means the user scrolls forever
-  // just to hit Save. Pinning it above the BottomNav (52px) keeps the
-  // primary action reachable at all times.
+  // just to hit Save. Pinning it above the BottomNav (52 px) keeps the
+  // primary action reachable at all times. Compound selector so it
+  // doesn't collide with the top-level .has-edition-width block above.
   .has-edition-width > .columns.is-mobile.is-multiline:last-child {
     position: sticky;
     bottom: calc(52px + env(safe-area-inset-bottom));
@@ -177,7 +177,7 @@
 
   // MapInputRow: the desktop layout pins the map next to a column of
   // inputs. On mobile stack them (already the case via Bulma default),
-  // just ensure the map itself has a sane min height for finger interaction.
+  // just ensure the map itself has a sane min height for finger use.
   .has-edition-width .map-input-row .ol-map {
     min-height: 260px;
   }
