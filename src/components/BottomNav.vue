@@ -13,7 +13,8 @@
               v-if="tab.key === 'saved' && pendingCount"
               class="bottom-nav-badge"
               :aria-label="$gettext('Sorties en attente de publication')"
-            >{{ pendingCount > 9 ? '9+' : pendingCount }}</span>
+              >{{ pendingCount > 9 ? '9+' : pendingCount }}</span
+            >
           </span>
           <span class="bottom-nav-label">{{ tab.label }}</span>
         </router-link>

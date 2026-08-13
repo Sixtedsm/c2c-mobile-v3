@@ -195,8 +195,6 @@
 <script>
 import { toast } from 'bulma-toast';
 
-import { geolocationErrorMessage } from '@/js/geolocation-error-message';
-
 import BiodivInformation from './BiodivInformation';
 import LayerButton from './LayerButton';
 import SwissProtectionAreaInformation from './SwissProtectionAreaInformation';
@@ -218,6 +216,7 @@ import c2c from '@/js/apis/c2c';
 import photon from '@/js/apis/photon';
 import respecterCestProtegerService from '@/js/apis/respectercestproteger-service';
 import { FIT } from '@/js/fit/FIT';
+import { geolocationErrorMessage } from '@/js/geolocation-error-message';
 import ol from '@/js/libs/ol';
 import { TCX } from '@/js/tcx/TCX';
 
@@ -1353,8 +1352,8 @@ export default {
           typeof window.screen?.orientation?.angle === 'number'
             ? window.screen.orientation.angle
             : typeof window.orientation === 'number'
-              ? window.orientation
-              : 0;
+            ? window.orientation
+            : 0;
         heading = (heading + screenAngle + 360) % 360;
         this.currentHeadingDeg = heading;
         this.refreshPositionStyle();
@@ -1367,9 +1366,7 @@ export default {
       // handler firing rate and let Android's non-absolute readings
       // race the absolute ones.
       this._orientationEvent =
-        'ondeviceorientationabsolute' in window
-          ? 'deviceorientationabsolute'
-          : 'deviceorientation';
+        'ondeviceorientationabsolute' in window ? 'deviceorientationabsolute' : 'deviceorientation';
       window.addEventListener(this._orientationEvent, this.orientationHandler, true);
       this.compassActive = true;
       this.refreshPositionStyle();
@@ -1874,7 +1871,9 @@ $col-stride-px: 40px;
     line-height: 1;
     min-width: 38px;
 
-    &:hover { background: rgba(0, 0, 0, 0.06); }
+    &:hover {
+      background: rgba(0, 0, 0, 0.06);
+    }
     &.is-active {
       background: #ff9933;
       color: white;

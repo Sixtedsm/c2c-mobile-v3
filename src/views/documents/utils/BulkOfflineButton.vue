@@ -12,10 +12,7 @@
       <!-- Label hidden on mobile so the button stays compact in the
            header (tap-target = the whole button via title/aria-label). -->
       <span class="bulk-offline-label is-hidden-mobile">
-        &nbsp;{{ busy
-          ? $gettext('Saving') + ' ' + savedCount + '/' + total
-          : $gettext('Save page offline')
-        }}
+        &nbsp;{{ busy ? $gettext('Saving') + ' ' + savedCount + '/' + total : $gettext('Save page offline') }}
       </span>
       <!-- On mobile during a bulk save, show the count next to the icon
            so the user gets progress feedback without taking up the
@@ -224,8 +221,12 @@ html[data-theme='dark'] {
     background: #2a2a2a;
     color: #e5e5e5;
   }
-  .bulk-offline-title { color: #f5f5f5; }
-  .bulk-offline-subtitle { color: #9a9a9a; }
+  .bulk-offline-title {
+    color: #f5f5f5;
+  }
+  .bulk-offline-subtitle {
+    color: #9a9a9a;
+  }
   .bulk-offline-select {
     background: #1a1a1a;
     color: #e5e5e5;

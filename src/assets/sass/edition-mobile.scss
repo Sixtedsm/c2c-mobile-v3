@@ -1,0 +1,200 @@
+// Mobile ergonomics pass for the V1 edition pipeline (CDC Lot 4).
+// Reuses every V1 component untouched — this file is CSS-only and lives
+// as a global override layered on top of the scoped styles. Rationale:
+// per Sixte's "never replace a V1 component with a custom shim" rule,
+// we reshape the forms via CSS rather than forking them.
+//
+// Targets: OutingEditionView, RouteEditionView, WaypointEditionView,
+// ArticleEditionView, BookEditionView, XreportEditionView, plus their
+// shared FormField / FormSection / SaveDocumentRow scaffolding.
+
+@include mobile {
+  // Widen the edition canvas end-to-end — the desktop
+  // `.has-edition-width { max-width: 1000px; margin: auto }` centering
+  // wastes precious room on a 375px viewport.
+  .has-edition-width {
+    max-width: 100% !important;
+    padding: 0 0.5rem;
+  }
+
+  // Section headers act as the collapse/expand tap target on mobile.
+  // The V1 button was small and right-pulled; enlarge it and let the
+  // whole row read as a tap surface (the button still handles the tap).
+  .section-item .section-header {
+    align-items: center;
+    padding: 0.6rem 0 0.2rem;
+
+    .title.is-2 {
+      font-size: 1.05rem !important;
+      line-height: 1.25;
+      margin-bottom: 0.1rem;
+    }
+
+    p em {
+      font-size: 0.78rem;
+      color: #6b6b6b;
+    }
+
+    // The Collapse/Expand pill was clashing with the section title on
+    // narrow screens — pin it, keep it tappable, drop the info tint so
+    // it reads as a discreet chevron affordance instead of a CTA.
+    .button.is-info {
+      background: transparent !important;
+      border: 1px solid rgba(0, 0, 0, 0.15) !important;
+      color: #4a4a4a !important;
+      font-size: 0.75rem !important;
+      padding: 0.35rem 0.6rem;
+      min-height: 34px !important;
+      min-width: 44px;
+      white-space: nowrap;
+    }
+  }
+
+  // FormField / FormRow: full-width columns are already Bulma's mobile
+  // default, but the `.is-4 / .is-6 / .is-8` classes leak on some rows.
+  // Force single column so long forms never end up with two half-inputs
+  // side by side.
+  .has-edition-width {
+    .columns:not(.is-mobile) > .column,
+    .columns:not(.is-mobile) > .column.is-narrow,
+    .columns:not(.is-mobile) > .column.is-4,
+    .columns:not(.is-mobile) > .column.is-6,
+    .columns:not(.is-mobile) > .column.is-8,
+    .columns:not(.is-mobile) > .column.is-12 {
+      flex: 0 0 100% !important;
+      max-width: 100% !important;
+    }
+  }
+
+  // Inputs: 16px is already forced by mobile-fixes to prevent iOS zoom;
+  // add breathing room + a clearer boundary so a fat finger tap doesn't
+  // land on the next field.
+  .has-edition-width {
+    .input,
+    .textarea,
+    .select select {
+      min-height: 44px;
+      padding: 0.55rem 0.7rem;
+    }
+    .textarea {
+      min-height: 88px;
+    }
+    label.label {
+      font-size: 0.82rem;
+      margin-bottom: 0.3rem;
+    }
+    .field:not(:last-child) {
+      margin-bottom: 0.75rem;
+    }
+    .help {
+      font-size: 0.72rem;
+    }
+  }
+
+  // Checkboxes + radios (Bulma-checkradio): the original is-small style
+  // is a hard target on a phone. Grow the box + label for finger use.
+  .has-edition-width {
+    .is-checkradio[type='checkbox'] + label,
+    .is-checkradio[type='radio'] + label {
+      font-size: 0.9rem;
+      padding-left: 2rem;
+      min-height: 28px;
+      &::before {
+        width: 22px !important;
+        height: 22px !important;
+      }
+      &::after {
+        top: 3px;
+      }
+    }
+  }
+
+  // Sticky save bar — the SaveDocumentRow sits at the very bottom of a
+  // 3-screen-tall form. On mobile that means the user scrolls forever
+  // just to hit Save. Pinning it above the BottomNav (52px) keeps the
+  // primary action reachable at all times.
+  .has-edition-width > .columns.is-mobile.is-multiline:last-child {
+    position: sticky;
+    bottom: calc(52px + env(safe-area-inset-bottom));
+    left: 0;
+    right: 0;
+    background: white;
+    padding: 0.5rem 0.5rem;
+    margin: 0.75rem -0.5rem 0;
+    box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.08);
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    z-index: 15;
+
+    .column {
+      padding: 0.25rem 0.35rem;
+    }
+
+    // Save button dominates the row — bigger, filled, first in tab order.
+    .button.is-primary {
+      min-height: 44px;
+      padding: 0 1.2rem;
+      font-weight: 600;
+    }
+    .button:not(.is-primary) {
+      min-height: 44px;
+    }
+
+    // The comment input takes the full row on mobile.
+    .column.is-12-mobile {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+  }
+
+  // Preview header pill (top-right of EditionContainer) — was cramped
+  // against the doc title on narrow screens.
+  .has-edition-width > .title.is-1 {
+    font-size: 1.15rem !important;
+    line-height: 1.3;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+
+    .button.is-size-6 {
+      float: none !important;
+      margin-left: auto;
+      min-height: 40px;
+      font-size: 0.85rem !important;
+    }
+  }
+
+  // Association picker rows (AssociationsInputRow) are dense on
+  // desktop — give each token / suggestion room to breathe so a tap
+  // doesn't land on the wrong pill.
+  .has-edition-width .association-input-row {
+    .tag {
+      padding: 0.4rem 0.6rem;
+      font-size: 0.85rem;
+      min-height: 32px;
+    }
+  }
+
+  // MapInputRow: the desktop layout pins the map next to a column of
+  // inputs. On mobile stack them (already the case via Bulma default),
+  // just ensure the map itself has a sane min height for finger interaction.
+  .has-edition-width .map-input-row .ol-map {
+    min-height: 260px;
+  }
+}
+
+// Dark mode overrides so the sticky save bar reads on a dark canvas.
+html[data-theme='dark'] {
+  @include mobile {
+    .has-edition-width > .columns.is-mobile.is-multiline:last-child {
+      background: #232323;
+      border-top-color: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.4);
+    }
+    .section-item .section-header .button.is-info {
+      background: transparent !important;
+      border-color: rgba(255, 255, 255, 0.15) !important;
+      color: #e5e5e5 !important;
+    }
+  }
+}

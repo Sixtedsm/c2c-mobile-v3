@@ -1,65 +1,47 @@
 import { toast } from 'bulma-toast';
-import Vue from 'vue';
 
 import c2c from '@/js/apis/c2c';
 import config from '@/js/config';
 import { getImageUrl } from '@/js/image-urls';
 import ol from '@/js/libs/ol';
+import uploadFile from '@/js/upload-file';
+import { extractEmbeddedImageIds, extractImageUrlsFromCooked } from '@/pwa/cooked-html-parser';
 import * as store from '@/pwa/offline-store';
 
-const EMBEDDED_IMAGE_REGEX = /<img[^<>]+c2c:document-id="(\d+)"/gm;
-const IMG_SRC_REGEX = /<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gim;
-// The C2C cooker emits embedded images without a real src; the Markdown
-// component rebuilds the URL at render time from this attribute.
-const URL_PROXY_REGEX = /<img\b[^>]*\bc2c:url-proxy\s*=\s*["']([^"']+)["']/gim;
-// Modern thumbnails are served in three formats and the <picture> element
-// picks the best one supported; we have to cache all three to guarantee
-// offline rendering whatever the browser picks.
-const IMAGE_FORMATS = ['', 'avif', 'webp'];
-const IMAGE_SIZES_TO_PREFETCH = ['MI', 'SI'];
-
-function extractImageUrlsFromCooked(cooked) {
-  const out = new Set();
-  if (!cooked) {
-    return out;
-  }
-  const apiBase = config.urls.api;
-  const visit = (value) => {
-    if (typeof value !== 'string') {
-      return;
-    }
-    if (value.indexOf('<img') === -1) {
-      return;
-    }
-    let match;
-
-    // 1) Direct src=… (already-rendered images, gallery thumbnails, etc.)
-    IMG_SRC_REGEX.lastIndex = 0;
-    while ((match = IMG_SRC_REGEX.exec(value)) !== null) {
-      out.add(match[1]);
-    }
-
-    // 2) c2c:url-proxy=… (embedded figures rebuilt client-side by
-    //    Markdown.vue#computeImages). For each proxy URL we precache the
-    //    three format variants the runtime <picture> element will try.
-    URL_PROXY_REGEX.lastIndex = 0;
-    while ((match = URL_PROXY_REGEX.exec(value)) !== null) {
-      const proxyPath = match[1];
-      for (const fmt of IMAGE_FORMATS) {
-        const url = apiBase + proxyPath + (fmt ? `&extension=${fmt}` : '');
-        out.add(url);
-      }
-    }
-  };
-  if (typeof cooked === 'string') {
-    visit(cooked);
-  } else if (typeof cooked === 'object') {
-    for (const value of Object.values(cooked)) {
-      visit(value);
-    }
-  }
-  return out;
+// Push one File through the existing V1 upload pipeline (EXIF parse +
+// resize + POST to imageBackend). Adapts the callback-style helper to
+// a Promise so sync code can `await` it cleanly. Returns the enriched
+// image document (filename + width/height + EXIF fields) ready for
+// c2c.createImages.
+function uploadOnePhoto(file) {
+  return new Promise((resolve, reject) => {
+    uploadFile(
+      file,
+      0,
+      () => {},
+      () => {},
+      (document) => resolve(document),
+      (err) => reject(err || new Error('upload failed'))
+    );
+  });
 }
+
+// Upload every photo then register them as C2C image documents in one
+// createImages call. Returns the array of newly-created document_ids
+// so the outing sync path can attach them via associations.images.
+async function uploadPhotosAndCreateImages(files) {
+  const documents = [];
+  for (const file of files) {
+    const doc = await uploadOnePhoto(file);
+    documents.push(doc);
+  }
+  if (!documents.length) return [];
+  const response = await c2c.createImages(documents);
+  const created = response?.data?.images || [];
+  return created.map((img) => img.document_id).filter(Boolean);
+}
+
+const IMAGE_SIZES_TO_PREFETCH = ['MI', 'SI'];
 
 async function prefetchUrl(url) {
   try {
@@ -87,7 +69,7 @@ async function prefetchImageVariants(imageDoc) {
 }
 
 async function prefetchSrcsFromCooked(cooked) {
-  for (const url of extractImageUrlsFromCooked(cooked)) {
+  for (const url of extractImageUrlsFromCooked(cooked, config.urls.api)) {
     // We pull both real src= URLs and reconstructed c2c:url-proxy URLs so the
     // service worker caches exactly the URLs the browser will request when
     // rendering the topo offline (including avif/webp <picture> variants).
@@ -218,31 +200,6 @@ async function prefetchTilesForDocument(data) {
     const slice = urls.slice(i, i + BATCH);
     await Promise.all(slice.map((url) => prefetchUrl(url)));
   }
-}
-
-function extractEmbeddedImageIds(cooked) {
-  if (!cooked) {
-    return [];
-  }
-  const ids = new Set();
-  const collect = (value) => {
-    if (typeof value !== 'string') {
-      return;
-    }
-    let match;
-    EMBEDDED_IMAGE_REGEX.lastIndex = 0;
-    while ((match = EMBEDDED_IMAGE_REGEX.exec(value)) !== null) {
-      ids.add(match[1]);
-    }
-  };
-  if (typeof cooked === 'string') {
-    collect(cooked);
-  } else if (typeof cooked === 'object') {
-    for (const value of Object.values(cooked)) {
-      collect(value);
-    }
-  }
-  return [...ids];
 }
 
 // PWA app badge (#18): mirrors the offline-outing queue length on the
@@ -432,6 +389,9 @@ export default function install(Vue) {
       },
 
       async removeFolder(id) {
+        // store.deleteFolder already nulls folderId on contained docs
+        // before deleting the folder itself — no extra orphan reassign
+        // needed here.
         await store.deleteFolder(id);
         await this.refresh();
       },
@@ -439,6 +399,39 @@ export default function install(Vue) {
       async moveDocumentToFolder(type, id, lang, folderId) {
         await store.setDocumentFolder(type, id, lang, folderId);
         await this.refresh();
+      },
+
+      // "Pack sortie du jour" (CDC §2.2): a one-tap way to bundle a
+      // route with the surrounding waypoints (hut, summit, access,
+      // bivouac, water source, pass, cliff…) into one folder, so a
+      // single tap prepares an outing for offline consultation on the
+      // trail. Skips the associated documents that are already saved,
+      // and swallows individual failures — the main doc is what
+      // matters; a missing waypoint should not fail the whole pack.
+      async saveDayPack({ type, id, lang, folderName }) {
+        // Fetch the main doc first to read its associations. We save it
+        // into the freshly created folder to keep the pack self-contained.
+        const service = c2c[type];
+        if (!service) {
+          throw new Error(`Unknown document type: ${type}`);
+        }
+        const folderId = await this.createFolder(folderName || `Pack ${new Date().toLocaleDateString('fr-FR')}`);
+        await this.saveDocument({ type, id, lang, folderId });
+
+        const mainDoc = await store.getDocument(type, id, lang);
+        const associations = mainDoc?.associations ?? {};
+        const associatedWaypoints = [...(associations.waypoints ?? []), ...(associations.waypoint_children ?? [])];
+        for (const wp of associatedWaypoints) {
+          const wpId = wp?.document_id;
+          if (!wpId) continue;
+          if (this.isSaved('waypoint', wpId, lang)) continue;
+          try {
+            await this.saveDocument({ type: 'waypoint', id: wpId, lang, folderId });
+          } catch {
+            /* one missing waypoint should not tank the pack */
+          }
+        }
+        return folderId;
       },
 
       async getDocument(type, id, lang) {
@@ -449,10 +442,39 @@ export default function install(Vue) {
         return store.estimateUsage();
       },
 
-      async queueOuting(document) {
+      // Purge every saved document + folder. Pending outings are left
+      // alone on purpose: they represent unsync'd user data and losing
+      // them silently would be a real data-loss regression. If the user
+      // wants to drop those too, they can discard each pending item
+      // from the OfflineView list.
+      async purgeAllDocuments() {
+        const docs = this.savedDocs.slice();
+        for (const d of docs) {
+          try {
+            await store.deleteDocument(d.type, d.id, d.lang);
+          } catch {
+            /* keep going — one failure shouldn't halt the purge */
+          }
+        }
+        const folders = this.folders.slice();
+        for (const f of folders) {
+          try {
+            await store.deleteFolder(f.id);
+          } catch {
+            /* ditto */
+          }
+        }
+        await this.refresh();
+      },
+
+      async queueOuting(document, { photos = [] } = {}) {
+        // Photos are stored as raw File/Blob in IndexedDB (idb-keyval
+        // handles Blobs natively — no base64 blow-up). They're uploaded
+        // + associated to the outing at sync time; see syncPendingOutings.
         const entry = await store.enqueuePendingOuting({
           payload: document,
           title: document?.locales?.[0]?.title || this.$gettext?.('Untitled') || 'Untitled',
+          photos: Array.isArray(photos) ? photos.slice(0, 20) : [],
         });
         this.pendingOutings = await store.listPendingOutings();
         return entry;
@@ -469,20 +491,59 @@ export default function install(Vue) {
         this.syncing = true;
         const remaining = [];
         let published = 0;
+        let newConflicts = 0;
         for (const item of queue) {
+          // Items previously flagged as conflicting stay in the queue
+          // without being retried — the user has to explicitly resolve
+          // them (retry / discard) via the OfflineView UI. Prevents an
+          // auto-retry storm from re-triggering the same 409 on every
+          // reconnect.
+          if (item.conflict) {
+            remaining.push(item);
+            continue;
+          }
           try {
-            const response = await c2c.outing.create(item.payload);
+            // If the item has photos captured offline, upload + register
+            // them first so we can attach image_ids to the outing before
+            // creating it. A single upload failure aborts the whole item
+            // for this attempt — safer to retry the whole thing than to
+            // publish an outing missing photos.
+            const payload = { ...item.payload };
+            if (Array.isArray(item.photos) && item.photos.length > 0) {
+              const imageIds = await uploadPhotosAndCreateImages(item.photos);
+              payload.associations = {
+                ...(payload.associations || {}),
+                images: [...(payload.associations?.images || []), ...imageIds.map((document_id) => ({ document_id }))],
+              };
+            }
+            const response = await c2c.outing.create(payload);
             if (!response?.data?.document_id) {
               remaining.push({ ...item, attempts: item.attempts + 1, lastError: 'no-id' });
             } else {
               published += 1;
             }
           } catch (error) {
-            remaining.push({
-              ...item,
-              attempts: item.attempts + 1,
-              lastError: error?.response?.status ?? 'network',
-            });
+            const status = error?.response?.status;
+            // 409 Conflict = a referenced route / waypoint was edited
+            // upstream between the offline draft and the publish attempt
+            // (CDC §2.4 "gestion des conflits"). Freeze the item and
+            // surface it in the UI — an auto-retry would just fail
+            // identically and the user has to make the call.
+            if (status === 409) {
+              remaining.push({
+                ...item,
+                attempts: item.attempts + 1,
+                lastError: 409,
+                conflict: true,
+              });
+              newConflicts += 1;
+            } else {
+              remaining.push({
+                ...item,
+                attempts: item.attempts + 1,
+                lastError: status ?? error?.message ?? 'network',
+              });
+            }
           }
         }
         await store.replacePendingOutings(remaining);
@@ -496,10 +557,7 @@ export default function install(Vue) {
           toast({
             type: 'is-success',
             position: 'bottom-center',
-            message:
-              published === 1
-                ? `1 sortie publiée en ligne.`
-                : `${published} sorties publiées en ligne.`,
+            message: published === 1 ? `1 sortie publiée en ligne.` : `${published} sorties publiées en ligne.`,
           });
         }
         if (remaining.length && published === 0 && queue.length) {
@@ -511,6 +569,47 @@ export default function install(Vue) {
             message: `Échec de la synchronisation. Ouvrez « Mes topos » pour réessayer.`,
           });
         }
+        if (newConflicts > 0) {
+          toast({
+            type: 'is-warning',
+            position: 'bottom-center',
+            duration: 5000,
+            message:
+              newConflicts === 1
+                ? `1 sortie en conflit : ouvrez « Mes topos » pour la résoudre.`
+                : `${newConflicts} sorties en conflit : ouvrez « Mes topos » pour les résoudre.`,
+          });
+        }
+      },
+
+      // Mark a conflicted item as ready to retry — clears the frozen
+      // flag so the next syncPendingOutings() picks it up again. The
+      // caller (OfflineView "Réessayer") decides when to do this after
+      // the user has read the warning.
+      async retryConflictedOuting(id) {
+        const queue = await store.listPendingOutings();
+        const next = queue.map((item) => (item.id === id ? { ...item, conflict: false, lastError: null } : item));
+        await store.replacePendingOutings(next);
+        this.pendingOutings = next;
+        if (this.online) {
+          this.syncPendingOutings();
+        }
+      },
+
+      // Export a conflicted item's payload as a downloadable JSON so
+      // the user can preserve their data before abandoning the sync.
+      exportPendingOutingAsJson(item) {
+        const blob = new Blob([JSON.stringify(item.payload, null, 2)], {
+          type: 'application/json',
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `sortie-brouillon-${item.id || Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
       },
 
       async removePendingOuting(id) {

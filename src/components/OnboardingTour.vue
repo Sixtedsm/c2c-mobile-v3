@@ -1,12 +1,13 @@
 <template>
-  <div v-if="visible" class="onboarding-overlay" role="dialog" aria-modal="true" :aria-label="$gettext('Bienvenue sur Camptocamp')">
+  <div
+    v-if="visible"
+    class="onboarding-overlay"
+    role="dialog"
+    aria-modal="true"
+    :aria-label="$gettext('Bienvenue sur Camptocamp')"
+  >
     <div class="onboarding-card">
-      <button
-        type="button"
-        class="onboarding-skip"
-        :aria-label="$gettext('Passer')"
-        @click="finish"
-      >
+      <button type="button" class="onboarding-skip" :aria-label="$gettext('Passer')" @click="finish">
         <fa-icon icon="xmark" />
       </button>
 
@@ -31,12 +32,7 @@
       </div>
 
       <div class="onboarding-actions">
-        <button
-          v-if="step > 0"
-          type="button"
-          class="onboarding-btn onboarding-btn-secondary"
-          @click="step--"
-        >
+        <button v-if="step > 0" type="button" class="onboarding-btn onboarding-btn-secondary" @click="step--">
           {{ $gettext('Précédent') }}
         </button>
         <button
@@ -47,13 +43,8 @@
         >
           {{ $gettext('Suivant') }}
         </button>
-        <button
-          v-else
-          type="button"
-          class="onboarding-btn onboarding-btn-primary"
-          @click="finish"
-        >
-          {{ $gettext('C\'est parti') }}
+        <button v-else type="button" class="onboarding-btn onboarding-btn-primary" @click="finish">
+          {{ $gettext("C'est parti") }}
         </button>
       </div>
     </div>
@@ -84,12 +75,16 @@ export default {
         {
           icon: 'mountain',
           title: this.$gettext('Bienvenue sur Camptocamp'),
-          text: this.$gettext('Topos, sorties, conditions et récits pour la montagne — accessibles depuis votre poche.'),
+          text: this.$gettext(
+            'Topos, sorties, conditions et récits pour la montagne — accessibles depuis votre poche.'
+          ),
         },
         {
           icon: 'bars',
           title: this.$gettext('Naviguer'),
-          text: this.$gettext('Cinq onglets en bas : Recherche, Récent, Mes topos hors-ligne, Moi et Plus pour le reste.'),
+          text: this.$gettext(
+            'Cinq onglets en bas : Recherche, Récent, Mes topos hors-ligne, Moi et Plus pour le reste.'
+          ),
         },
         {
           icon: 'bookmark',
@@ -292,17 +287,28 @@ html[data-theme='dark'] {
     background: #2a2a2a;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
   }
-  .onboarding-title { color: #f5f5f5; }
-  .onboarding-text { color: #b5b5b5; }
+  .onboarding-title {
+    color: #f5f5f5;
+  }
+  .onboarding-text {
+    color: #b5b5b5;
+  }
   .onboarding-skip {
     color: #b5b5b5;
-    &:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
   }
-  .onboarding-icon { background: #3a2f1a; }
+  .onboarding-icon {
+    background: #3a2f1a;
+  }
   .onboarding-btn-secondary {
     color: #e5e5e5;
     border-color: rgba(255, 255, 255, 0.15);
-    &:hover { background: rgba(255, 255, 255, 0.06); }
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
   }
 }
 </style>

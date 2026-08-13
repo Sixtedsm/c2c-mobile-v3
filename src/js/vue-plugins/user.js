@@ -1,8 +1,7 @@
-import router from '@/js/vue-plugins/router';
-
 import c2c from '@/js/apis/c2c';
 import trackingService from '@/js/apis/tracking-service';
 import config from '@/js/config';
+import router from '@/js/vue-plugins/router';
 
 export default function install(Vue) {
   Vue.prototype.$user = new Vue({
@@ -152,7 +151,7 @@ export default function install(Vue) {
               }
             }
             return Promise.reject(error);
-          },
+          }
         );
       },
 

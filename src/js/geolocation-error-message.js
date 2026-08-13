@@ -10,13 +10,9 @@ export function geolocationErrorMessage(err, gettext) {
   const t = gettext || ((s) => s);
   switch (err && err.code) {
     case 1:
-      return t(
-        'Géolocalisation refusée. Autorisez-la dans les réglages du navigateur, puis réessayez.'
-      );
+      return t('Géolocalisation refusée. Autorisez-la dans les réglages du navigateur, puis réessayez.');
     case 2:
-      return t(
-        'Position indisponible (signal GPS faible ?). Réessayez à l\'extérieur ou attendez quelques secondes.'
-      );
+      return t("Position indisponible (signal GPS faible ?). Réessayez à l'extérieur ou attendez quelques secondes.");
     case 3:
       return t('Délai dépassé pour récupérer la position. Réessayez.');
     default:

@@ -2,10 +2,10 @@ import { get, set } from 'idb-keyval';
 /* The SW reads/writes only the per-document IDB entries; the pending-outings
  * queue is owned by the in-app $offline plugin so that the UI can stay in
  * sync. Keeping the two responsibilities separate prevents accidental races. */
+import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
 import { NavigationRoute, registerRoute, setCatchHandler } from 'workbox-routing';
-import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { CacheFirst } from 'workbox-strategies';
 
 // ---------- Precache the app shell ----------

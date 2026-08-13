@@ -15,6 +15,15 @@
             :document-type="documentType"
             :lang="lang"
           />
+          <!-- "Démarrer la sortie" (CDC §2.4): only on route pages,
+               only in the live view. Tracks GPS in the background,
+               offers save-as-draft + GPX export on stop. -->
+          <start-outing-control
+            v-if="!isPrintingView && !isDraftView && documentType === 'route'"
+            :topo-ref="{ type: 'route', id: document.document_id, lang: lang }"
+            :route="document"
+            class="start-outing-header"
+          />
           <tags-button v-if="!isPrintingView" :document="document" />
 
           <!-- ShareButton uses the Web Share API (native sheet on mobile)
@@ -70,6 +79,7 @@ import ShareButton from './ShareButton.vue';
 import SocialNetworkSharing from './SocialNetworkSharing';
 import TagsButton from './TagsButton';
 
+import StartOutingControl from '@/components/StartOutingControl.vue';
 import ImagesUploader from '@/components/images-uploader/ImagesUploader';
 import isEditableMixin from '@/js/is-editable-mixin';
 import { requireDocumentProperty } from '@/js/properties-mixins';
@@ -81,6 +91,7 @@ export default {
     OfflineHeaderButton,
     ShareButton,
     GotopButton,
+    StartOutingControl,
     TagsButton,
     SocialNetworkSharing,
     DocumentVersionBanner,
@@ -107,15 +118,7 @@ export default {
     offlineSupportedType() {
       // Areas / maps / profiles aren't useful to save for field use and the
       // offline plugin doesn't model them — only hide-show, no logic change.
-      return [
-        'article',
-        'book',
-        'image',
-        'outing',
-        'route',
-        'waypoint',
-        'xreport',
-      ].includes(this.documentType);
+      return ['article', 'book', 'image', 'outing', 'route', 'waypoint', 'xreport'].includes(this.documentType);
     },
   },
 };
@@ -137,6 +140,14 @@ export default {
 }
 .button-bar > *:hover {
   color: $black;
+}
+
+// The Start-outing pill is a wider element than the other icon-buttons
+// in the bar — align vertically without inheriting the row's 1.5rem
+// font-size so the pill keeps its intended sizing.
+.start-outing-header {
+  font-size: 0.9rem;
+  vertical-align: middle;
 }
 
 .title {

@@ -37,6 +37,17 @@
       :label="offlineLabel"
     />
 
+    <!-- Pack "sortie du jour" (CDC §2.2): one-tap bundle of the route +
+         its associated waypoints (hut, summit, access…) into a folder.
+         Routes only — for other doc types the concept doesn't map. -->
+    <tool-box-button
+      v-if="canSaveDayPack"
+      @click="saveDayPack"
+      :icon="dayPackBusy ? 'circle-notch' : 'layer-group'"
+      :icon-class="dayPackBusy ? 'fa-spin' : null"
+      :label="dayPackLabel"
+    />
+
     <tool-box-button v-if="canPrint" @click="printDocument" icon="print" :label="$gettext('Print / save as PDF')" />
 
     <tool-box-button
@@ -225,6 +236,7 @@ export default {
   data() {
     return {
       isAccountBlocked: null,
+      dayPackBusy: false,
     };
   },
 
@@ -416,6 +428,19 @@ export default {
       }
       return this.isSavedOffline ? this.$gettext('Saved for offline use') : this.$gettext('Save for offline use');
     },
+
+    canSaveDayPack() {
+      // Day pack = route + associated waypoints. Only meaningful when
+      // starting from a route; other doc types (outing, waypoint,
+      // article…) don't have the right shape.
+      return this.documentType === 'route';
+    },
+
+    dayPackLabel() {
+      return this.dayPackBusy
+        ? this.$gettext('Création du pack sortie…')
+        : this.$gettext('Enregistrer en pack sortie du jour');
+    },
   },
 
   created() {
@@ -467,9 +492,7 @@ export default {
           this.documentType,
           this.offlineDocId,
           this.offlineLang,
-          this.$gettext(
-            'Retirer ce topo des sauvegardes hors-ligne ? Vous ne pourrez plus l\'ouvrir sans réseau.'
-          )
+          this.$gettext("Retirer ce topo des sauvegardes hors-ligne ? Vous ne pourrez plus l'ouvrir sans réseau.")
         );
       } else {
         await this.$offline.saveDocument({
@@ -477,6 +500,27 @@ export default {
           id: this.offlineDocId,
           lang: this.offlineLang,
         });
+      }
+    },
+
+    async saveDayPack() {
+      if (this.dayPackBusy) return;
+      const routeTitle = this.$documentUtils.getDocumentTitle(this.document, this.offlineLang);
+      const folderName = window.prompt(
+        this.$gettext('Nom du pack sortie ?'),
+        routeTitle || this.$gettext('Sortie du jour')
+      );
+      if (!folderName || !folderName.trim()) return;
+      this.dayPackBusy = true;
+      try {
+        await this.$offline.saveDayPack({
+          type: 'route',
+          id: this.offlineDocId,
+          lang: this.offlineLang,
+          folderName: folderName.trim(),
+        });
+      } finally {
+        this.dayPackBusy = false;
       }
     },
   },

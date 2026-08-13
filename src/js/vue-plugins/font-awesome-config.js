@@ -4,6 +4,7 @@ import { faFacebook } from '@fortawesome/free-brands-svg-icons/faFacebook';
 import { faGoogle } from '@fortawesome/free-brands-svg-icons/faGoogle';
 import { faInstagram } from '@fortawesome/free-brands-svg-icons/faInstagram';
 import { faYoutube } from '@fortawesome/free-brands-svg-icons/faYoutube';
+import { faBookmark as faBookmarkRegularV3 } from '@fortawesome/free-regular-svg-icons/faBookmark';
 import { faCircle as faCircleRegular } from '@fortawesome/free-regular-svg-icons/faCircle';
 import { faClock as faClockRegular } from '@fortawesome/free-regular-svg-icons/faClock';
 import { faFaceFrown as faFaceFrownRegular } from '@fortawesome/free-regular-svg-icons/faFaceFrown';
@@ -23,6 +24,8 @@ import { faBars } from '@fortawesome/free-solid-svg-icons/faBars';
 import { faBold } from '@fortawesome/free-solid-svg-icons/faBold';
 import { faBolt } from '@fortawesome/free-solid-svg-icons/faBolt';
 import { faBomb } from '@fortawesome/free-solid-svg-icons/faBomb';
+import { faBook as faBookV3 } from '@fortawesome/free-solid-svg-icons/faBook';
+import { faBookmark as faBookmarkV3 } from '@fortawesome/free-solid-svg-icons/faBookmark';
 import { faBroom } from '@fortawesome/free-solid-svg-icons/faBroom';
 import { faBug } from '@fortawesome/free-solid-svg-icons/faBug';
 import { faBullseye } from '@fortawesome/free-solid-svg-icons/faBullseye';
@@ -37,7 +40,9 @@ import { faChevronLeft } from '@fortawesome/free-solid-svg-icons/faChevronLeft';
 import { faChevronRight } from '@fortawesome/free-solid-svg-icons/faChevronRight';
 import { faChevronUp } from '@fortawesome/free-solid-svg-icons/faChevronUp';
 import { faCircle } from '@fortawesome/free-solid-svg-icons/faCircle';
+import { faCircleInfo as faCircleInfoV3 } from '@fortawesome/free-solid-svg-icons/faCircleInfo';
 import { faCircleNotch } from '@fortawesome/free-solid-svg-icons/faCircleNotch';
+import { faClock as faClockSolidV3 } from '@fortawesome/free-solid-svg-icons/faClock';
 import { faCloud } from '@fortawesome/free-solid-svg-icons/faCloud';
 import { faCode } from '@fortawesome/free-solid-svg-icons/faCode';
 import { faColumns } from '@fortawesome/free-solid-svg-icons/faColumns';
@@ -50,6 +55,7 @@ import { faDirections } from '@fortawesome/free-solid-svg-icons/faDirections';
 import { faDownload } from '@fortawesome/free-solid-svg-icons/faDownload';
 import { faEdit } from '@fortawesome/free-solid-svg-icons/faEdit';
 import { faEllipsisVertical } from '@fortawesome/free-solid-svg-icons/faEllipsisVertical';
+import { faEnvelope as faEnvelopeV3 } from '@fortawesome/free-solid-svg-icons/faEnvelope';
 import { faExclamation } from '@fortawesome/free-solid-svg-icons/faExclamation';
 import { faExclamationCircle } from '@fortawesome/free-solid-svg-icons/faExclamationCircle';
 import { faExpand } from '@fortawesome/free-solid-svg-icons/faExpand';
@@ -60,6 +66,7 @@ import { faFileDownload } from '@fortawesome/free-solid-svg-icons/faFileDownload
 import { faFilter } from '@fortawesome/free-solid-svg-icons/faFilter';
 import { faFlag } from '@fortawesome/free-solid-svg-icons/faFlag';
 import { faFlagCheckered } from '@fortawesome/free-solid-svg-icons/faFlagCheckered';
+import { faFloppyDisk as faFloppyDiskV3 } from '@fortawesome/free-solid-svg-icons/faFloppyDisk';
 import { faGear } from '@fortawesome/free-solid-svg-icons/faGear';
 import { faGears } from '@fortawesome/free-solid-svg-icons/faGears';
 import { faGlobe } from '@fortawesome/free-solid-svg-icons/faGlobe';
@@ -81,13 +88,17 @@ import { faList } from '@fortawesome/free-solid-svg-icons/faList';
 import { faListOl } from '@fortawesome/free-solid-svg-icons/faListOl';
 import { faListUl } from '@fortawesome/free-solid-svg-icons/faListUl';
 import { faLocationCrosshairs } from '@fortawesome/free-solid-svg-icons/faLocationCrosshairs';
+import { faLocationDot as faLocationDotV3 } from '@fortawesome/free-solid-svg-icons/faLocationDot';
 import { faLock } from '@fortawesome/free-solid-svg-icons/faLock';
+import { faMagnifyingGlass as faMagnifyingGlassV3 } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlass';
 import { faMap } from '@fortawesome/free-solid-svg-icons/faMap';
 import { faMapMarkedAlt } from '@fortawesome/free-solid-svg-icons/faMapMarkedAlt';
 import { faMapMarkerAlt } from '@fortawesome/free-solid-svg-icons/faMapMarkerAlt';
 import { faMinus } from '@fortawesome/free-solid-svg-icons/faMinus';
+import { faMoon } from '@fortawesome/free-solid-svg-icons/faMoon';
 import { faNewspaper } from '@fortawesome/free-solid-svg-icons/faNewspaper';
 import { faObjectGroup } from '@fortawesome/free-solid-svg-icons/faObjectGroup';
+import { faPalette } from '@fortawesome/free-solid-svg-icons/faPalette';
 import { faPen } from '@fortawesome/free-solid-svg-icons/faPen';
 import { faPlug } from '@fortawesome/free-solid-svg-icons/faPlug';
 import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
@@ -110,8 +121,7 @@ import { faSortAmountDownAlt } from '@fortawesome/free-solid-svg-icons/faSortAmo
 import { faSortAmountUp } from '@fortawesome/free-solid-svg-icons/faSortAmountUp';
 import { faSquare } from '@fortawesome/free-solid-svg-icons/faSquare';
 import { faStar } from '@fortawesome/free-solid-svg-icons/faStar';
-import { faMoon } from '@fortawesome/free-solid-svg-icons/faMoon';
-import { faPalette } from '@fortawesome/free-solid-svg-icons/faPalette';
+import { faStop as faStopV3 } from '@fortawesome/free-solid-svg-icons/faStop';
 import { faSun } from '@fortawesome/free-solid-svg-icons/faSun';
 import { faTachometerAlt } from '@fortawesome/free-solid-svg-icons/faTachometerAlt';
 import { faTag } from '@fortawesome/free-solid-svg-icons/faTag';
@@ -185,18 +195,15 @@ import waypointwaypoints from '@/assets/font-awesome-custom/js/waypoint/waypoint
 import waypointweather_station from '@/assets/font-awesome-custom/js/waypoint/weather_station';
 import waypointwebcam from '@/assets/font-awesome-custom/js/waypoint/webcam';
 
+/* eslint-disable import/order */
 // Icons added for the V3 mobile shell (BottomNav + MoreView + MeView).
-import { faBookmark as faBookmarkRegularV3 } from '@fortawesome/free-regular-svg-icons/faBookmark';
-import { faBook as faBookV3 } from '@fortawesome/free-solid-svg-icons/faBook';
-import { faBookmark as faBookmarkV3 } from '@fortawesome/free-solid-svg-icons/faBookmark';
-import { faCircleInfo as faCircleInfoV3 } from '@fortawesome/free-solid-svg-icons/faCircleInfo';
-import { faClock as faClockSolidV3 } from '@fortawesome/free-solid-svg-icons/faClock';
-import { faEnvelope as faEnvelopeV3 } from '@fortawesome/free-solid-svg-icons/faEnvelope';
-import { faLocationDot as faLocationDotV3 } from '@fortawesome/free-solid-svg-icons/faLocationDot';
-import { faMagnifyingGlass as faMagnifyingGlassV3 } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlass';
+// Ordered by V3-feature grouping rather than strict alphabetical to keep
+// related icons together; the `V3` alias suffix distinguishes them from
+// any V1 imports of the same name above.
 import { faMountain as faMountainV3 } from '@fortawesome/free-solid-svg-icons/faMountain';
 import { faPaperPlane as faPaperPlaneV3 } from '@fortawesome/free-solid-svg-icons/faPaperPlane';
 import { faPenToSquare as faPenToSquareV3 } from '@fortawesome/free-solid-svg-icons/faPenToSquare';
+import { faPlay as faPlayV3 } from '@fortawesome/free-solid-svg-icons/faPlay';
 import { faSpinner as faSpinnerV3 } from '@fortawesome/free-solid-svg-icons/faSpinner';
 import { faRightFromBracket as faRightFromBracketV3 } from '@fortawesome/free-solid-svg-icons/faRightFromBracket';
 import { faSliders as faSlidersV3 } from '@fortawesome/free-solid-svg-icons/faSliders';
@@ -204,6 +211,7 @@ import { faSnowflake as faSnowflakeV3 } from '@fortawesome/free-solid-svg-icons/
 import { faTriangleExclamation as faTriangleExclamationV3 } from '@fortawesome/free-solid-svg-icons/faTriangleExclamation';
 import { faUserGroup as faUserGroupV3 } from '@fortawesome/free-solid-svg-icons/faUserGroup';
 import { faXmark as faXmarkV3 } from '@fortawesome/free-solid-svg-icons/faXmark';
+/* eslint-enable import/order */
 
 // registered globally
 export default function install(Vue) {
@@ -214,15 +222,18 @@ export default function install(Vue) {
     faCircleInfoV3,
     faClockSolidV3,
     faEnvelopeV3,
+    faFloppyDiskV3,
     faLocationDotV3,
     faMagnifyingGlassV3,
     faMountainV3,
     faPaperPlaneV3,
     faPenToSquareV3,
+    faPlayV3,
     faSpinnerV3,
     faRightFromBracketV3,
     faSlidersV3,
     faSnowflakeV3,
+    faStopV3,
     faTriangleExclamationV3,
     faUserGroupV3,
     faXmarkV3,

@@ -14,6 +14,24 @@
         <button class="button is-small is-primary" @click="openCreateFolderModal">
           <fa-icon icon="plus" />&nbsp;{{ $gettext('New folder') }}
         </button>
+        <button
+          v-if="entries.length"
+          class="button is-small purge-btn"
+          :title="$gettext('Supprimer tous les topos hors-ligne (les brouillons de sortie sont conservés)')"
+          @click="purgeAll"
+        >
+          <fa-icon icon="trash" />&nbsp;<span class="is-hidden-mobile">{{ $gettext('Tout vider') }}</span>
+        </button>
+      </div>
+      <!-- Storage progress bar (Lot 5): the raw byte count is helpful
+           but a percentage-of-quota bar tells the user at a glance
+           whether they're safe or near the browser storage ceiling. -->
+      <div
+        v-if="storagePercent !== null"
+        class="storage-bar"
+        :class="{ 'is-warn': storagePercent > 70, 'is-danger': storagePercent > 90 }"
+      >
+        <div class="storage-bar-fill" :style="{ width: storagePercent + '%' }" />
       </div>
     </header>
 
@@ -36,13 +54,54 @@
         <span v-else class="tag is-warning">{{ $gettext('Offline') }}</span>
       </header>
       <ul class="pending-outings-list">
-        <li v-for="item in $offline.pendingOutings" :key="item.id" class="pending-outing">
-          <span class="pending-outing-title">{{ item.title || $gettext('Untitled outing') }}</span>
-          <span v-if="item.attempts > 0" class="tag is-light is-danger is-small">
-            {{ $gettext('Attempts:') }} {{ item.attempts }}
-          </span>
+        <li
+          v-for="item in $offline.pendingOutings"
+          :key="item.id"
+          class="pending-outing"
+          :class="{ 'is-conflict': item.conflict }"
+        >
+          <div class="pending-outing-info">
+            <span class="pending-outing-title">{{ item.title || $gettext('Untitled outing') }}</span>
+            <span v-if="item.conflict" class="tag is-warning is-small pending-outing-badge">
+              <fa-icon icon="triangle-exclamation" />
+              &nbsp;{{ $gettext('En conflit') }}
+            </span>
+            <span v-else-if="item.attempts > 0" class="tag is-light is-danger is-small pending-outing-badge">
+              {{ $gettext('Attempts:') }} {{ item.attempts }}
+            </span>
+          </div>
+          <!-- Conflict resolution row (Lot 5 §2.4): shown only when the
+               API returned 409 on a previous attempt. Three moves:
+               retry as-is, export the payload as JSON for later manual
+               edit, or discard the draft entirely. Retry + discard both
+               live on $offline so future surfaces (a dedicated
+               resolution page later, e.g.) reuse the same primitives. -->
+          <div v-if="item.conflict" class="pending-outing-conflict">
+            <p class="pending-outing-conflict-msg">
+              {{
+                $gettext(
+                  'Un itinéraire ou point de passage a été modifié depuis votre brouillon. Choisissez comment continuer :'
+                )
+              }}
+            </p>
+            <div class="pending-outing-conflict-actions">
+              <button class="button is-small is-primary" :disabled="$offline.syncing" @click="retryConflict(item.id)">
+                <fa-icon icon="rotate" />
+                &nbsp;{{ $gettext('Réessayer') }}
+              </button>
+              <button class="button is-small" @click="exportConflict(item)">
+                <fa-icon icon="download" />
+                &nbsp;{{ $gettext('Exporter JSON') }}
+              </button>
+              <button class="button is-small is-text" @click="discardPending(item.id)">
+                <fa-icon icon="trash" />
+                &nbsp;{{ $gettext('Abandonner') }}
+              </button>
+            </div>
+          </div>
           <button
-            class="button is-small is-text"
+            v-else
+            class="button is-small is-text pending-outing-discard"
             :title="$gettext('Discard this pending outing')"
             @click="discardPending(item.id)"
           >
@@ -95,11 +154,35 @@
                 <div class="offline-card-meta">
                   <span class="tag is-light">{{ $gettext(entry.type) }}</span>
                   <span class="tag is-light">{{ entry.lang.toUpperCase() }}</span>
-                  <span class="has-text-grey is-size-7">{{ formatDate(entry.savedAt) }}</span>
+                  <!-- Freshness (Lot 5 §2.2): amber if 7-30 d, red past
+                       30 d. Visible on every entry so the user can spot
+                       obsolete packs at a glance before heading out. -->
+                  <span
+                    v-if="freshnessOf(entry) !== 'fresh' && freshnessOf(entry) !== 'unknown'"
+                    class="tag is-small"
+                    :class="freshnessTagClass(entry)"
+                    :title="$gettext('Vérifiez le contenu — la sauvegarde peut être obsolète.')"
+                  >
+                    <fa-icon icon="triangle-exclamation" />
+                    &nbsp;{{ ageLabelOf(entry) }}
+                  </span>
+                  <span v-else class="has-text-grey is-size-7">{{ ageLabelOf(entry) }}</span>
                 </div>
               </div>
             </router-link>
             <div class="offline-card-actions">
+              <button
+                v-if="freshnessOf(entry) === 'stale' || freshnessOf(entry) === 'very-stale'"
+                class="offline-card-refresh button is-small is-text"
+                :disabled="isRefreshing(entry)"
+                :title="$gettext('Rafraîchir depuis Camptocamp')"
+                @click="refresh(entry)"
+              >
+                <fa-icon
+                  :icon="isRefreshing(entry) ? 'rotate' : 'rotate'"
+                  :class="{ 'fa-spin': isRefreshing(entry) }"
+                />
+              </button>
               <select
                 class="offline-card-select"
                 :value="entry.folderId || ''"
@@ -148,8 +231,8 @@
 
 <script>
 import ModalWindow from '@/components/generics/modals/ModalWindow';
-
 import pullRefreshMixin from '@/js/pull-refresh-mixin';
+import { ageLabel, freshnessOf } from '@/pwa/offline-freshness';
 
 const TYPE_ICONS = {
   route: 'route',
@@ -175,6 +258,11 @@ export default {
       folderModalMode: 'create',
       folderInputValue: '',
       folderBeingRenamed: null,
+      // Bumped once when the view mounts so freshness labels are
+      // consistent across the whole listing. A per-item Date.now() call
+      // would make one entry read "il y a 6 jours" and its neighbor
+      // "il y a 7 jours" mid-scroll.
+      nowTick: Date.now(),
     };
   },
 
@@ -209,6 +297,13 @@ export default {
         return used;
       }
       return `${used} / ${this.formatBytes(quota)}`;
+    },
+
+    storagePercent() {
+      const usage = this.storage?.usage;
+      const quota = this.storage?.quota;
+      if (!usage || !quota) return null;
+      return Math.min(100, Math.round((usage / quota) * 100));
     },
   },
 
@@ -338,6 +433,55 @@ export default {
       this.storage = await this.$offline.getStorageUsage();
     },
 
+    retryConflict(id) {
+      this.$offline.retryConflictedOuting(id);
+    },
+
+    exportConflict(item) {
+      this.$offline.exportPendingOutingAsJson(item);
+    },
+
+    freshnessOf(entry) {
+      return freshnessOf(entry.savedAt, this.nowTick);
+    },
+
+    freshnessTagClass(entry) {
+      const f = freshnessOf(entry.savedAt, this.nowTick);
+      if (f === 'very-stale') return 'is-danger';
+      if (f === 'stale') return 'is-warning';
+      return '';
+    },
+
+    ageLabelOf(entry) {
+      return ageLabel(entry.savedAt, this.nowTick, this.$gettext);
+    },
+
+    isRefreshing(entry) {
+      return this.$offline.isDownloading(entry.type, entry.id, entry.lang);
+    },
+
+    // Re-download the doc through the same saveDocument path — it
+    // overwrites the IDB entry with a fresh `savedAt`, re-prefetches
+    // images + tiles + associated waypoints. Preserves the folder.
+    async refresh(entry) {
+      await this.$offline.saveDocument({
+        type: entry.type,
+        id: entry.id,
+        lang: entry.lang,
+        folderId: entry.folderId || null,
+      });
+    },
+
+    async purgeAll() {
+      const count = this.entries.length;
+      const msg = this.$gettext(
+        'Supprimer les {n} topos hors-ligne ? Les brouillons de sortie non publiés sont conservés.'
+      ).replace('{n}', count);
+      if (!window.confirm(msg)) return;
+      await this.$offline.purgeAllDocuments();
+      this.storage = await this.$offline.getStorageUsage();
+    },
+
     async discardPending(id) {
       const message = this.$gettext('Discard this outing? Your data will be lost.');
       if (!window.confirm(message)) {
@@ -370,6 +514,45 @@ export default {
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+}
+
+// Purge-all button: destructive action, tinted red so users don't
+// mash it by accident. Confirm modal in JS is the real safety net.
+.purge-btn {
+  background: transparent;
+  color: #c0392b;
+  border: 1px solid rgba(192, 57, 43, 0.35);
+
+  &:hover:not([disabled]),
+  &:focus:not([disabled]) {
+    background: rgba(192, 57, 43, 0.08);
+    color: #a5251a;
+    border-color: #c0392b;
+  }
+}
+
+// Storage progress bar under the header (Lot 5 §2.9). Green while
+// there's plenty of room, warn amber over 70%, danger red over 90%.
+.storage-bar {
+  flex-basis: 100%;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+
+  .storage-bar-fill {
+    height: 100%;
+    background: #48c774;
+    transition: width 0.2s;
+  }
+
+  &.is-warn .storage-bar-fill {
+    background: #f2b13a;
+  }
+  &.is-danger .storage-bar-fill {
+    background: #e54545;
+  }
 }
 
 .empty-state {
@@ -530,6 +713,7 @@ export default {
 
 .pending-outing {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   padding: 0.35rem 0;
@@ -538,6 +722,20 @@ export default {
   &:first-child {
     border-top: 0;
   }
+
+  // Conflict items expand vertically to fit the resolution block.
+  &.is-conflict {
+    align-items: flex-start;
+  }
+}
+
+.pending-outing-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow: hidden;
 }
 
 .pending-outing-title {
@@ -545,5 +743,33 @@ export default {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.pending-outing-badge {
+  flex: 0 0 auto;
+}
+
+.pending-outing-discard {
+  flex: 0 0 auto;
+}
+
+.pending-outing-conflict {
+  flex: 1 1 100%;
+  padding: 0.5rem 0.6rem;
+  background: hsl(48, 100%, 96%);
+  border-radius: 6px;
+  margin-top: 0.35rem;
+}
+
+.pending-outing-conflict-msg {
+  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+  color: #6b6b6b;
+}
+
+.pending-outing-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 </style>

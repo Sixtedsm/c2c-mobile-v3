@@ -1,10 +1,5 @@
 <template>
-  <a
-    href="#"
-    class="share-button"
-    :title="$gettext('Partager')"
-    @click.prevent="share"
-  >
+  <a href="#" class="share-button" :title="$gettext('Partager')" @click.prevent="share">
     <fa-icon icon="share-alt" />
     <span v-if="copied" class="copied-toast">{{ $gettext('Lien copié') }}</span>
   </a>
@@ -45,8 +40,15 @@ export default {
       // Best-effort guess: try cooked type first, then route name.
       if (this.document?.type) {
         const map = {
-          r: 'route', o: 'outing', w: 'waypoint', a: 'article',
-          b: 'book', i: 'image', x: 'xreport', m: 'map', u: 'profile',
+          r: 'route',
+          o: 'outing',
+          w: 'waypoint',
+          a: 'article',
+          b: 'book',
+          i: 'image',
+          x: 'xreport',
+          m: 'map',
+          u: 'profile',
         };
         return map[this.document.type] || null;
       }
@@ -76,7 +78,9 @@ export default {
       try {
         await navigator.clipboard.writeText(url);
         this.copied = true;
-        setTimeout(() => { this.copied = false; }, 1800);
+        setTimeout(() => {
+          this.copied = false;
+        }, 1800);
       } catch (e) {
         // Last-resort fallback: prompt the user with the URL so they can copy
         // it manually. Old browsers without clipboard API.
@@ -88,7 +92,8 @@ export default {
       if (!s) return '';
       return s
         .toLowerCase()
-        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/^_|_$/g, '')
         .slice(0, 60);
@@ -103,7 +108,9 @@ export default {
   color: #4a4a4a;
   position: relative;
 
-  &:hover { color: #ff9933; }
+  &:hover {
+    color: #ff9933;
+  }
 }
 
 .copied-toast {

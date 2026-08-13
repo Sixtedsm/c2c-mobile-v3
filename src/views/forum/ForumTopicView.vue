@@ -3,9 +3,7 @@
     <div class="container">
       <h1 class="title is-5 topic-title">{{ title }}</h1>
 
-      <div v-if="loading" class="loading-row">
-        <fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}
-      </div>
+      <div v-if="loading" class="loading-row"><fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}</div>
 
       <div v-else-if="error" class="error-row">
         {{ $gettext('Sujet introuvable.') }}
@@ -52,7 +50,7 @@
             @click="startReply"
           >
             <fa-icon icon="pen-to-square" />
-            &nbsp;{{ $gettext('Répondre dans l\'app') }}
+            &nbsp;{{ $gettext("Répondre dans l'app") }}
           </button>
 
           <div v-else class="forum-reply-editor">
@@ -64,12 +62,7 @@
               :disabled="sending"
             />
             <div class="forum-reply-actions">
-              <button
-                type="button"
-                class="button is-text is-small"
-                :disabled="sending"
-                @click="showReply = false"
-              >
+              <button type="button" class="button is-text is-small" :disabled="sending" @click="showReply = false">
                 {{ $gettext('Annuler') }}
               </button>
               <button
@@ -83,20 +76,14 @@
               </button>
             </div>
             <p v-if="needsForumLogin" class="forum-reply-hint">
-              {{ $gettext('Vous n\'êtes pas connecté au forum.') }}
-              <a :href="forumLoginUrl" target="_blank" rel="noopener">
-                {{ $gettext('Se connecter au forum') }} →
-              </a>
+              {{ $gettext("Vous n'êtes pas connecté au forum.") }}
+              <a :href="forumLoginUrl" target="_blank" rel="noopener"> {{ $gettext('Se connecter au forum') }} → </a>
             </p>
           </div>
         </section>
 
         <p class="forum-link-out">
-          <a
-            :href="topicExternalUrl"
-            target="_self"
-            rel="noopener"
-          >
+          <a :href="topicExternalUrl" target="_self" rel="noopener">
             {{ $gettext('Ouvrir sur le forum Camptocamp') }} →
           </a>
         </p>
@@ -106,8 +93,8 @@
 </template>
 
 <script>
-import { toast } from 'bulma-toast';
 import axios from 'axios';
+import { toast } from 'bulma-toast';
 
 import config from '@/js/config';
 
@@ -158,9 +145,7 @@ export default {
     forumLoginUrl() {
       // Discourse SSO endpoint. After login, the user is returned to the
       // topic; on the next reply attempt the session cookie is in place.
-      return `${config.urls.forum}/login?return_path=${encodeURIComponent(
-        '/t/' + this.$route.params.id
-      )}`;
+      return `${config.urls.forum}/login?return_path=${encodeURIComponent('/t/' + this.$route.params.id)}`;
     },
   },
 
@@ -260,9 +245,7 @@ export default {
             type: 'is-warning',
             position: 'bottom-center',
             duration: 4500,
-            message: this.$gettext(
-              'Connectez-vous au forum (lien sous l\'éditeur) puis réessayez.'
-            ),
+            message: this.$gettext("Connectez-vous au forum (lien sous l'éditeur) puis réessayez."),
           });
         } else {
           // Probably CORS or a network problem — the inline path can't
@@ -272,9 +255,7 @@ export default {
             type: 'is-warning',
             position: 'bottom-center',
             duration: 4500,
-            message: this.$gettext(
-              'Impossible d\'envoyer depuis l\'app. Utilisez « Ouvrir sur le forum ».'
-            ),
+            message: this.$gettext("Impossible d'envoyer depuis l'app. Utilisez « Ouvrir sur le forum »."),
           });
         }
       } finally {
@@ -357,10 +338,18 @@ export default {
   color: #4a4a4a;
   line-height: 1.5;
 
-  ::v-deep p { margin: 0.4rem 0; }
-  ::v-deep a { color: #337ab7; }
-  ::v-deep img { max-width: 100%; height: auto; }
-  ::v-deep pre, ::v-deep code {
+  ::v-deep p {
+    margin: 0.4rem 0;
+  }
+  ::v-deep a {
+    color: #337ab7;
+  }
+  ::v-deep img {
+    max-width: 100%;
+    height: auto;
+  }
+  ::v-deep pre,
+  ::v-deep code {
     background: #f4f4f0;
     padding: 0.1rem 0.3rem;
     border-radius: 2px;
@@ -397,7 +386,11 @@ export default {
     font-family: inherit;
     color: #4a4a4a;
     resize: vertical;
-    &:focus { outline: none; border-color: #ff9933; box-shadow: 0 0 0 0.125em rgba(255, 153, 51, 0.25); }
+    &:focus {
+      outline: none;
+      border-color: #ff9933;
+      box-shadow: 0 0 0 0.125em rgba(255, 153, 51, 0.25);
+    }
   }
 }
 
@@ -412,7 +405,10 @@ export default {
   font-size: 0.78rem;
   color: #6b6b6b;
 
-  a { color: #337ab7; text-decoration: none; }
+  a {
+    color: #337ab7;
+    text-decoration: none;
+  }
 }
 
 .forum-link-out {
@@ -446,17 +442,29 @@ html[data-theme='dark'] {
     background: #2a2a2a;
     border-color: rgba(255, 255, 255, 0.08);
   }
-  .forum-topic-view .post-author { color: #f0f0f0; }
-  .forum-topic-view .post-date { color: #9a9a9a; }
-  .forum-topic-view .post-body { color: #e5e5e5; }
-  .forum-topic-view .post-avatar { background: #3a3a3a; }
+  .forum-topic-view .post-author {
+    color: #f0f0f0;
+  }
+  .forum-topic-view .post-date {
+    color: #9a9a9a;
+  }
+  .forum-topic-view .post-body {
+    color: #e5e5e5;
+  }
+  .forum-topic-view .post-avatar {
+    background: #3a3a3a;
+  }
   .forum-topic-view .forum-reply-editor textarea {
     background: #1f1f1f;
     color: #e5e5e5;
     border-color: rgba(255, 255, 255, 0.15);
   }
-  .forum-topic-view .forum-reply-hint { color: #b5b5b5; }
+  .forum-topic-view .forum-reply-hint {
+    color: #b5b5b5;
+  }
   .forum-topic-view .forum-reply-hint a,
-  .forum-topic-view .forum-link-out a { color: #6db4ff; }
+  .forum-topic-view .forum-link-out a {
+    color: #6db4ff;
+  }
 }
 </style>

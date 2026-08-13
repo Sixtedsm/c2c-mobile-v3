@@ -35,7 +35,14 @@ export default {
 
     wrapStyle() {
       const px = typeof this.size === 'number' ? `${this.size}px` : this.size;
-      return { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: px, height: px, lineHeight: 0 };
+      return {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: px,
+        height: px,
+        lineHeight: 0,
+      };
     },
   },
 };

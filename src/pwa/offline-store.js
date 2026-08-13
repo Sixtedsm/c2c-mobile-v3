@@ -81,7 +81,10 @@ export async function estimateUsage() {
 const PENDING_OUTINGS_KEY = 'queue:pending-outings';
 
 export async function listPendingOutings() {
-  return (await get(PENDING_OUTINGS_KEY)) ?? [];
+  const queue = (await get(PENDING_OUTINGS_KEY)) ?? [];
+  // Normalize legacy entries that pre-date the `attempts` field — so
+  // consumers can freely do `item.attempts + 1` without defensive `|| 0`.
+  return queue.map((item) => (item.attempts === undefined || item.attempts === null ? { ...item, attempts: 0 } : item));
 }
 
 export async function enqueuePendingOuting(entry) {

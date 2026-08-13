@@ -99,9 +99,7 @@
                 class="is-size-4 has-text-secondary"
               />
               <document-title :document="route" />
-              <span v-if="route.elevation_max" class="offline-route-meta">
-                · {{ route.elevation_max }} m
-              </span>
+              <span v-if="route.elevation_max" class="offline-route-meta"> · {{ route.elevation_max }} m </span>
             </input-checkbox>
           </div>
         </div>
@@ -523,6 +521,8 @@ html[data-theme='dark'] {
     border-color: rgba(255, 255, 255, 0.08);
     color: #e5e5e5;
   }
-  .offline-route-meta { color: #b5b5b5; }
+  .offline-route-meta {
+    color: #b5b5b5;
+  }
 }
 </style>

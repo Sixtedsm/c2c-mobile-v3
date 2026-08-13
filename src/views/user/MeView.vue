@@ -87,7 +87,7 @@
           <router-link :to="{ name: 'app-settings' }" class="action-link">
             <span class="action-icon"><fa-icon icon="palette" /></span>
             <span class="action-text">
-              <span class="action-label">{{ $gettext('Paramètres de l\'application') }}</span>
+              <span class="action-label">{{ $gettext("Paramètres de l'application") }}</span>
               <span class="action-desc">{{ $gettext('Thème, taille du texte') }}</span>
             </span>
             <fa-icon icon="chevron-right" class="action-chevron" />
@@ -102,7 +102,7 @@
             <span class="action-icon"><fa-icon icon="circle-info" /></span>
             <span class="action-text">
               <span class="action-label">{{ $gettext('Aide') }}</span>
-              <span class="action-desc">{{ $gettext('Guide d\'utilisation Camptocamp') }}</span>
+              <span class="action-desc">{{ $gettext("Guide d'utilisation Camptocamp") }}</span>
             </span>
             <fa-icon icon="chevron-right" class="action-chevron" />
           </router-link>
@@ -116,6 +116,21 @@
             </span>
             <fa-icon icon="chevron-right" class="action-chevron" />
           </router-link>
+        </li>
+        <!-- App-specific bug channel (CDC §4.3): a mailto with the
+             current URL, browser UA, online status and PWA-install
+             flag pre-filled so a report already carries the context
+             a maintainer needs — no forcing the user to remember
+             what they were doing when it broke. -->
+        <li>
+          <a :href="bugReportMailto" class="action-link">
+            <span class="action-icon"><fa-icon icon="bug" /></span>
+            <span class="action-text">
+              <span class="action-label">{{ $gettext("Signaler un bug de l'app mobile") }}</span>
+              <span class="action-desc">{{ $gettext('Ouvre un mail avec le contexte pré-rempli') }}</span>
+            </span>
+            <fa-icon icon="chevron-right" class="action-chevron" />
+          </a>
         </li>
       </ul>
 
@@ -131,8 +146,8 @@
 </template>
 
 <script>
-import c2c from '@/js/apis/c2c';
 import CustomIcon from '@/components/CustomIcon.vue';
+import c2c from '@/js/apis/c2c';
 
 export default {
   name: 'MeView',
@@ -162,14 +177,14 @@ export default {
         {
           key: 'my-outings',
           label: this.$gettext('Mes sorties'),
-          desc: this.$gettext('Sorties auxquelles j\'ai participé'),
+          desc: this.$gettext("Sorties auxquelles j'ai participé"),
           icon: 'footprint-arrow',
           to: { name: 'outings', query: { u } },
         },
         {
           key: 'my-changes',
           label: this.$gettext('Mes topos publiés'),
-          desc: this.$gettext('Itinéraires, points, photos, articles que j\'ai créés ou modifiés'),
+          desc: this.$gettext("Itinéraires, points, photos, articles que j'ai créés ou modifiés"),
           icon: 'mountain-pencil',
           to: { name: 'whatsnew', query: { u } },
         },
@@ -186,6 +201,25 @@ export default {
           to: { name: 'offline' },
         },
       ];
+    },
+
+    bugReportMailto() {
+      const isStandalone =
+        (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+        window.navigator.standalone === true;
+      const lines = [
+        this.$gettext('Merci de décrire le problème ci-dessus. Contexte technique inclus :'),
+        '',
+        `URL : ${window.location.href}`,
+        `Navigateur : ${window.navigator.userAgent}`,
+        `Connexion : ${this.$offline?.online === false ? 'hors-ligne' : 'en ligne'}`,
+        `Mode PWA installée : ${isStandalone ? 'oui' : 'non'}`,
+        `Thème : ${this.$appSettings?.effectiveTheme || 'auto'}`,
+        `Taille texte : ${this.$appSettings?.state?.textSize || 'normal'}`,
+      ];
+      const subject = encodeURIComponent(this.$gettext('Bug app mobile — camptocamp.org'));
+      const body = encodeURIComponent(lines.join('\n'));
+      return `mailto:secretariat@camptocamp.org?subject=${subject}&body=${body}`;
     },
 
     myAccount() {
@@ -224,16 +258,13 @@ export default {
 
   methods: {
     signOut() {
-      c2c.userProfile
-        .logout()
-        .then(() => {
-          this.$user.signout();
-          this.$router.push({ name: 'home' });
-        })
-        .catch(() => {
-          this.$user.signout();
-          this.$router.push({ name: 'home' });
-        });
+      // Always sign out locally and bounce home — even if the API call
+      // fails (offline, expired session, etc.), the user's intent is
+      // clear and we should not leave them stuck on /me.
+      c2c.userProfile.logout().finally(() => {
+        this.$user.signout();
+        this.$router.push({ name: 'home' });
+      });
     },
   },
 };

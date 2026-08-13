@@ -4,6 +4,15 @@
       <fa-icon v-if="isBusy" icon="spinner" spin />
       <fa-icon v-else-if="isSaved" icon="bookmark" />
       <fa-icon v-else :icon="['far', 'bookmark']" />
+      <!-- Freshness dot (Lot 5 §2.2): amber when the copy is 7-30 days
+           old, red past 30 days. Silent when fresh so the icon stays
+           clean in the common case. Long-press exposes the refresh
+           option via the ToolBox — the header stays icon-only. -->
+      <span
+        v-if="isSaved && freshness !== 'fresh' && freshness !== 'unknown'"
+        class="freshness-dot"
+        :class="'freshness-dot--' + freshness"
+      />
     </a>
   </span>
 </template>
@@ -13,6 +22,8 @@
 // next to favorite / edit / add-photo so the V3 UX matches what Sixte
 // expects: every primary action is on the same row.
 
+import { freshnessOf } from '@/pwa/offline-freshness';
+
 export default {
   name: 'OfflineHeaderButton',
 
@@ -20,6 +31,16 @@ export default {
     document: { type: Object, required: true },
     documentType: { type: String, required: true },
     lang: { type: String, required: true },
+  },
+
+  data() {
+    return {
+      savedAt: null,
+      // Bumped every minute so `freshness` re-evaluates without a
+      // hard reload. Cheap — one setInterval per open doc page.
+      nowTick: Date.now(),
+      tickHandle: null,
+    };
   },
 
   computed: {
@@ -34,15 +55,58 @@ export default {
       if (!this.docId) return false;
       return this.$offline.isDownloading(this.documentType, this.docId, this.lang);
     },
+    freshness() {
+      return freshnessOf(this.savedAt, this.nowTick);
+    },
     label() {
       if (this.isBusy) return this.$gettext('Téléchargement en cours…');
-      return this.isSaved
-        ? this.$gettext('Enregistré hors-ligne — toucher pour retirer')
-        : this.$gettext('Enregistrer pour usage hors-ligne');
+      if (this.isSaved) {
+        if (this.freshness === 'very-stale') {
+          return this.$gettext('Sauvegarde hors-ligne très ancienne — envisagez de rafraîchir');
+        }
+        if (this.freshness === 'stale') {
+          return this.$gettext('Sauvegarde hors-ligne datée — envisagez de rafraîchir');
+        }
+        return this.$gettext('Enregistré hors-ligne — toucher pour retirer');
+      }
+      return this.$gettext('Enregistrer pour usage hors-ligne');
     },
   },
 
+  watch: {
+    // Re-read the saved timestamp whenever the underlying doc changes
+    // (page navigation) or when the offline state flips (save/remove).
+    docId: 'refreshSavedAt',
+    isSaved: 'refreshSavedAt',
+  },
+
+  mounted() {
+    this.refreshSavedAt();
+    // Re-tick every 5 minutes so a very long-open doc page still
+    // catches the fresh→stale transition without a reload.
+    this.tickHandle = window.setInterval(() => {
+      this.nowTick = Date.now();
+    }, 5 * 60 * 1000);
+  },
+
+  beforeDestroy() {
+    if (this.tickHandle) window.clearInterval(this.tickHandle);
+  },
+
   methods: {
+    async refreshSavedAt() {
+      if (!this.isSaved || !this.docId) {
+        this.savedAt = null;
+        return;
+      }
+      // $offline.savedDocs is the reactive source — pull savedAt from
+      // there rather than reaching into the store directly.
+      const entry = this.$offline.savedDocs.find(
+        (d) => d.type === this.documentType && String(d.id) === String(this.docId) && d.lang === this.lang
+      );
+      this.savedAt = entry?.savedAt ?? null;
+    },
+
     async toggle() {
       if (this.isBusy || !this.docId) return;
       if (this.isSaved) {
@@ -53,9 +117,7 @@ export default {
           this.documentType,
           this.docId,
           this.lang,
-          this.$gettext(
-            'Retirer ce topo des sauvegardes hors-ligne ? Vous ne pourrez plus l\'ouvrir sans réseau.'
-          )
+          this.$gettext("Retirer ce topo des sauvegardes hors-ligne ? Vous ne pourrez plus l'ouvrir sans réseau.")
         );
       } else {
         await this.$offline.saveDocument({
@@ -71,6 +133,7 @@ export default {
 
 <style lang="scss" scoped>
 .offline-header-button a {
+  position: relative;
   cursor: pointer;
   color: #4a4a4a;
   display: inline-flex;
@@ -84,6 +147,31 @@ export default {
 
   &.is-busy {
     color: #9ca3af;
+  }
+}
+
+.freshness-dot {
+  position: absolute;
+  top: -1px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px white;
+
+  &--stale {
+    background: #f2b13a;
+  }
+  &--very-stale {
+    background: #e54545;
+  }
+}
+</style>
+
+<style lang="scss">
+html[data-theme='dark'] {
+  .freshness-dot {
+    box-shadow: 0 0 0 1.5px #232323;
   }
 }
 </style>

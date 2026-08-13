@@ -8,10 +8,7 @@
         <h2 class="forum-block-title">{{ $gettext('Catégories') }}</h2>
         <ul class="cat-grid">
           <li v-for="cat in categories" :key="cat.id">
-            <router-link
-              :to="{ name: 'forum-category', params: { slug: cat.slug, id: cat.id } }"
-              class="cat-link"
-            >
+            <router-link :to="{ name: 'forum-category', params: { slug: cat.slug, id: cat.id } }" class="cat-link">
               <span class="cat-marker" :style="{ backgroundColor: '#' + (cat.color || 'aaaaaa') }" />
               <span class="cat-text">
                 <span class="cat-name">{{ cat.name }}</span>
@@ -26,9 +23,7 @@
       <section class="forum-block">
         <h2 class="forum-block-title">{{ $gettext('Discussions récentes') }}</h2>
 
-        <div v-if="loading" class="loading-row">
-          <fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}
-        </div>
+        <div v-if="loading" class="loading-row"><fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}</div>
 
         <div v-else-if="error" class="error-row">
           {{ $gettext('Impossible de joindre le forum.') }}
@@ -36,10 +31,7 @@
 
         <ul v-else-if="latest.length" class="topic-list">
           <li v-for="topic in latest" :key="topic.id" class="topic-item">
-            <router-link
-              :to="{ name: 'forum-topic', params: { id: topic.id, slug: topic.slug } }"
-              class="topic-link"
-            >
+            <router-link :to="{ name: 'forum-topic', params: { id: topic.id, slug: topic.slug } }" class="topic-link">
               <div class="topic-avatar">
                 <img
                   v-if="topicPoster(topic) && topicPoster(topic).avatar_template"
@@ -52,8 +44,8 @@
                 <span class="topic-title">{{ topic.fancy_title || topic.title }}</span>
                 <span class="topic-meta">
                   {{ topicPoster(topic) ? topicPoster(topic).username : 'Anonyme' }}
-                  · {{ topic.posts_count }} {{ $gettext('messages') }}
-                  · {{ formatDate(topic.last_posted_at || topic.created_at) }}
+                  · {{ topic.posts_count }} {{ $gettext('messages') }} ·
+                  {{ formatDate(topic.last_posted_at || topic.created_at) }}
                 </span>
               </div>
             </router-link>
@@ -100,10 +92,7 @@ export default {
       this.loading = true;
       this.error = false;
       try {
-        const [cats, lat] = await Promise.all([
-          forumHttp.get('/categories.json'),
-          forumHttp.get('/latest.json'),
-        ]);
+        const [cats, lat] = await Promise.all([forumHttp.get('/categories.json'), forumHttp.get('/latest.json')]);
         this.categories = cats.data?.category_list?.categories || [];
         this.latest = lat.data?.topic_list?.topics || [];
         const usersArray = lat.data?.users || [];

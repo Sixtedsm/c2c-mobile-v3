@@ -3,9 +3,7 @@
     <div class="container">
       <h1 class="title is-5">{{ categoryName }}</h1>
 
-      <div v-if="loading" class="loading-row">
-        <fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}
-      </div>
+      <div v-if="loading" class="loading-row"><fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}</div>
 
       <div v-else-if="error" class="error-row">
         {{ $gettext('Impossible de charger cette catégorie.') }}
@@ -13,10 +11,7 @@
 
       <ul v-else class="topic-list">
         <li v-for="topic in topics" :key="topic.id" class="topic-item">
-          <router-link
-            :to="{ name: 'forum-topic', params: { id: topic.id, slug: topic.slug } }"
-            class="topic-link"
-          >
+          <router-link :to="{ name: 'forum-topic', params: { id: topic.id, slug: topic.slug } }" class="topic-link">
             <div class="topic-avatar">
               <img
                 v-if="topicPoster(topic) && topicPoster(topic).avatar_template"
@@ -29,8 +24,8 @@
               <span class="topic-title">{{ topic.fancy_title || topic.title }}</span>
               <span class="topic-meta">
                 {{ topicPoster(topic) ? topicPoster(topic).username : 'Anonyme' }}
-                · {{ topic.posts_count }} {{ $gettext('messages') }}
-                · {{ formatDate(topic.last_posted_at || topic.created_at) }}
+                · {{ topic.posts_count }} {{ $gettext('messages') }} ·
+                {{ formatDate(topic.last_posted_at || topic.created_at) }}
               </span>
             </div>
           </router-link>

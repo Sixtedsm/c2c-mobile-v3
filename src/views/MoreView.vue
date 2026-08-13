@@ -31,7 +31,6 @@
 
 <script>
 import CustomIcon from '@/components/CustomIcon.vue';
-import config from '@/js/config';
 
 export default {
   name: 'MoreView',
@@ -60,7 +59,7 @@ export default {
         {
           key: 'xreports',
           label: this.$gettext('Sérac'),
-          desc: this.$gettext("Incidents et accidents"),
+          desc: this.$gettext('Incidents et accidents'),
           icon: 'serac-warning',
           to: { name: 'xreports' },
         },

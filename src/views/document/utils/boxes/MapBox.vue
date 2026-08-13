@@ -147,7 +147,6 @@ export default {
   beforeDestroy() {
     window.removeEventListener('resize', this.resizePin);
     if (this.pinnedMode) this.togglePinToSide(true);
-    if (this.pinnedMode) this.togglePinToSide(true);
   },
 
   methods: {
@@ -360,6 +359,10 @@ export default {
   align-items: center;
   justify-content: center;
 
-  &:hover, &:focus { background: #f0f4f8; outline: none; }
+  &:hover,
+  &:focus {
+    background: #f0f4f8;
+    outline: none;
+  }
 }
 </style>

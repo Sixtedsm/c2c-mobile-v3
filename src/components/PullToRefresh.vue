@@ -5,10 +5,7 @@
     :style="indicatorStyle"
     aria-hidden="true"
   >
-    <fa-icon
-      :icon="refreshing ? 'rotate' : 'arrow-down'"
-      :class="{ 'fa-spin': refreshing, 'is-ready': ready }"
-    />
+    <fa-icon :icon="refreshing ? 'rotate' : 'arrow-down'" :class="{ 'fa-spin': refreshing, 'is-ready': ready }" />
   </div>
 </template>
 
@@ -66,6 +63,13 @@ export default {
 
     this.onSyncDone = () => {
       this.refreshing = false;
+      // Clear the safety timeout if the listener responded before 4s —
+      // otherwise a stale timeout could fire during a *later* refresh
+      // and cancel that one prematurely.
+      if (this._safetyTimer) {
+        clearTimeout(this._safetyTimer);
+        this._safetyTimer = null;
+      }
     };
     window.addEventListener('v3:refresh-done', this.onSyncDone);
   },
@@ -79,6 +83,9 @@ export default {
     }
     if (this.onSyncDone) {
       window.removeEventListener('v3:refresh-done', this.onSyncDone);
+    }
+    if (this._safetyTimer) {
+      clearTimeout(this._safetyTimer);
     }
   },
 
@@ -118,8 +125,13 @@ export default {
         window.dispatchEvent(new CustomEvent('v3:refresh'));
         // Safety net: if nobody handles the refresh (no listener responded
         // with v3:refresh-done), stop spinning after 4s rather than hanging.
-        setTimeout(() => {
+        // Track the timer so onSyncDone can clear it — otherwise a stale
+        // safety timer from this pull could cancel a *later* refresh.
+        // (No pre-clear needed: onTouchEnd early-returns while refreshing
+        // is true, so we can't reach this with a live timer.)
+        this._safetyTimer = setTimeout(() => {
           this.refreshing = false;
+          this._safetyTimer = null;
         }, 4000);
       }
     },

@@ -6,7 +6,7 @@
            .subtitle` which dragged the subtitle visibly onto the title
            on iOS Safari with a 14px base font. Plain heading + lede is
            predictable. -->
-      <h1 class="app-settings-heading">{{ $gettext('Paramètres de l\'application') }}</h1>
+      <h1 class="app-settings-heading">{{ $gettext("Paramètres de l'application") }}</h1>
       <p class="app-settings-lede">
         {{ $gettext('Réglages locaux à cet appareil — pas synchronisés avec votre compte Camptocamp.') }}
       </p>
@@ -28,6 +28,25 @@
       </div>
       <p class="note">{{ $gettext('« Auto » suit le réglage de votre système.') }}</p>
 
+      <!-- GPS frequency (CDC §2.9). Live-reset the GPS watch when the
+           user picks a new value while tracking is running — otherwise
+           the change would only kick in on the next start/stop cycle. -->
+      <h2 class="section-label">{{ $gettext('Fréquence GPS') }}</h2>
+      <div class="option-row">
+        <button
+          v-for="opt in gpsIntervalOptions"
+          :key="opt.value"
+          type="button"
+          class="option-btn"
+          :class="{ 'is-active': $appSettings.state.gpsIntervalS === opt.value }"
+          @click="setGpsInterval(opt.value)"
+        >
+          <span class="gps-interval-value">{{ opt.value }}s</span>
+          <span>{{ opt.label }}</span>
+        </button>
+      </div>
+      <p class="note">{{ $gettext('Un intervalle plus long économise la batterie mais lisse la trace.') }}</p>
+
       <!-- Text size -->
       <h2 class="section-label">{{ $gettext('Taille du texte') }}</h2>
       <div class="option-row">
@@ -43,13 +62,13 @@
           <span>{{ opt.label }}</span>
         </button>
       </div>
-      <p class="note">{{ $gettext('Ajuste la taille de base de l\'interface. Affecte tous les écrans.') }}</p>
+      <p class="note">{{ $gettext("Ajuste la taille de base de l'interface. Affecte tous les écrans.") }}</p>
 
       <!-- Replay onboarding -->
       <h2 class="section-label">{{ $gettext('Découverte') }}</h2>
       <button type="button" class="button is-light is-fullwidth replay-btn" @click="replayOnboarding">
         <fa-icon icon="circle-info" />
-        <span>&nbsp;{{ $gettext('Revoir l\'introduction') }}</span>
+        <span>&nbsp;{{ $gettext("Revoir l'introduction") }}</span>
       </button>
     </div>
   </section>
@@ -74,9 +93,28 @@ export default {
         { value: 'large', label: this.$gettext('Grand'), demoSize: '1.2rem' },
       ];
     },
+    gpsIntervalOptions() {
+      return [
+        { value: '5', label: this.$gettext('Précis') },
+        { value: '15', label: this.$gettext('Équilibré') },
+        { value: '30', label: this.$gettext('Économe') },
+      ];
+    },
   },
 
   methods: {
+    setGpsInterval(value) {
+      this.$appSettings.setGpsIntervalS(value);
+      // If a session is actively tracking, restart the watch so the new
+      // interval takes effect immediately.
+      if (this.$outingSession?.gpsTracking) {
+        this.$outingSession.gpsTracking = false;
+        this.$nextTick(() => {
+          this.$outingSession.gpsTracking = true;
+        });
+      }
+    },
+
     replayOnboarding() {
       try {
         window.localStorage.removeItem('v3.onboardingDone');
@@ -161,16 +199,26 @@ export default {
   font-size: 0.75rem;
   color: #6b6b6b;
 }
+
+.gps-interval-value {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #4a4a4a;
+}
 </style>
 
 <style lang="scss">
 // Dark mode counterparts — out-specifies the scoped rules above via the
 // html[data-theme='dark'] attribute selector.
 html[data-theme='dark'] {
-  .app-settings-view .app-settings-heading { color: #f5f5f5; }
+  .app-settings-view .app-settings-heading {
+    color: #f5f5f5;
+  }
   .app-settings-view .app-settings-lede,
   .app-settings-view .section-label,
-  .app-settings-view .note { color: #9a9a9a; }
+  .app-settings-view .note {
+    color: #9a9a9a;
+  }
   .app-settings-view .option-btn {
     background: #2a2a2a;
     border-color: rgba(255, 255, 255, 0.1);

@@ -1,6 +1,5 @@
 <template>
   <header class="mobile-top-bar no-print" :class="{ 'is-transparent': transparent, 'is-search-open': searchOpen }">
-
     <!-- Search-open mode: the input fills the bar -->
     <template v-if="searchOpen">
       <button
@@ -35,12 +34,7 @@
       >
         <fa-icon icon="chevron-left" />
       </button>
-      <router-link
-        v-else
-        :to="{ name: 'home' }"
-        class="top-bar-logo"
-        aria-label="Camptocamp.org"
-      >
+      <router-link v-else :to="{ name: 'home' }" class="top-bar-logo" aria-label="Camptocamp.org">
         <logo-ctc />
       </router-link>
 
@@ -58,27 +52,15 @@
         >
           <fa-icon icon="circle-info" />
         </router-link>
-        <button
-          type="button"
-          class="top-bar-btn"
-          :aria-label="$gettext('Rechercher')"
-          @click="openSearch"
-        >
+        <button type="button" class="top-bar-btn" :aria-label="$gettext('Rechercher')" @click="openSearch">
           <fa-icon icon="search" />
         </button>
 
-        <join-us-link
-          v-if="!$user.isLogged"
-          class="top-bar-btn join-btn"
-          :aria-label="$gettext('Adhérer')"
-        >
+        <join-us-link v-if="!$user.isLogged" class="top-bar-btn join-btn" :aria-label="$gettext('Adhérer')">
           <icon-join-us />
         </join-us-link>
 
-        <dropdown-button
-          ref="addMenu"
-          class="is-right top-bar-btn add-btn"
-        >
+        <dropdown-button ref="addMenu" class="is-right top-bar-btn add-btn">
           <span slot="button" class="add-trigger" :title="$gettext('Ajouter un contenu')">
             <fa-icon icon="plus" />
           </span>
@@ -104,11 +86,7 @@
         >
           <fa-icon icon="user" />
         </router-link>
-        <login-button
-          v-else
-          class="top-bar-btn"
-          :aria-label="$gettext('Se connecter')"
-        >
+        <login-button v-else class="top-bar-btn" :aria-label="$gettext('Se connecter')">
           <fa-icon icon="user" />
         </login-button>
       </div>
@@ -120,6 +98,9 @@
 import LogoCtc from './LogoCtc.vue';
 
 const TAB_ROUTES = new Set(['topoguide', 'home', 'offline', 'me', 'more']);
+// Static — used as a v-for source. No reactive deps, no need for a
+// per-render computed. Hoisted to module scope.
+const ADDABLE_TYPES = ['outing', 'route', 'waypoint', 'article', 'book', 'xreport'];
 
 export default {
   name: 'MobileTopBar',
@@ -140,7 +121,11 @@ export default {
     },
 
     showBack() {
-      return !TAB_ROUTES.has(this.routeName) && window.history.length > 1;
+      // Always show back on non-tab routes. goBack() falls back to push
+      // home when history is empty, so we no longer need the unreliable
+      // window.history.length check (which counted across the whole tab
+      // session — false positives on fresh tab opens at deep URLs).
+      return !TAB_ROUTES.has(this.routeName);
     },
 
     title() {
@@ -191,7 +176,7 @@ export default {
     },
 
     addableTypes() {
-      return ['outing', 'route', 'waypoint', 'article', 'book', 'xreport'];
+      return ADDABLE_TYPES;
     },
   },
 
@@ -337,7 +322,10 @@ export default {
 .join-btn {
   background: #ff9933;
   color: white;
-  &:hover { background: #e6791f; color: white; }
+  &:hover {
+    background: #e6791f;
+    color: white;
+  }
 }
 
 // Add: green "+" — matches the V1 is-success button.
@@ -354,8 +342,12 @@ export default {
     border-radius: 4px;
     cursor: pointer;
   }
-  ::v-deep .add-trigger:hover { background: #3ec46d; }
-  ::v-deep .dropdown-menu { z-index: 30; }
+  ::v-deep .add-trigger:hover {
+    background: #3ec46d;
+  }
+  ::v-deep .dropdown-menu {
+    z-index: 30;
+  }
 }
 
 .search-wrap {
@@ -364,8 +356,8 @@ export default {
   align-items: center;
 
   ::v-deep .input,
-  ::v-deep input[type="search"],
-  ::v-deep input[type="text"] {
+  ::v-deep input[type='search'],
+  ::v-deep input[type='text'] {
     width: 100%;
     height: 36px;
     font-size: 16px; // prevents iOS auto-zoom

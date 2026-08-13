@@ -20,7 +20,7 @@
       ></button>
     </div>
     <dfm-ad-small v-if="!homePage() && ($screen.isMobile || $screen.isTablet || $screen.isDesktop)" class="ad" />
-    <site-notice ref="siteNotice no-print" class="no-print site-notice" />
+    <site-notice ref="siteNotice" class="no-print site-notice" />
     <image-viewer ref="imageViewer" />
     <helper-window ref="helper" />
     <alert-window ref="alertWindow" />
@@ -47,18 +47,20 @@
     <bottom-nav />
     <onboarding-tour />
     <pull-to-refresh />
+    <outing-session-banner />
   </div>
 </template>
 
 <script>
-import AlertWindow from './components/alert-window/AlertWindow';
 import BottomNav from './components/BottomNav.vue';
+import MobileTopBar from './components/MobileTopBar.vue';
+import OnboardingTour from './components/OnboardingTour.vue';
+import OutingSessionBanner from './components/OutingSessionBanner.vue';
+import PullToRefresh from './components/PullToRefresh.vue';
+import AlertWindow from './components/alert-window/AlertWindow';
 import GdprBanner from './components/gdpr/GdprBanner.vue';
 import HelperWindow from './components/helper/HelperWindow';
 import ImageViewer from './components/image-viewer/ImageViewer';
-import MobileTopBar from './components/MobileTopBar.vue';
-import OnboardingTour from './components/OnboardingTour.vue';
-import PullToRefresh from './components/PullToRefresh.vue';
 import DfmAdSmall from './views/DfmAdSmall.vue';
 import Navigation from './views/Navigation';
 import SideMenu from './views/SideMenu';
@@ -79,6 +81,7 @@ export default {
     GdprBanner,
     MobileTopBar,
     OnboardingTour,
+    OutingSessionBanner,
     PullToRefresh,
   },
 
@@ -149,9 +152,7 @@ export default {
         // Outing creation — feeds into the offline queue (#21). Pulling
         // any one component from wiki-tools / view-account pulls the
         // whole named chunk into the SW cache.
-        import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/OutingEditionView').catch(
-          () => {}
-        );
+        import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/OutingEditionView').catch(() => {});
         import(/* webpackChunkName: "view-account" */ '@/views/user/LoginView').catch(() => {});
       };
       if ('requestIdleCallback' in window) {
@@ -172,7 +173,7 @@ export default {
               position: 'bottom-center',
               duration: 4000,
               message: this.$gettext(
-                'Cette page n\'est pas disponible hors-ligne. Reconnectez-vous au réseau et réessayez.'
+                "Cette page n'est pas disponible hors-ligne. Reconnectez-vous au réseau et réessayez."
               ),
             });
           });
@@ -231,9 +232,15 @@ html {
   // default and "normal" (no override) silently fell back to 14px too —
   // only "large" was visibly different. Explicit values now, with clear
   // 2/4 px gaps so each step actually shifts the rem-based UI.
-  &[data-text-size='small'] { font-size: 12px; }
-  &[data-text-size='normal'] { font-size: 14px; }
-  &[data-text-size='large'] { font-size: 18px; }
+  &[data-text-size='small'] {
+    font-size: 12px;
+  }
+  &[data-text-size='normal'] {
+    font-size: 14px;
+  }
+  &[data-text-size='large'] {
+    font-size: 18px;
+  }
 }
 
 // Dark theme (#4) — html[data-theme='dark'] selector out-specifies
@@ -276,8 +283,13 @@ html[data-theme='dark'] {
   }
   .bottom-nav-link {
     color: #8a8a8a;
-    &:hover, &:focus { color: #ccc; }
-    &.is-active { color: #ff9933; }
+    &:hover,
+    &:focus {
+      color: #ccc;
+    }
+    &.is-active {
+      color: #ff9933;
+    }
   }
   // Recolor the pending-sync badge halo to match the dark bottom nav
   // — keeps the orange dot from getting a white ring against #232323.
@@ -291,13 +303,21 @@ html[data-theme='dark'] {
     border-color: rgba(255, 255, 255, 0.1);
     color: #e5e5e5;
   }
-  .me-view .me-display-name { color: #f5f5f5; }
+  .me-view .me-display-name {
+    color: #f5f5f5;
+  }
   .me-view .me-username,
   .me-view .action-desc,
   .me-view .section-label,
-  .me-view .footer-links { color: #9a9a9a; }
-  .me-view .action-icon { background: #3a2f1a; }
-  .me-view .footer-links { border-top-color: rgba(255, 255, 255, 0.1); }
+  .me-view .footer-links {
+    color: #9a9a9a;
+  }
+  .me-view .action-icon {
+    background: #3a2f1a;
+  }
+  .me-view .footer-links {
+    border-top-color: rgba(255, 255, 255, 0.1);
+  }
   .me-view .action-link:hover,
   .me-view .action-link:focus {
     color: #f5f5f5;
@@ -308,13 +328,23 @@ html[data-theme='dark'] {
     background: #2a2a2a;
     border-color: rgba(255, 255, 255, 0.1);
     color: #e5e5e5;
-    &:hover, &:focus { color: #f5f5f5; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4); }
+    &:hover,
+    &:focus {
+      color: #f5f5f5;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    }
   }
-  .more-view .tile-icon { background: #3a2f1a; }
+  .more-view .tile-icon {
+    background: #3a2f1a;
+  }
   .more-view .subtitle,
-  .more-view .tile-desc { color: #9a9a9a; }
+  .more-view .tile-desc {
+    color: #9a9a9a;
+  }
   // Empty state (DocumentsView)
-  .documents-view .empty-state { color: #9a9a9a; }
+  .documents-view .empty-state {
+    color: #9a9a9a;
+  }
 
   // V3 mobile map quick-toggle pill — keep readable on dark
   .ol-control-quick-layers {
@@ -322,7 +352,9 @@ html[data-theme='dark'] {
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
     button {
       color: #e5e5e5;
-      &:hover { background: rgba(255, 255, 255, 0.08); }
+      &:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
     }
   }
 
@@ -356,7 +388,10 @@ html[data-theme='dark'] {
   .card div,
   .card p,
   .card span,
-  .card a:not(.button):not(.tag):not(.has-text-primary):not(.has-text-info):not(.has-text-link):not(.has-text-success):not(.has-text-warning):not(.has-text-danger) {
+  .card
+    a:not(.button):not(.tag):not(.has-text-primary):not(.has-text-info):not(.has-text-link):not(.has-text-success):not(
+      .has-text-warning
+    ):not(.has-text-danger) {
     color: #f0f0f0;
   }
   .card .has-text-grey,
@@ -369,8 +404,12 @@ html[data-theme='dark'] {
   .card-footer {
     background: transparent;
   }
-  .card-footer { border-top-color: rgba(255, 255, 255, 0.08); }
-  .card-footer-item { border-right-color: rgba(255, 255, 255, 0.08); }
+  .card-footer {
+    border-top-color: rgba(255, 255, 255, 0.08);
+  }
+  .card-footer-item {
+    border-right-color: rgba(255, 255, 255, 0.08);
+  }
   // FeedCard alternating row separator (Bulma .card-content + custom .row)
   .feed-card .row,
   .feed-card .columns:not(:last-child) {
@@ -394,14 +433,24 @@ html[data-theme='dark'] {
   .has-text-grey-darker,
   .has-text-grey-dark,
   .has-text-dark,
-  .has-text-black { color: #f0f0f0 !important; }
-  .has-text-grey { color: #c5c5c5 !important; }
-  .has-text-grey-light { color: #a0a0a0 !important; }
+  .has-text-black {
+    color: #f0f0f0 !important;
+  }
+  .has-text-grey {
+    color: #c5c5c5 !important;
+  }
+  .has-text-grey-light {
+    color: #a0a0a0 !important;
+  }
 
   // Background utilities (Bulma)
   .has-background-light,
-  .has-background-white { background-color: #2a2a2a !important; }
-  .has-background-white-print { background-color: transparent !important; }
+  .has-background-white {
+    background-color: #2a2a2a !important;
+  }
+  .has-background-white-print {
+    background-color: transparent !important;
+  }
 
   // Tags (Bulma)
   .tag:not(.is-primary):not(.is-info):not(.is-success):not(.is-warning):not(.is-danger) {
@@ -419,13 +468,26 @@ html[data-theme='dark'] {
     background: #2f2f2f;
     color: #e5e5e5;
   }
-  .notification.is-info { background: #1e3a5f; color: #d8e6f5; }
-  .notification.is-warning { background: #5a4a1f; color: #f5e8c8; }
-  .notification.is-danger { background: #5a2222; color: #f5d6d6; }
+  .notification.is-info {
+    background: #1e3a5f;
+    color: #d8e6f5;
+  }
+  .notification.is-warning {
+    background: #5a4a1f;
+    color: #f5e8c8;
+  }
+  .notification.is-danger {
+    background: #5a2222;
+    color: #f5d6d6;
+  }
 
   // Titles / subtitles (Bulma) — keep them visible
-  .title { color: #f5f5f5; }
-  .subtitle { color: #b5b5b5; }
+  .title {
+    color: #f5f5f5;
+  }
+  .subtitle {
+    color: #b5b5b5;
+  }
 
   // Forms (Bulma inputs/selects/textareas)
   .input,
@@ -434,11 +496,20 @@ html[data-theme='dark'] {
     background: #1f1f1f;
     color: #e5e5e5;
     border-color: rgba(255, 255, 255, 0.15);
-    &::placeholder { color: #6b6b6b; }
-    &:focus { border-color: #ff9933; box-shadow: 0 0 0 0.125em rgba(255, 153, 51, 0.25); }
+    &::placeholder {
+      color: #6b6b6b;
+    }
+    &:focus {
+      border-color: #ff9933;
+      box-shadow: 0 0 0 0.125em rgba(255, 153, 51, 0.25);
+    }
   }
-  .label { color: #e5e5e5; }
-  .help { color: #9a9a9a; }
+  .label {
+    color: #e5e5e5;
+  }
+  .help {
+    color: #9a9a9a;
+  }
 
   // Buttons — only the "light" / "text" / undecorated variants need a
   // dark surface; .is-primary/.is-info etc. already pop against any bg.
@@ -446,12 +517,21 @@ html[data-theme='dark'] {
     background: #2a2a2a;
     color: #e5e5e5;
     border-color: rgba(255, 255, 255, 0.15);
-    &:hover, &:focus { background: #353535; color: #fff; border-color: rgba(255, 255, 255, 0.25); }
+    &:hover,
+    &:focus {
+      background: #353535;
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.25);
+    }
   }
   .button.is-text {
     background: transparent;
     color: #e5e5e5;
-    &:hover, &:focus { background: rgba(255, 255, 255, 0.06); color: #fff; }
+    &:hover,
+    &:focus {
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+    }
   }
   .button.is-light {
     background: #2a2a2a !important;
@@ -465,9 +545,15 @@ html[data-theme='dark'] {
   }
   .dropdown-item {
     color: #e5e5e5;
-    &:hover, &.is-active { background: #3a3a3a; color: #fff; }
+    &:hover,
+    &.is-active {
+      background: #3a3a3a;
+      color: #fff;
+    }
   }
-  .dropdown-divider { background-color: rgba(255, 255, 255, 0.08); }
+  .dropdown-divider {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
 
   // Modals (Bulma)
   .modal-card-head,
@@ -475,13 +561,26 @@ html[data-theme='dark'] {
     background: #232323;
     border-color: rgba(255, 255, 255, 0.08);
   }
-  .modal-card-body { background: #2a2a2a; color: #e5e5e5; }
-  .modal-card-title { color: #f5f5f5; }
-  .modal-background { background-color: rgba(0, 0, 0, 0.7); }
+  .modal-card-body {
+    background: #2a2a2a;
+    color: #e5e5e5;
+  }
+  .modal-card-title {
+    color: #f5f5f5;
+  }
+  .modal-background {
+    background-color: rgba(0, 0, 0, 0.7);
+  }
 
   // Tabs
-  .tabs a { color: #b5b5b5; border-bottom-color: rgba(255, 255, 255, 0.15); }
-  .tabs li.is-active a { color: #ff9933; border-bottom-color: #ff9933; }
+  .tabs a {
+    color: #b5b5b5;
+    border-bottom-color: rgba(255, 255, 255, 0.15);
+  }
+  .tabs li.is-active a {
+    color: #ff9933;
+    border-bottom-color: #ff9933;
+  }
 
   // Tables — V1 WhatsNew, AssociationsHistory etc.
   table,
@@ -489,9 +588,17 @@ html[data-theme='dark'] {
     background: transparent;
     color: #e5e5e5;
   }
-  .table th { background: #232323; color: #f5f5f5; border-color: rgba(255, 255, 255, 0.08); }
-  .table td { border-color: rgba(255, 255, 255, 0.06); }
-  .table tr:hover td { background: rgba(255, 255, 255, 0.04); }
+  .table th {
+    background: #232323;
+    color: #f5f5f5;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .table td {
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+  .table tr:hover td {
+    background: rgba(255, 255, 255, 0.04);
+  }
 
   // V1 ag-grid table (DocumentsView list mode) — its CSS is loaded
   // by the data-table chunk and uses a fixed light palette. Override
@@ -517,21 +624,35 @@ html[data-theme='dark'] {
 
   // Generic small-text/muted classes used across V1
   .has-text-info,
-  .has-text-link { color: #6db4ff; }
+  .has-text-link {
+    color: #6db4ff;
+  }
 
   // Document-detail surfaces (route/outing/waypoint header rows are
   // already inside .card / .box overrides, but the inner separators
   // and dotted lines need a darker contrast).
-  hr { background-color: rgba(255, 255, 255, 0.08); }
+  hr {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
 
   // Markdown content inside topo descriptions
   .markdown-section,
   .markdown-content {
     color: #e5e5e5;
-    a { color: #6db4ff; }
-    code { background: #1a1a1a; color: #ffd17a; }
-    pre { background: #1a1a1a; }
-    blockquote { border-left-color: rgba(255, 255, 255, 0.2); color: #b5b5b5; }
+    a {
+      color: #6db4ff;
+    }
+    code {
+      background: #1a1a1a;
+      color: #ffd17a;
+    }
+    pre {
+      background: #1a1a1a;
+    }
+    blockquote {
+      border-left-color: rgba(255, 255, 255, 0.2);
+      color: #b5b5b5;
+    }
   }
 
   // c2c embedded figure widgets — the legendary white blocks in dark

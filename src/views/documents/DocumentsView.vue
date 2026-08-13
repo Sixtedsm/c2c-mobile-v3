@@ -27,6 +27,10 @@
           <page-selector :documents="documents" />
         </span>
         <span class="is-pulled-right is-flex header-right" v-if="documentType != 'profile'">
+          <!-- "Près de moi" (CDC §2.3, roadmap #15): geoloc → bbox
+               filter. Only exposed for doc types the API can filter by
+               bbox — same predicate as the map itself. -->
+          <near-me-button v-if="documentAreGeoLocalized" class="header-item" />
           <!-- Bulk save current page for offline use (#11). Component
                auto-hides for non-savable types (images, profiles). -->
           <bulk-offline-button
@@ -37,7 +41,7 @@
           />
           <load-user-preferences-button class="is-hidden-mobile" />
 
-          <span @click="toogleProperty('listMode')" class="header-item is-size-3 has-cursor-pointer is-hidden-mobile">
+          <span @click="toggleProperty('listMode')" class="header-item is-size-3 has-cursor-pointer is-hidden-mobile">
             <fa-icon
               v-show="displayMode !== 'map'"
               icon="th-list"
@@ -58,17 +62,8 @@
               :value="displayMode"
               @input="setProperty('displayMode', arguments[0])"
             />
-
-            <!-- V1 mini map toggle was visible on mobile (is-hidden-tablet)
-                 — duplicates the new V3 floating .map-list-fab below.
-                 Hidden across all viewports now; the FAB owns this. -->
-            <span v-if="false" class="is-size-3 is-hidden-tablet">
-              <fa-icon
-                :icon="displayMode === 'map' ? 'th' : 'map-marked-alt'"
-                class="has-text-primary"
-                @click="setProperty('displayMode', displayMode === 'map' ? 'both' : 'map')"
-              />
-            </span>
+            <!-- V1 mini map toggle (mobile) removed: the V3 floating
+                 .map-list-fab below owns the list↔map switch on mobile. -->
           </template>
         </span>
       </div>
@@ -115,7 +110,9 @@
              "No Rows" overlay and map shows a blank map, but cards looked
              silently broken. -->
         <div
-          v-if="documents && !listMode && documentType !== 'image' && documents.documents && !documents.documents.length"
+          v-if="
+            documents && !listMode && documentType !== 'image' && documents.documents && !documents.documents.length
+          "
           class="empty-state has-text-centered"
         >
           <fa-icon icon="folder-open" class="empty-state-icon" />
@@ -166,6 +163,7 @@ import BulkOfflineButton from './utils/BulkOfflineButton';
 import DisplayModeSwitch from './utils/DisplayModeSwitch';
 import ImageCards from './utils/ImageCards';
 import LoadUserPreferencesButton from './utils/LoadUserPreferencesButton';
+import NearMeButton from './utils/NearMeButton';
 import PageSelector from './utils/PageSelector';
 import QueryItems from './utils/QueryItems';
 
@@ -186,6 +184,7 @@ export default {
     DisplayModeSwitch,
     LoadUserPreferencesButton,
     BulkOfflineButton,
+    NearMeButton,
   },
 
   mixins: [pullRefreshMixin],
@@ -272,7 +271,7 @@ export default {
       return this.promise;
     },
 
-    toogleProperty(property) {
+    toggleProperty(property) {
       this.setProperty(property, !this[property]);
     },
 
