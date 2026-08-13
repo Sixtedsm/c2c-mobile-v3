@@ -1,3 +1,5 @@
 node_modules/
 tools/
 src/assets/font-awesome-custom/
+vitest.config.js
+tests/

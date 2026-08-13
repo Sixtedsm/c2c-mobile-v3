@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Prevent overlapping runs on the same ref from wasting minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # `npm install` (not `ci`) matches the deploy workflow — package-lock
+      # can drift on this fork and we don't want CI to fail on lockfile
+      # churn while a fix is in flight.
+      - run: npm install --no-audit --no-fund
+
+      - name: Lint (prettier + stylelint + eslint)
+        run: npm run lint:no-fix
+
+      - name: Unit tests (Vitest)
+        run: npm test
+
+      - name: Build V3 bundle
+        run: npm run build:v3
