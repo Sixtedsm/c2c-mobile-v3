@@ -553,6 +553,17 @@ export default function install(Vue) {
                 ],
               };
             }
+            // Migration guard: early V3 builds queued outing payloads
+            // without the required `users` association. Inject the
+            // currently-logged-in user id so those pre-existing pending
+            // drafts don't stay stuck forever on the API validation.
+            const hasUsers = Array.isArray(payload.associations?.users) && payload.associations.users.length > 0;
+            if (!hasUsers && this.$user?.id) {
+              payload.associations = {
+                ...(payload.associations || {}),
+                users: [{ document_id: Number(this.$user.id) }],
+              };
+            }
             const response = await c2c.outing.create(payload);
             if (!response?.data?.document_id) {
               remaining.push({

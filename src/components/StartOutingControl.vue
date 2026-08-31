@@ -104,11 +104,21 @@
         </p>
 
         <div class="start-outing-stop-options">
-          <button v-if="hasTrace" type="button" class="start-outing-stop-btn is-primary" @click="openDraftForm">
+          <!-- "Enregistrer en brouillon" est toujours disponible, même
+               sans trace GPS : l'utilisateur peut vouloir enregistrer
+               une sortie qu'il a faite (activité, date, conditions,
+               photos) sans avoir enregistré le tracé. -->
+          <button type="button" class="start-outing-stop-btn is-primary" @click="openDraftForm">
             <fa-icon icon="floppy-disk" />
             <span>
               <strong>{{ $gettext('Enregistrer en brouillon') }}</strong>
-              <small>{{ $gettext('Attaché à ce topo · publiée dès retour du réseau') }}</small>
+              <small>
+                {{
+                  hasTrace
+                    ? $gettext('Attaché à ce topo · publiée dès retour du réseau')
+                    : $gettext('Sans trace GPS · publiée dès retour du réseau')
+                }}
+              </small>
             </span>
           </button>
           <button v-if="hasTrace" type="button" class="start-outing-stop-btn" @click="exportGpxThenStop">
