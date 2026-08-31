@@ -27,8 +27,10 @@
     <div v-if="alternativeSideMenu" class="alternative-side-menu-shader" @click="alternativeSideMenu = false" />
 
     <!-- V3 mobile top bar — sticky title + back button. Replaces the V1
-         desktop navbar that we hide everywhere via CSS below. -->
-    <mobile-top-bar />
+         desktop navbar (hidden by the mobile-shell CSS below). Not
+         rendered when the user forced the desktop shell via
+         MoreView's "Version ordinateur" toggle. -->
+    <mobile-top-bar v-if="!isDesktopShell" />
 
     <!-- keep router view in last -->
     <div class="page-content is-block-print">
@@ -44,10 +46,10 @@
       </transition>
     </div>
     <gdpr-banner></gdpr-banner>
-    <bottom-nav />
+    <bottom-nav v-if="!isDesktopShell" />
     <onboarding-tour />
     <pull-to-refresh />
-    <outing-session-banner />
+    <outing-session-banner v-if="!isDesktopShell" />
   </div>
 </template>
 
@@ -92,7 +94,23 @@ export default {
       // Per-route scroll positions inside .page-content. Lets a user open
       // a topo, hit Back, and land exactly where they were in the list.
       scrollPositions: Object.create(null),
+      // Reactive echo of the app-wide viewport bucket so `isDesktopShell`
+      // (below) recomputes on resize. Kept in sync by updateWidth().
+      widthBucket: 'mobile',
     };
+  },
+
+  computed: {
+    // Should the fork render the V1 desktop shell (SideMenu + top
+    // Navigation, no BottomNav) instead of the V3 mobile shell?
+    // 'desktop' / 'mobile' from appSettings force it; 'auto' defers
+    // to the current viewport bucket.
+    isDesktopShell() {
+      const mode = this.$appSettings?.state?.shellMode;
+      if (mode === 'desktop') return true;
+      if (mode === 'mobile') return false;
+      return this.widthBucket === 'desktop';
+    },
   },
 
   watch: {
@@ -191,13 +209,18 @@ export default {
         fullhd: 1408,
       };
       const width = this.$el.offsetWidth;
+      let bucket;
       if (width <= bulmaBreakpoints.tablet) {
-        this.$el.dataset.width = 'mobile';
+        bucket = 'mobile';
       } else if (width <= bulmaBreakpoints.desktop) {
-        this.$el.dataset.width = 'tablet';
+        bucket = 'tablet';
       } else {
-        this.$el.dataset.width = 'desktop';
+        bucket = 'desktop';
       }
+      this.$el.dataset.width = bucket;
+      // Mirror into reactive data so `isDesktopShell` recomputes on
+      // resize (dataset writes don't trigger Vue reactivity).
+      this.widthBucket = bucket;
     },
     homePage() {
       if (this.$route.path === '/home' || this.$route.path === '/') {
@@ -789,10 +812,12 @@ body {
   box-shadow: 0 5px 10px 0px rgba(10, 10, 10, 0.5);
 }
 
-// V3 page-content is the single scroll surface — pinned between the
-// fixed MobileTopBar and BottomNav. Everything else (decor) stays put,
-// like a native app's main content area.
-.page-content {
+// V3 page-content in mobile shell mode: single scroll surface pinned
+// between the fixed MobileTopBar and BottomNav. In desktop shell mode
+// (opt-in via MoreView → "Version ordinateur") the V1 layout takes
+// over and we let its own rules position the content — see the
+// `html[data-shell='desktop']` override further down.
+html[data-shell='mobile'] .page-content {
   position: absolute;
   top: calc(52px + env(safe-area-inset-top));
   // Bottom nav bumped 52 → 66 px after beta feedback (patapouet, forum
@@ -811,16 +836,36 @@ body {
 }
 
 // V3 ditches the V1 desktop SideMenu and top Navigation in favor of the
-// BottomNav-only shell. Hide them everywhere so we don't end up with two
-// navigation systems and a duplicated "Plus" entry.
+// BottomNav-only shell — but ONLY in mobile shell mode. The desktop
+// shell needs the V1 chrome back, so scope the hide to mobile.
 @media screen {
-  .side-menu,
-  .navigation {
+  html[data-shell='mobile'] .side-menu,
+  html[data-shell='mobile'] .navigation {
     display: none !important;
   }
-  // Home-topoguide used to reserve padding for the V1 navbar; not needed.
-  .home-topoguide .page-content {
+  // Home-topoguide used to reserve padding for the V1 navbar; not needed
+  // on the mobile shell either.
+  html[data-shell='mobile'] .home-topoguide .page-content {
     padding-top: 0 !important;
+  }
+}
+
+// Desktop shell: let the V1 layout breathe. Undo the mobile-shell
+// html { overflow: hidden; height: 100% } so the page scrolls the way
+// camptocamp.org does, and unlock body scroll too.
+html[data-shell='desktop'] {
+  overflow: auto;
+  height: auto;
+
+  body {
+    overflow: auto;
+    height: auto;
+  }
+
+  #app {
+    overflow: visible;
+    height: auto;
+    min-height: 100vh;
   }
 }
 

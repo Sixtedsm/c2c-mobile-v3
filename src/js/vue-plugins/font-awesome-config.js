@@ -200,6 +200,7 @@ import waypointwebcam from '@/assets/font-awesome-custom/js/waypoint/webcam';
 // Ordered by V3-feature grouping rather than strict alphabetical to keep
 // related icons together; the `V3` alias suffix distinguishes them from
 // any V1 imports of the same name above.
+import { faMobileScreen as faMobileScreenV3 } from '@fortawesome/free-solid-svg-icons/faMobileScreen';
 import { faMountain as faMountainV3 } from '@fortawesome/free-solid-svg-icons/faMountain';
 import { faPaperPlane as faPaperPlaneV3 } from '@fortawesome/free-solid-svg-icons/faPaperPlane';
 import { faPenToSquare as faPenToSquareV3 } from '@fortawesome/free-solid-svg-icons/faPenToSquare';
@@ -225,6 +226,7 @@ export default function install(Vue) {
     faFloppyDiskV3,
     faLocationDotV3,
     faMagnifyingGlassV3,
+    faMobileScreenV3,
     faMountainV3,
     faPaperPlaneV3,
     faPenToSquareV3,

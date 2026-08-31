@@ -6,7 +6,18 @@
 
       <ul class="tile-grid">
         <li v-for="tile in tiles" :key="tile.key">
+          <button v-if="tile.onClick" type="button" class="tile-link tile-link-button" @click="tile.onClick">
+            <span class="tile-icon">
+              <custom-icon :name="tile.icon" :size="34" />
+            </span>
+            <span class="tile-text">
+              <span class="tile-label">{{ tile.label }}</span>
+              <span class="tile-desc">{{ tile.desc }}</span>
+            </span>
+            <fa-icon icon="chevron-right" class="tile-chevron" />
+          </button>
           <component
+            v-else
             :is="tile.href ? 'a' : 'router-link'"
             :to="tile.to || undefined"
             :href="tile.href || undefined"
@@ -77,20 +88,31 @@ export default {
           icon: 'speech-bubbles',
           to: { name: 'forum' },
         },
-        // Escape hatch to the desktop site — keeps the "one shared link"
-        // story tidy: a user who lands on the mobile PWA but really wants
-        // the full c2c.org UI has a single button instead of having to
-        // type a URL by hand. Opens in the current tab (target:_self) so
-        // the PWA's standalone window navigates out cleanly.
+        // Flip the fork into the V1 desktop shell (SideMenu + top
+        // Navigation, no BottomNav). Round-trip via a page reload so
+        // components that pin themselves at boot (map controls, ad
+        // slot, etc.) re-init cleanly against the new layout. Back to
+        // mobile from a discrete "Version mobile" link that shows up
+        // in the SideMenu when the desktop shell is active.
         {
           key: 'desktop',
           label: this.$gettext('Version ordinateur'),
-          desc: this.$gettext('Ouvrir camptocamp.org dans le navigateur'),
+          desc: this.$gettext('Bascule vers la présentation site (retour possible)'),
           icon: 'notebook',
-          href: 'https://www.camptocamp.org/',
-          targetSelf: true,
+          onClick: () => this.switchToDesktopShell(),
         },
       ];
+    },
+  },
+
+  methods: {
+    switchToDesktopShell() {
+      this.$appSettings.setShellMode('desktop');
+      // Reload so App.vue rebuilds against the new data-shell attribute
+      // — some layout choices (position: absolute for .page-content,
+      // OpenLayers map sizing) are baked at mount time and don't
+      // reconcile via reactivity alone.
+      window.location.reload();
     },
   },
 };
@@ -129,13 +151,24 @@ export default {
   color: #4a4a4a;
   text-decoration: none;
   transition: box-shadow 0.15s;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
 
   &:hover,
   &:focus {
     text-decoration: none;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
     color: #4a4a4a;
+    outline: none;
   }
+}
+.tile-link-button {
+  // Reset default <button> styling so it visually matches the
+  // anchor / router-link tiles that share the `.tile-link` class.
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .tile-icon {

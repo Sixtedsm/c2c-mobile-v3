@@ -17,12 +17,20 @@ const defaults = {
   // trades battery for a precise trace); '15' balanced; '30' battery-
   // saver for long days where a coarser trace is fine.
   gpsIntervalS: '5',
+  // Shell mode — picks between the V3 mobile shell (BottomNav, top
+  // bar, no side menu) and the V1 desktop shell (SideMenu +
+  // Navigation, no bottom nav). 'auto' defers to the viewport (mobile
+  // shell on <= tablet, desktop shell on >= desktop). Explicit values
+  // let a user override the auto-detection — the "Version ordinateur"
+  // / "Version mobile" toggle in MoreView / SideMenu writes here.
+  shellMode: 'auto',
 };
 
 const allowed = {
   theme: ['auto', 'light', 'dark'],
   textSize: ['small', 'normal', 'large'],
   gpsIntervalS: ['5', '15', '30'],
+  shellMode: ['auto', 'mobile', 'desktop'],
 };
 
 function load() {
@@ -58,6 +66,17 @@ function effectiveTheme(theme) {
   return theme === 'auto' ? (prefersDark() ? 'dark' : 'light') : theme;
 }
 
+function prefersDesktopViewport() {
+  return !!(window.matchMedia && window.matchMedia('(min-width: 1024px)').matches);
+}
+
+function effectiveShellMode(mode) {
+  if (mode === 'mobile' || mode === 'desktop') return mode;
+  // auto — Bulma's desktop breakpoint is 1024 px (App.vue uses it too
+  // for the layout switch).
+  return prefersDesktopViewport() ? 'desktop' : 'mobile';
+}
+
 function apply(state) {
   const root = document.documentElement;
   const theme = effectiveTheme(state.theme);
@@ -66,6 +85,7 @@ function apply(state) {
   // can paint dark when the user opts into dark mode.
   root.style.colorScheme = theme;
   root.setAttribute('data-text-size', state.textSize);
+  root.setAttribute('data-shell', effectiveShellMode(state.shellMode));
 }
 
 const state = Vue.observable(load());
@@ -78,6 +98,15 @@ if (window.matchMedia) {
   };
   if (mq.addEventListener) mq.addEventListener('change', onChange);
   else if (mq.addListener) mq.addListener(onChange);
+
+  // Re-apply the shell mode when the viewport crosses the desktop
+  // breakpoint — only in 'auto' mode; explicit choices stick.
+  const shellMq = window.matchMedia('(min-width: 1024px)');
+  const onShellChange = () => {
+    if (state.shellMode === 'auto') apply(state);
+  };
+  if (shellMq.addEventListener) shellMq.addEventListener('change', onShellChange);
+  else if (shellMq.addListener) shellMq.addListener(onShellChange);
 }
 
 const api = {
@@ -103,8 +132,17 @@ const api = {
     // No visual side-effect: $outingSession reads the value on next
     // startGpsWatch() call, so no apply() step needed here.
   },
+  setShellMode(value) {
+    if (!allowed.shellMode.includes(value)) return;
+    state.shellMode = value;
+    persist(state);
+    apply(state);
+  },
   get effectiveTheme() {
     return effectiveTheme(state.theme);
+  },
+  get effectiveShellMode() {
+    return effectiveShellMode(state.shellMode);
   },
   get gpsIntervalMs() {
     return (Number(state.gpsIntervalS) || 5) * 1000;

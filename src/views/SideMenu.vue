@@ -73,6 +73,17 @@
       </span>
     </a>
 
+    <!-- "Version mobile" — round-trip out of the V1 desktop shell
+         back into the V3 mobile shell. Only visible when the user
+         explicitly opted into the desktop shell (from MoreView).
+         Styled as any other menu item so it doesn't stand out. -->
+    <a v-if="canReturnToMobileShell" class="side-menu-shell-switch" href="#" @click.prevent="switchToMobileShell">
+      <span class="menu-item is-ellipsed">
+        <fa-icon icon="mobile-screen" fixed-width />
+        <span class="menu-item-text">{{ $gettext('Version mobile') }}</span>
+      </span>
+    </a>
+
     <div class="menu-footer is-size-7">
       <div class="has-text-centered menu-links">
         <router-link :to="{ name: 'article', params: { id: 106727 } }" v-translate>contact</router-link>
@@ -124,6 +135,17 @@ export default {
     };
   },
 
+  computed: {
+    // Only offer the "Version mobile" swap when the user is actually
+    // in the V1 desktop shell right now — either because they
+    // explicitly picked it in MoreView, or because the tab was
+    // resized past the desktop breakpoint in auto mode.
+    canReturnToMobileShell() {
+      const mode = this.$appSettings?.state?.shellMode;
+      return mode === 'desktop' || (mode === 'auto' && this.$appSettings?.effectiveShellMode === 'desktop');
+    },
+  },
+
   created() {
     this.mediaQueryList = window.matchMedia('only screen and (min-height: 715px)');
     if (this.mediaQueryList.addEventListener) {
@@ -151,6 +173,13 @@ export default {
 
     onHeightBreakpointChange() {
       this.isTall = this.mediaQueryList.matches;
+    },
+
+    switchToMobileShell() {
+      this.$appSettings.setShellMode('mobile');
+      // Reload so App.vue rebuilds against the new data-shell attribute
+      // — matches the MoreView "Version ordinateur" round-trip.
+      window.location.reload();
     },
   },
 };
@@ -198,6 +227,18 @@ aside {
 .menu-item.router-link-active {
   border-left: 5px solid $color-base-c2c;
   font-weight: bold;
+}
+
+// "Version mobile" link — no router-link-active state, but the
+// hover/text handling should match every other menu row so it
+// blends in perfectly with the V1 SideMenu.
+.side-menu-shell-switch {
+  display: block;
+  color: $text;
+
+  &:hover {
+    color: $text;
+  }
 }
 
 .menu-footer {
