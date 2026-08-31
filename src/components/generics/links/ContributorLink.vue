@@ -11,7 +11,10 @@
       <router-link :to="{ name: 'whatsnew', query: { u: contributor.user_id } }" rel="nofollow">c</router-link>
       <span v-if="contributor.forum_username">
         <span>|</span>
-        <a :href="$options.forumUrl + '/users/' + contributor.forum_username + '/activity'">d</a>
+        <!-- V3: the discourse activity page now lives in-app as the
+             ForumUserView (/forum/u/:username) so a tap on "d" stays
+             inside the PWA instead of kicking the user out to Safari. -->
+        <router-link :to="{ name: 'forum-user', params: { username: contributor.forum_username } }">d</router-link>
       </span>
       <span>)</span>
     </span>
@@ -19,10 +22,7 @@
 </template>
 
 <script>
-import config from '@/js/config';
-
 export default {
-  forumUrl: config.urls.forum,
   props: {
     contributor: {
       type: Object,

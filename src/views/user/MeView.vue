@@ -1,20 +1,35 @@
 <template>
   <section class="section me-view">
     <div class="container">
-      <!-- Header: avatar, name, username, public profile link -->
+      <!-- Header: avatar, name, username, two public profile links
+           (C2C wiki + Discourse forum) — same split camptocamp.org
+           has, brought inside the app so the two shortcuts don't
+           silently kick the user out to Safari. -->
       <header v-if="$user.isLogged" class="me-header">
         <div class="avatar" aria-hidden="true">{{ initial }}</div>
         <div class="me-header-text">
           <p class="me-display-name">{{ displayName }}</p>
           <p class="me-username">@{{ $user.userName }}</p>
-          <router-link
-            v-if="$user.id"
-            :to="{ name: 'profile', params: { id: $user.id, lang: $user.lang || 'fr' } }"
-            class="public-profile-link"
-          >
-            {{ $gettext('Voir mon profil') }}
-            <fa-icon icon="chevron-right" />
-          </router-link>
+          <div class="public-profile-links">
+            <router-link
+              v-if="$user.id"
+              :to="{ name: 'profile', params: { id: $user.id, lang: $user.lang || 'fr' } }"
+              class="public-profile-link"
+            >
+              <fa-icon icon="mountain" />
+              &nbsp;{{ $gettext('Mon profil Camptocamp') }}
+              <fa-icon icon="chevron-right" />
+            </router-link>
+            <router-link
+              v-if="$user.forumUsername"
+              :to="{ name: 'forum-user', params: { username: $user.forumUsername } }"
+              class="public-profile-link"
+            >
+              <fa-icon icon="comment" />
+              &nbsp;{{ $gettext('Mon profil forum') }}
+              <fa-icon icon="chevron-right" />
+            </router-link>
+          </div>
         </div>
       </header>
 
@@ -333,6 +348,12 @@ export default {
   text-overflow: ellipsis;
 }
 
+.public-profile-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0.15rem;
+}
 .public-profile-link {
   font-size: 0.8rem;
   color: #337ab7;
@@ -340,6 +361,7 @@ export default {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  width: fit-content;
 }
 
 .me-signin {

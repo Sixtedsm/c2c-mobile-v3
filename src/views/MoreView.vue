@@ -108,11 +108,16 @@ export default {
   methods: {
     switchToDesktopShell() {
       this.$appSettings.setShellMode('desktop');
-      // Reload so App.vue rebuilds against the new data-shell attribute
-      // — some layout choices (position: absolute for .page-content,
-      // OpenLayers map sizing) are baked at mount time and don't
-      // reconcile via reactivity alone.
-      window.location.reload();
+      // Navigate to home + reload in one shot: `/more` is a mobile-only
+      // route (there is no equivalent on camptocamp.org), so if we
+      // reloaded in place the desktop shell would mount over a page
+      // that has no desktop rendering — user sees the SideMenu on top
+      // of the mobile MoreView. `location.href` triggers a real
+      // navigation, which re-boots App.vue against the new
+      // data-shell attribute AND lands on a page the desktop shell
+      // knows how to render.
+      const href = this.$router.resolve({ name: 'home' }).href;
+      window.location.href = href;
     },
   },
 };

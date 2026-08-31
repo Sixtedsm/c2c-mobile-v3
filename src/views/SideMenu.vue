@@ -177,9 +177,12 @@ export default {
 
     switchToMobileShell() {
       this.$appSettings.setShellMode('mobile');
-      // Reload so App.vue rebuilds against the new data-shell attribute
-      // — matches the MoreView "Version ordinateur" round-trip.
-      window.location.reload();
+      // Navigate to home + reload — mirrors the desktop-switch flow
+      // in MoreView. Some V1 pages (e.g. YETI, edition views) look
+      // odd in the mobile shell if we drop back to them mid-context;
+      // home is a clean landing that renders well in both shells.
+      const href = this.$router.resolve({ name: 'home' }).href;
+      window.location.href = href;
     },
   },
 };
