@@ -90,8 +90,11 @@
     </div>
 
     <!-- Stop modal: choose what to do with the recorded trace before
-         closing the session. When no trace was recorded, we skip
-         straight to `finalStop()`. -->
+         closing the session. "Créer la sortie" opens the full V1
+         edition form (OutingEditionView) with the trace + metrics
+         pre-filled — same UI online or offline, same resulting outing
+         shape. V1 handles the online publish AND the offline queue
+         automatically via document-edition-view-mixin. -->
     <div v-if="showStopModal" class="start-outing-modal" @click.self="showStopModal = false">
       <div class="start-outing-modal-card">
         <h3>{{ $gettext('Arrêter la sortie') }}</h3>
@@ -104,19 +107,19 @@
         </p>
 
         <div class="start-outing-stop-options">
-          <!-- "Enregistrer en brouillon" est toujours disponible, même
-               sans trace GPS : l'utilisateur peut vouloir enregistrer
-               une sortie qu'il a faite (activité, date, conditions,
-               photos) sans avoir enregistré le tracé. -->
-          <button type="button" class="start-outing-stop-btn is-primary" @click="openDraftForm">
-            <fa-icon icon="floppy-disk" />
+          <!-- "Créer la sortie" is always available, even without a
+               trace: the user may have hiked without recording and
+               still want to log the outing (activity, date, conditions,
+               photos). The redirect opens the full V1 form. -->
+          <button type="button" class="start-outing-stop-btn is-primary" @click="startEditingDraft">
+            <fa-icon icon="pen-to-square" />
             <span>
-              <strong>{{ $gettext('Enregistrer en brouillon') }}</strong>
+              <strong>{{ $gettext('Créer la sortie') }}</strong>
               <small>
                 {{
                   hasTrace
-                    ? $gettext('Attaché à ce topo · publiée dès retour du réseau')
-                    : $gettext('Sans trace GPS · publiée dès retour du réseau')
+                    ? $gettext('Trace pré-remplie · publiée en ligne ou mise en file hors ligne')
+                    : $gettext('Formulaire complet · publiée en ligne ou mise en file hors ligne')
                 }}
               </small>
             </span>
@@ -144,123 +147,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Draft form: minimal set of fields for a valid outing. Fills in
-         everything the API needs (activity, date, title, associated
-         route, GPS trace). The user can enrich the draft later on the
-         web edition view. -->
-    <div v-if="showDraftForm" class="start-outing-modal" @click.self="showDraftForm = false">
-      <div class="start-outing-modal-card">
-        <h3>{{ $gettext('Nouveau brouillon de sortie') }}</h3>
-        <p class="start-outing-modal-sub">
-          {{ $gettext('La sortie sera publiée automatiquement dès que la connexion revient.') }}
-        </p>
-
-        <div class="draft-field">
-          <label>{{ $gettext('Activité') }}</label>
-          <select v-model="draft.activity" class="draft-input">
-            <option v-for="a in availableActivities" :key="a" :value="a">
-              {{ $gettext(a) }}
-            </option>
-          </select>
-        </div>
-
-        <div class="draft-field">
-          <label>{{ $gettext('Date') }}</label>
-          <input v-model="draft.date" type="date" class="draft-input" :max="today" />
-        </div>
-
-        <div class="draft-field">
-          <label>{{ $gettext('Titre') }}</label>
-          <input v-model="draft.title" type="text" class="draft-input" maxlength="120" />
-        </div>
-
-        <div class="draft-field">
-          <label>{{ $gettext('Conditions / commentaires') }}</label>
-          <textarea v-model="draft.description" rows="4" class="draft-input" />
-        </div>
-
-        <!-- Nearby routes (CDC §2.5): at end of GPS, propose the routes
-             that intersect the recorded trace so the user can attach
-             the outing to whatever fits, not just the topo they started
-             from. Current topo is pre-checked. When the user is offline
-             the query silently no-ops — we still keep the pre-checked
-             topo association. -->
-        <div v-if="hasTrace" class="draft-field">
-          <label>{{ $gettext('Itinéraires proches') }}</label>
-          <p v-if="loadingNearbyRoutes" class="draft-photos-hint">
-            <fa-icon icon="rotate" spin />
-            &nbsp;{{ $gettext('Recherche des itinéraires…') }}
-          </p>
-          <div v-else-if="nearbyRoutes.length" class="draft-routes-list">
-            <label
-              v-for="r in nearbyRoutes"
-              :key="r.document_id"
-              class="draft-route-item"
-              :class="{ 'is-selected': draft.selectedRouteIds.includes(r.document_id) }"
-            >
-              <input type="checkbox" :value="r.document_id" v-model="draft.selectedRouteIds" />
-              <span class="draft-route-title">
-                {{ routeTitleOf(r) }}
-                <small v-if="r.elevation_max">· {{ r.elevation_max }} m</small>
-              </span>
-            </label>
-          </div>
-          <p v-else class="draft-photos-hint">
-            {{
-              $gettext(
-                'Aucun itinéraire proposé (hors ligne ou zone sans topo indexé). La sortie reste attachée à ce topo.'
-              )
-            }}
-          </p>
-        </div>
-
-        <!-- Photos (CDC §2.4 + §2.8): captured now or picked from the
-             gallery, stored locally with the draft, uploaded + attached
-             at sync time. `capture="environment"` preferentially opens
-             the back camera on mobile — falls back to the gallery
-             everywhere else. -->
-        <div class="draft-field">
-          <label>{{ $gettext('Photos') }}</label>
-          <div class="draft-photos">
-            <div v-for="(p, idx) in draft.photos" :key="idx" class="draft-photo">
-              <img :src="p.previewUrl" :alt="'photo ' + (idx + 1)" />
-              <button
-                type="button"
-                class="draft-photo-remove"
-                :aria-label="$gettext('Supprimer cette photo')"
-                @click="removePhoto(idx)"
-              >
-                <fa-icon icon="xmark" />
-              </button>
-            </div>
-            <label class="draft-photo-add">
-              <fa-icon icon="camera" />
-              <span>{{ $gettext('Ajouter') }}</span>
-              <input type="file" accept="image/*" capture="environment" multiple @change="onPhotoInput" />
-            </label>
-          </div>
-          <p v-if="draft.photos.length" class="draft-photos-hint">
-            {{ draft.photos.length }} {{ $gettext('photo(s) — envoyées avec le brouillon quand le réseau revient.') }}
-          </p>
-        </div>
-
-        <div class="start-outing-modal-actions">
-          <button type="button" class="button is-text" @click="showDraftForm = false">
-            {{ $gettext('Annuler') }}
-          </button>
-          <button
-            type="button"
-            class="button is-primary"
-            :disabled="savingDraft || !draft.activity || !draft.title.trim()"
-            @click="saveDraft"
-          >
-            <fa-icon :icon="savingDraft ? 'rotate' : 'floppy-disk'" :spin="savingDraft" />
-            &nbsp;{{ savingDraft ? $gettext('Enregistrement…') : $gettext('Enregistrer le brouillon') }}
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -269,23 +155,13 @@
 //   1. sessionActive — declares "I'm on the move now". Lightweight.
 //   2. gpsTracking   — actively records the trace. Battery-heavy, opt-in.
 //
-// On stop, three options: save-as-draft (queued for sync), export GPX
-// only, or discard. The draft path pipes into $offline.queueOuting so
-// the existing sync machinery publishes it as soon as the network is
-// back. Ported from V4's StartOutingControl and reshaped for V3's
-// document-header slot.
+// On stop, three options: open V1's OutingEditionView (with the trace
+// pre-filled), export GPX only, or discard. The edition view handles
+// both the online publish and the offline queue via V1's existing
+// mixin — no custom mini-form here so an outing filled in offline has
+// the exact same shape and richness as one filled in online.
 
-import { toast } from 'bulma-toast';
-
-import c2c from '@/js/apis/c2c';
-import constants from '@/js/constants';
-import ol from '@/js/libs/ol';
 import { formatElapsed } from '@/pwa/elapsed-label';
-import { bboxFromPositions } from '@/pwa/geo-bbox';
-
-// Fallback used when the topo has no `activities` array — order matches
-// how likely a mobile user is to record that kind of outing.
-const DEFAULT_ACTIVITIES = ['hiking', 'skitouring', 'rock_climbing', 'snowshoeing'];
 
 export default {
   name: 'StartOutingControl',
@@ -293,8 +169,9 @@ export default {
   props: {
     topoRef: { type: Object, required: true },
     // Route document that the outing is attached to — used to pre-fill
-    // activity + title on the draft form. Optional: when missing, we
-    // fall back to the default activity list and a generic title.
+    // the `?act=<activities>` query param so the edition form lands
+    // with the right activities pre-selected. Optional: when missing,
+    // the user picks activities inside the form.
     route: { type: Object, default: null },
   },
 
@@ -302,22 +179,10 @@ export default {
     return {
       showStartModal: false,
       showStopModal: false,
-      showDraftForm: false,
       showMenu: false,
       wantTracking: false,
-      savingDraft: false,
       tickHandle: null,
       now: Date.now(),
-      draft: {
-        activity: null,
-        date: this.todayString(),
-        title: '',
-        description: '',
-        photos: [],
-        selectedRouteIds: [],
-      },
-      nearbyRoutes: [],
-      loadingNearbyRoutes: false,
     };
   },
 
@@ -340,25 +205,6 @@ export default {
     traceKmLabel() {
       return (Math.round(this.$outingSession.tracedDistanceMeters / 100) / 10).toFixed(1);
     },
-    today() {
-      // Depend on `this.now` (bumped every 30 s) so `today` refreshes
-      // after midnight even if the modal was left open. Otherwise the
-      // draft form would pre-fill yesterday's date.
-      // eslint-disable-next-line no-unused-vars
-      const _tick = this.now;
-      return this.todayString();
-    },
-    availableActivities() {
-      const routeActivities = Array.isArray(this.route?.activities) ? this.route.activities : [];
-      const all = constants.activities || DEFAULT_ACTIVITIES;
-      // Route activities first (most relevant), then the rest of the
-      // official list so the user can override.
-      const ordered = [...routeActivities];
-      for (const a of all) {
-        if (!ordered.includes(a)) ordered.push(a);
-      }
-      return ordered;
-    },
   },
 
   mounted() {
@@ -371,16 +217,9 @@ export default {
 
   beforeDestroy() {
     if (this.tickHandle) window.clearInterval(this.tickHandle);
-    this.clearPhotoPreviews();
   },
 
   methods: {
-    todayString() {
-      const d = new Date();
-      const pad = (n) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    },
-
     openStartModal() {
       // Warn if a session is already running on another topo.
       const s = this.$outingSession;
@@ -410,182 +249,25 @@ export default {
       this.showStopModal = true;
     },
 
-    openDraftForm() {
-      // Pre-fill: activity from route, title from route + date.
-      this.draft.activity =
-        (Array.isArray(this.route?.activities) && this.route.activities[0]) || this.availableActivities[0] || 'hiking';
-      this.draft.date = this.todayString();
-      const routeTitle = this.route ? this.$documentUtils.getDocumentTitle(this.route, this.topoRef.lang) : '';
-      this.draft.title = routeTitle
-        ? `${routeTitle} — ${this.draft.date}`
-        : this.$gettext('Sortie du ') + this.draft.date;
-      this.draft.description = '';
-      this.clearPhotoPreviews();
-      this.draft.photos = [];
-      // Pre-select the current topo. If we can't find nearby routes,
-      // the auto-attach still works via buildOutingPayload's fallback.
-      const currentId = this.topoRef.type === 'route' ? Number(this.topoRef.id) : null;
-      this.draft.selectedRouteIds = currentId ? [currentId] : [];
-      this.nearbyRoutes = [];
+    // Redirect to the V1 edition form with the current route
+    // pre-associated (?r=<id>) and its activities pre-selected
+    // (?act=<a,b>). The GPS trace + metrics travel through the
+    // $outingSession singleton — OutingEditionView.afterLoad reads
+    // them and hydrates the document. Session is cleared on
+    // successful save (see OutingEditionView.watch.modified).
+    startEditingDraft() {
+      const query = {};
+      if (this.topoRef.type === 'route') {
+        query.r = String(this.topoRef.id);
+      }
+      if (Array.isArray(this.route?.activities) && this.route.activities.length) {
+        query.act = this.route.activities.join(',');
+      }
       this.showStopModal = false;
-      this.showDraftForm = true;
-      this.loadNearbyRoutes();
-    },
-
-    // Nearby-routes query: build a bbox from the trace, ask the API for
-    // routes intersecting it. Filters by the picked activity so a
-    // hiking sortie doesn't get flooded with rock-climbing topos in the
-    // same bbox. Best-effort — no error toast, the user always has the
-    // fallback of the pre-checked current topo.
-    async loadNearbyRoutes() {
-      if (!this.hasTrace || !this.$offline.online) return;
-      this.loadingNearbyRoutes = true;
-      try {
-        const bbox = this.traceBbox3857();
-        if (!bbox) return;
-        const query = { bbox, limit: 10 };
-        if (this.draft.activity) query.act = this.draft.activity;
-        const response = await c2c.route.getAll(query);
-        const routes = response?.data?.documents || [];
-        // Keep the current topo pinned at the top so the user always
-        // sees the pre-checked context first.
-        const currentId = this.topoRef.type === 'route' ? Number(this.topoRef.id) : null;
-        const currentIdx = routes.findIndex((r) => r.document_id === currentId);
-        if (currentIdx > 0) {
-          const [current] = routes.splice(currentIdx, 1);
-          routes.unshift(current);
-        }
-        this.nearbyRoutes = routes.slice(0, 5);
-      } catch {
-        this.nearbyRoutes = [];
-      } finally {
-        this.loadingNearbyRoutes = false;
-      }
-    },
-
-    // Thin wrapper — the actual math lives in @/pwa/geo-bbox so it's
-    // shared with NearMeButton and unit-testable in isolation.
-    traceBbox3857() {
-      return bboxFromPositions(ol, this.$outingSession.positions, 500);
-    },
-
-    routeTitleOf(route) {
-      const title = this.$documentUtils.getDocumentTitle(route, this.topoRef.lang);
-      return title || `#${route.document_id}`;
-    },
-
-    onPhotoInput(event) {
-      const files = Array.from(event.target.files || []);
-      for (const file of files) {
-        if (!file.type?.startsWith('image/')) continue;
-        this.draft.photos.push({
-          file,
-          previewUrl: URL.createObjectURL(file),
-        });
-      }
-      event.target.value = '';
-    },
-
-    removePhoto(idx) {
-      const p = this.draft.photos[idx];
-      if (p?.previewUrl) URL.revokeObjectURL(p.previewUrl);
-      this.draft.photos.splice(idx, 1);
-    },
-
-    clearPhotoPreviews() {
-      for (const p of this.draft.photos) {
-        if (p?.previewUrl) URL.revokeObjectURL(p.previewUrl);
-      }
-    },
-
-    // Build a valid C2C v6 outing payload from the current session +
-    // form input. Geometry is a LineString in EPSG:3857 (what the API
-    // stores), stringified as the `geom_detail` column expects.
-    buildOutingPayload() {
-      const positions = this.$outingSession.positions;
-      const coords3857 = positions.map((p) => ol.proj.fromLonLat([p.lon, p.lat]));
-      const geomDetail = {
-        type: 'LineString',
-        coordinates: coords3857,
-      };
-      // Route associations: whatever the user picked in the nearby-routes
-      // list. Falls back to the current topo when the list was empty or
-      // never loaded (offline).
-      const routeIds =
-        this.draft.selectedRouteIds && this.draft.selectedRouteIds.length
-          ? this.draft.selectedRouteIds
-          : this.topoRef.type === 'route'
-          ? [Number(this.topoRef.id)]
-          : [];
-      // Users association is REQUIRED for an outing (see
-      // constants/documentsProperties.json → outing → users:
-      // required=true). Attach the logged-in user as the participant.
-      const userId = this.$user?.id;
-      const payload = {
-        // C2C v6 API requires an explicit document type letter on
-        // every payload; outings use 'o'.
-        type: 'o',
-        activities: [this.draft.activity],
-        date_start: this.draft.date,
-        date_end: this.draft.date,
-        quality: 'medium',
-        locales: [
-          {
-            lang: this.topoRef.lang,
-            title: this.draft.title.trim(),
-            // Summary + description both accepted by the API. Description
-            // carries whatever the user wrote in "Conditions / commentaires"
-            // — leave empty if untouched.
-            description: this.draft.description.trim() || '',
-          },
-        ],
-        associations: {
-          routes: routeIds.map((id) => ({ document_id: id })),
-          users: userId ? [{ document_id: Number(userId) }] : [],
-        },
-      };
-      if (coords3857.length > 1) {
-        payload.geometry = { geom_detail: JSON.stringify(geomDetail) };
-      }
-      // Enrich with auto-computed metrics when the trace supports them.
-      const distance = this.$outingSession.tracedDistanceMeters;
-      const gain = this.$outingSession.elevationGainMeters;
-      const loss = this.$outingSession.elevationLossMeters;
-      if (distance > 0) payload.length_total = Math.round(distance);
-      if (gain > 0) payload.height_diff_up = Math.round(gain);
-      if (loss > 0) payload.height_diff_down = Math.round(loss);
-      return payload;
-    },
-
-    async saveDraft() {
-      if (this.savingDraft) return;
-      this.savingDraft = true;
-      try {
-        const payload = this.buildOutingPayload();
-        const photoFiles = this.draft.photos.map((p) => p.file).filter(Boolean);
-        await this.$offline.queueOuting(payload, { photos: photoFiles });
-        toast({
-          type: 'is-success',
-          position: 'bottom-center',
-          duration: 3500,
-          message: this.$gettext('Brouillon enregistré. Il sera publié dès le retour du réseau.'),
-        });
-        this.finalStop();
-        // If we're already online, kick a sync straight away so the
-        // user's draft doesn't wait until the next network event.
-        if (this.$offline.online) {
-          this.$offline.syncPendingOutings();
-        }
-      } catch {
-        toast({
-          type: 'is-warning',
-          position: 'bottom-center',
-          duration: 4000,
-          message: this.$gettext("Échec de l'enregistrement du brouillon. Réessayez ou exportez la trace en GPX."),
-        });
-      } finally {
-        this.savingDraft = false;
-      }
+      this.showMenu = false;
+      this.$router.push({ name: 'outing-add', params: { lang: this.topoRef.lang }, query }).catch(() => {
+        /* NavigationDuplicated is benign */
+      });
     },
 
     exportGpx() {
@@ -624,11 +306,8 @@ export default {
     },
 
     finalStop() {
-      this.clearPhotoPreviews();
-      this.draft.photos = [];
       this.$outingSession.stop();
       this.showStopModal = false;
-      this.showDraftForm = false;
       this.showMenu = false;
     },
   },
@@ -900,164 +579,6 @@ export default {
   }
 }
 
-.draft-field {
-  margin-bottom: 0.7rem;
-
-  label {
-    display: block;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: #6b6b6b;
-    margin-bottom: 0.25rem;
-  }
-}
-
-.draft-input {
-  width: 100%;
-  padding: 0.5rem 0.6rem;
-  background: white;
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-family: inherit;
-  color: #4a4a4a;
-
-  &:focus {
-    outline: none;
-    border-color: #ff9933;
-    box-shadow: 0 0 0 0.125em rgba(255, 153, 51, 0.25);
-  }
-}
-
-textarea.draft-input {
-  resize: vertical;
-  min-height: 5rem;
-}
-
-.draft-photos {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.draft-photo {
-  position: relative;
-  width: 70px;
-  height: 70px;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-}
-
-.draft-photo-remove {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  background: rgba(0, 0, 0, 0.55);
-  color: white;
-  border: none;
-  border-radius: 50%;
-  font-size: 0.7rem;
-  line-height: 1;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  &:hover,
-  &:focus {
-    background: rgba(0, 0, 0, 0.75);
-    outline: none;
-  }
-}
-
-.draft-photo-add {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 70px;
-  height: 70px;
-  border: 1px dashed rgba(0, 0, 0, 0.25);
-  border-radius: 6px;
-  color: #6b6b6b;
-  font-size: 0.7rem;
-  cursor: pointer;
-  gap: 0.15rem;
-
-  input {
-    display: none;
-  }
-
-  &:hover,
-  &:focus-within {
-    border-color: #ff9933;
-    color: #cc7a29;
-  }
-}
-
-.draft-photos-hint {
-  margin: 0.4rem 0 0;
-  font-size: 0.7rem;
-  color: #6b6b6b;
-}
-
-.draft-routes-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  max-height: 180px;
-  overflow-y: auto;
-}
-
-.draft-route-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.5rem;
-  background: white;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-
-  input {
-    margin: 0;
-    flex: 0 0 auto;
-  }
-
-  &.is-selected {
-    background: #fff5e6;
-    border-color: #ff9933;
-  }
-}
-
-.draft-route-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  small {
-    color: #6b6b6b;
-    font-weight: normal;
-    margin-left: 0.25rem;
-  }
-}
-
 .start-outing-modal-actions {
   margin-top: 1rem;
   display: flex;
@@ -1135,41 +656,6 @@ html[data-theme='dark'] {
         color: #ff8f6b;
         opacity: 0.8;
       }
-    }
-  }
-  .draft-field label {
-    color: #b5b5b5;
-  }
-  .draft-input {
-    background: #1f1f1f;
-    color: #e5e5e5;
-    border-color: rgba(255, 255, 255, 0.15);
-  }
-  .draft-photo {
-    border-color: rgba(255, 255, 255, 0.12);
-  }
-  .draft-photo-add {
-    border-color: rgba(255, 255, 255, 0.18);
-    color: #b5b5b5;
-    &:hover,
-    &:focus-within {
-      border-color: #ff9933;
-      color: #ffb866;
-    }
-  }
-  .draft-photos-hint {
-    color: #9a9a9a;
-  }
-  .draft-route-item {
-    background: #2a2a2a;
-    color: #e5e5e5;
-    border-color: rgba(255, 255, 255, 0.12);
-    &.is-selected {
-      background: #3a2f1a;
-      border-color: #ff9933;
-    }
-    small {
-      color: #b5b5b5;
     }
   }
 }

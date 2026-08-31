@@ -257,6 +257,7 @@ import CotometerWindow from './utils/CotometerWindow';
 import documentEditionViewMixin from './utils/document-edition-view-mixin';
 
 import c2c from '@/js/apis/c2c';
+import ol from '@/js/libs/ol';
 
 export default {
   components: { CotometerWindow },
@@ -319,11 +320,76 @@ export default {
     routeTitle() {
       this.updateRoutes('routeTitle', false);
     },
+
+    // Feature parity with online creation: when the outing was filled
+    // in offline via a "Démarrer la sortie" session and the mixin has
+    // just marked it saved (modified true → false, on either the
+    // online create path or the offline queue path), clear the
+    // session. This is the only reliable signal — afterSave() fires
+    // synchronously before the network resolves, so hooking it would
+    // clear the session even on validation failures.
+    modified(now, before) {
+      if (before === true && now === false && this.$outingSession?.sessionActive) {
+        this.$outingSession.stop();
+      }
+    },
   },
 
   methods: {
     afterLoad() {
       this.showBothDates = this.document.date_start !== this.document.date_end;
+      this.hydrateFromOutingSession();
+    },
+
+    // Feature parity between offline and online outing creation:
+    // when the user came here from StartOutingControl's "Créer la
+    // sortie" button, hydrate the fresh document with the GPS trace +
+    // auto-computed metrics captured during the session. Everything
+    // else the user fills through the same form as online, so the
+    // resulting outing has the exact same shape and richness.
+    //
+    // Idempotent — only runs when: (a) we're in add mode, (b) a
+    // session is active, (c) the session's topoRef matches the ?r=
+    // query param (so unrelated /outings/add opens don't clobber a
+    // pristine form with a stale trace).
+    hydrateFromOutingSession() {
+      if (this.mode !== 'add') return;
+      const session = this.$outingSession;
+      if (!session?.sessionActive) return;
+      const routeIdParam = this.$route.query.r;
+      if (routeIdParam && session.topoRef?.type === 'route') {
+        if (String(session.topoRef.id) !== String(routeIdParam)) return;
+      }
+
+      // Pre-fill dates from the session start (the user is filling
+      // right after the outing — typical case). Overwrites the
+      // buildDocument default (today) only if there's a startedAt.
+      if (session.startedAt) {
+        const iso = new Date(session.startedAt).toISOString().slice(0, 10);
+        this.document.date_start = iso;
+        this.document.date_end = iso;
+        this.showBothDates = false;
+      }
+
+      if (!session.positions.length) return;
+
+      // GPS trace as a LineString in EPSG:3857 (C2C's storage projection).
+      const coords3857 = session.positions.map((p) => ol.proj.fromLonLat([p.lon, p.lat]));
+      if (coords3857.length > 1) {
+        this.document.geometry.geom_detail = JSON.stringify({
+          type: 'LineString',
+          coordinates: coords3857,
+        });
+      }
+
+      // Auto-computed metrics from the trace — round to integers, the
+      // API stores meters as ints anyway.
+      const distance = Math.round(session.tracedDistanceMeters);
+      const gain = Math.round(session.elevationGainMeters);
+      const loss = Math.round(session.elevationLossMeters);
+      if (distance > 0) this.document.length_total = distance;
+      if (gain > 0) this.document.height_diff_up = gain;
+      if (loss > 0) this.document.height_diff_down = loss;
     },
 
     updateBbox(bbox) {
