@@ -15,13 +15,12 @@
 // Global reminder that an outing session is running. Only visible when
 // the user is NOT already on the topo the session is anchored to —
 // otherwise the StartOutingControl in the header already shows the
-// state and this would be redundant.
+// state and this banner would duplicate it.
 //
-// Sits inside the App shell above the BottomNav, low-z so it doesn't
-// cover modals. Tapping it navigates back to the topo so the user can
-// stop / adjust / add photos.
+// Sits inside the App shell above the BottomNav. Tapping it navigates
+// back to the topo so the user can stop / adjust / add photos.
 
-const TAB_ROUTES_WITH_HEADER_CONTROL = new Set(['route', 'outing']);
+import { formatElapsed } from '@/pwa/elapsed-label';
 
 export default {
   name: 'OutingSessionBanner',
@@ -40,28 +39,23 @@ export default {
     active() {
       return !!(this.$outingSession?.sessionActive && this.topoRef);
     },
+    // True when the user is currently viewing the topo where the
+    // session was started — in that case the in-header control shows
+    // the state, so this banner would be redundant. Uses a strict
+    // match on route name + id so an unrelated outing page still
+    // displays the banner (previous implementation used to swallow
+    // every outing page, hiding the banner too aggressively).
     onOwnTopo() {
-      // Same topo the session was started on — the in-header control
-      // owns the UI in that case.
       if (!this.active) return false;
       const t = this.topoRef;
       const route = this.$route;
-      if (!TAB_ROUTES_WITH_HEADER_CONTROL.has(route.name)) return false;
-      return (
-        (route.name === t.type || (route.name === 'outing' && t.type === 'route')) &&
-        String(route.params.id) === String(t.id)
-      );
+      return route.name === t.type && String(route.params.id) === String(t.id);
     },
     visible() {
       return this.active && !this.onOwnTopo;
     },
     elapsedLabel() {
-      const started = this.$outingSession.startedAt;
-      if (!started) return '';
-      const sec = Math.floor((this.now - started) / 1000);
-      const h = Math.floor(sec / 3600);
-      const m = Math.floor((sec % 3600) / 60);
-      return h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m} min`;
+      return formatElapsed(this.$outingSession.startedAt, this.now);
     },
     metricsLabel() {
       const km = this.$outingSession.tracedDistanceMeters / 1000;
@@ -70,17 +64,37 @@ export default {
     },
   },
 
-  mounted() {
-    this.tickHandle = window.setInterval(() => {
-      this.now = Date.now();
-    }, 30000);
+  watch: {
+    // Only run the elapsed-time tick while there's actually a session
+    // to display. Idle branches (no session, or user on the session's
+    // own topo) don't schedule the interval at all.
+    visible: {
+      handler(now) {
+        if (now) this.startTick();
+        else this.stopTick();
+      },
+      immediate: true,
+    },
   },
 
   beforeDestroy() {
-    if (this.tickHandle) window.clearInterval(this.tickHandle);
+    this.stopTick();
   },
 
   methods: {
+    startTick() {
+      if (this.tickHandle) return;
+      this.now = Date.now();
+      this.tickHandle = window.setInterval(() => {
+        this.now = Date.now();
+      }, 30000);
+    },
+    stopTick() {
+      if (this.tickHandle) {
+        window.clearInterval(this.tickHandle);
+        this.tickHandle = null;
+      }
+    },
     goToTopo() {
       if (!this.topoRef) return;
       this.$router

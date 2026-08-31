@@ -270,6 +270,7 @@ import { toast } from 'bulma-toast';
 import c2c from '@/js/apis/c2c';
 import constants from '@/js/constants';
 import ol from '@/js/libs/ol';
+import { formatElapsed } from '@/pwa/elapsed-label';
 import { bboxFromPositions } from '@/pwa/geo-bbox';
 
 // Fallback used when the topo has no `activities` array — order matches
@@ -321,13 +322,7 @@ export default {
       );
     },
     elapsedLabel() {
-      const started = this.$outingSession.startedAt;
-      if (!started) return '';
-      const sec = Math.floor((this.now - started) / 1000);
-      const h = Math.floor(sec / 3600);
-      const m = Math.floor((sec % 3600) / 60);
-      if (h > 0) return `${h}h${String(m).padStart(2, '0')}`;
-      return `${m} min`;
+      return formatElapsed(this.$outingSession.startedAt, this.now);
     },
     hasTrace() {
       return this.$outingSession.positions.length > 0;
@@ -336,6 +331,11 @@ export default {
       return (Math.round(this.$outingSession.tracedDistanceMeters / 100) / 10).toFixed(1);
     },
     today() {
+      // Depend on `this.now` (bumped every 30 s) so `today` refreshes
+      // after midnight even if the modal was left open. Otherwise the
+      // draft form would pre-fill yesterday's date.
+      // eslint-disable-next-line no-unused-vars
+      const _tick = this.now;
       return this.todayString();
     },
     availableActivities() {
@@ -582,7 +582,9 @@ export default {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Delay the revoke so slow browsers (iOS Safari especially) have
+      // time to start the download before the blob URL becomes invalid.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       this.showMenu = false;
     },
 

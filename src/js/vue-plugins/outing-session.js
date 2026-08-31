@@ -18,6 +18,21 @@ const STORAGE_KEY = 'v3.outingSession';
 const DEFAULT_TRACK_INTERVAL_MS = 5000; // fallback if $appSettings hasn't loaded yet
 const MIN_DISTANCE_M = 3; // ignore jitter under 3m (urban canyon GPS noise)
 const MAX_STALE_MS = 48 * 3600 * 1000; // drop sessions older than 48h
+// Debounce persist() on `positions` — a long trace (thousands of
+// points) shouldn't JSON.stringify the whole state on every fix. 2 s
+// balances battery / CPU vs. the risk of losing the last few points
+// on an unexpected crash.
+const POSITIONS_PERSIST_DEBOUNCE_MS = 2000;
+
+// XML entity escaping for GPX generation. Hoisted so it's not
+// re-created on every exportGpx() call.
+function escapeXml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 function loadSnapshot() {
   try {
@@ -115,15 +130,11 @@ export default function install(Vue) {
         else this.stopGpsWatch();
         this.snapshot();
       },
-      positions: { handler: 'snapshot', deep: false },
+      // Positions accrue at ~5 s intervals — debouncing writes to
+      // localStorage prevents a 3600-point trace from re-serializing
+      // ~350 KB on every fix.
+      positions: { handler: 'snapshotDebounced', deep: false },
       topoRef: { handler: 'snapshot', deep: true },
-    },
-
-    beforeDestroy() {
-      this.stopGpsWatch();
-      if (this._onVisibility && typeof document !== 'undefined') {
-        document.removeEventListener('visibilitychange', this._onVisibility);
-      }
     },
 
     created() {
@@ -150,9 +161,30 @@ export default function install(Vue) {
       document.addEventListener('visibilitychange', this._onVisibility);
     },
 
+    beforeDestroy() {
+      this.stopGpsWatch();
+      if (this._persistTimer) {
+        clearTimeout(this._persistTimer);
+        // Flush pending trace on unmount to avoid losing points that
+        // were still inside the debounce window.
+        persist(this.$data);
+      }
+      if (this._onVisibility && typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', this._onVisibility);
+      }
+    },
+
     methods: {
       snapshot() {
         persist(this.$data);
+      },
+
+      snapshotDebounced() {
+        if (this._persistTimer) clearTimeout(this._persistTimer);
+        this._persistTimer = window.setTimeout(() => {
+          this._persistTimer = null;
+          persist(this.$data);
+        }, POSITIONS_PERSIST_DEBOUNCE_MS);
       },
 
       // Start an outing on a given topo. Does NOT enable GPS tracking
@@ -250,12 +282,6 @@ export default function install(Vue) {
       // Build a GPX 1.1 document from the recorded trace. Standard
       // format compatible with Garmin / Strava / Komoot / etc.
       exportGpx({ name = 'Sortie Camptocamp', description = '' } = {}) {
-        const escape = (s) =>
-          String(s ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
         const trkpts = this.positions
           .map((p) => {
             const ele = Number.isFinite(p.alt) ? `      <ele>${p.alt.toFixed(1)}</ele>\n` : '';
@@ -266,12 +292,12 @@ export default function install(Vue) {
         return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Camptocamp mobile" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>${escape(name)}</name>
-    <desc>${escape(description)}</desc>
+    <name>${escapeXml(name)}</name>
+    <desc>${escapeXml(description)}</desc>
     <time>${new Date().toISOString()}</time>
   </metadata>
   <trk>
-    <name>${escape(name)}</name>
+    <name>${escapeXml(name)}</name>
     <trkseg>
 ${trkpts}
     </trkseg>

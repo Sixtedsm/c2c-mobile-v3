@@ -247,13 +247,25 @@ export default function install(Vue) {
       },
     },
 
-    async created() {
+    created() {
       window.addEventListener('online', this.handleOnline);
       window.addEventListener('offline', this.handleOffline);
-      await this.refresh();
-      if (this.online && this.pendingOutings.length) {
-        this.syncPendingOutings();
-      }
+      // Refresh in the background so the plugin is immediately usable
+      // and the first paint isn't blocked by IndexedDB reads (which
+      // can be 100-200 ms on a user with 20+ saved docs). Components
+      // that use $offline.savedDocs / .folders / .pendingOutings re-
+      // render reactively as soon as refresh() populates them.
+      this.refresh()
+        .then(() => {
+          if (this.online && this.pendingOutings.length) {
+            this.syncPendingOutings();
+          }
+        })
+        .catch(() => {
+          /* If IndexedDB is unavailable (private-mode Safari, quota
+             exceeded…) we still want the app to start; the offline
+             state just stays empty. */
+        });
     },
 
     methods: {
@@ -471,10 +483,21 @@ export default function install(Vue) {
         // Photos are stored as raw File/Blob in IndexedDB (idb-keyval
         // handles Blobs natively — no base64 blow-up). They're uploaded
         // + associated to the outing at sync time; see syncPendingOutings.
+        const photoList = Array.isArray(photos) ? photos.slice(0, 20) : [];
+        // Warn if the user attached more than the queue can carry so
+        // the extras don't disappear silently.
+        if (Array.isArray(photos) && photos.length > 20) {
+          toast({
+            type: 'is-warning',
+            position: 'bottom-center',
+            duration: 4000,
+            message: `Seules les 20 premières photos ont été mises en file (sur ${photos.length}). Ajoutez les autres directement sur le site après publication.`,
+          });
+        }
         const entry = await store.enqueuePendingOuting({
           payload: document,
           title: document?.locales?.[0]?.title || this.$gettext?.('Untitled') || 'Untitled',
-          photos: Array.isArray(photos) ? photos.slice(0, 20) : [],
+          photos: photoList,
         });
         this.pendingOutings = await store.listPendingOutings();
         return entry;
@@ -502,23 +525,33 @@ export default function install(Vue) {
             remaining.push(item);
             continue;
           }
+          // Preserve uploaded image ids across retries — if photos were
+          // successfully uploaded on a prior attempt and only the
+          // outing.create() call failed, don't re-upload (would create
+          // duplicate images on the user's C2C account).
+          let uploadedImageIds = item.uploadedImageIds || [];
           try {
-            // If the item has photos captured offline, upload + register
-            // them first so we can attach image_ids to the outing before
-            // creating it. A single upload failure aborts the whole item
-            // for this attempt — safer to retry the whole thing than to
-            // publish an outing missing photos.
+            if (Array.isArray(item.photos) && item.photos.length > 0 && uploadedImageIds.length === 0) {
+              uploadedImageIds = await uploadPhotosAndCreateImages(item.photos);
+            }
             const payload = { ...item.payload };
-            if (Array.isArray(item.photos) && item.photos.length > 0) {
-              const imageIds = await uploadPhotosAndCreateImages(item.photos);
+            if (uploadedImageIds.length > 0) {
               payload.associations = {
                 ...(payload.associations || {}),
-                images: [...(payload.associations?.images || []), ...imageIds.map((document_id) => ({ document_id }))],
+                images: [
+                  ...(payload.associations?.images || []),
+                  ...uploadedImageIds.map((document_id) => ({ document_id })),
+                ],
               };
             }
             const response = await c2c.outing.create(payload);
             if (!response?.data?.document_id) {
-              remaining.push({ ...item, attempts: item.attempts + 1, lastError: 'no-id' });
+              remaining.push({
+                ...item,
+                attempts: item.attempts + 1,
+                lastError: 'no-id',
+                uploadedImageIds,
+              });
             } else {
               published += 1;
             }
@@ -535,6 +568,7 @@ export default function install(Vue) {
                 attempts: item.attempts + 1,
                 lastError: 409,
                 conflict: true,
+                uploadedImageIds,
               });
               newConflicts += 1;
             } else {
@@ -542,6 +576,7 @@ export default function install(Vue) {
                 ...item,
                 attempts: item.attempts + 1,
                 lastError: status ?? error?.message ?? 'network',
+                uploadedImageIds,
               });
             }
           }
@@ -609,7 +644,11 @@ export default function install(Vue) {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // Delay the revoke so slow browsers (iOS Safari especially)
+        // have time to start the download before the blob URL becomes
+        // invalid — the synchronous revoke pattern silently fails on
+        // some devices.
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
       },
 
       async removePendingOuting(id) {
