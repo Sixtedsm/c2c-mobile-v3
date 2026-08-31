@@ -21,7 +21,16 @@ function uploadOnePhoto(file) {
       () => {},
       () => {},
       (document) => resolve(document),
-      (err) => reject(err || new Error('upload failed'))
+      (err) => {
+        // Best-effort: pull a real reason out of whatever V1's upload
+        // chain hands us (Axios error, DOM event, string, undefined).
+        const msg =
+          err?.response?.data?.description ||
+          err?.response?.statusText ||
+          err?.message ||
+          (typeof err === 'string' ? err : 'upload failed');
+        reject(new Error(msg));
+      }
     );
   });
 }
@@ -557,6 +566,15 @@ export default function install(Vue) {
             }
           } catch (error) {
             const status = error?.response?.status;
+            // Pull the richest human-readable reason we can. C2C's
+            // API returns `{status:"error", errors:[{name,description}]}`
+            // on validation failures — surface that so the offline UI
+            // shows "400 activities: required" instead of just "400".
+            const apiErrors = error?.response?.data?.errors;
+            const bodyDetail = apiErrors
+              ? apiErrors.map((e) => `${e.name || 'field'}: ${e.description || 'error'}`).join(', ')
+              : error?.response?.data?.description || error?.message || 'network';
+            const readable = status ? `${status} — ${bodyDetail}` : bodyDetail;
             // 409 Conflict = a referenced route / waypoint was edited
             // upstream between the offline draft and the publish attempt
             // (CDC §2.4 "gestion des conflits"). Freeze the item and
@@ -566,7 +584,7 @@ export default function install(Vue) {
               remaining.push({
                 ...item,
                 attempts: item.attempts + 1,
-                lastError: 409,
+                lastError: readable,
                 conflict: true,
                 uploadedImageIds,
               });
@@ -575,7 +593,7 @@ export default function install(Vue) {
               remaining.push({
                 ...item,
                 attempts: item.attempts + 1,
-                lastError: status ?? error?.message ?? 'network',
+                lastError: readable,
                 uploadedImageIds,
               });
             }
