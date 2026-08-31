@@ -795,7 +795,9 @@ body {
 .page-content {
   position: absolute;
   top: calc(52px + env(safe-area-inset-top));
-  bottom: calc(52px + env(safe-area-inset-bottom));
+  // Bottom nav bumped 52 → 66 px after beta feedback (patapouet, forum
+  // 2026-08-10). Top stays at 52 (MobileTopBar unchanged).
+  bottom: calc(66px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
   overflow-y: auto;

@@ -118,9 +118,9 @@ export default {
   position: fixed;
   left: 0;
   right: 0;
-  // Just above the BottomNav (52 + safe-area). The margin keeps it
+  // Just above the BottomNav (66 + safe-area). The margin keeps it
   // pinned inside the safe area on iPhone home-indicator devices.
-  bottom: calc(52px + env(safe-area-inset-bottom) + 8px);
+  bottom: calc(66px + env(safe-area-inset-bottom) + 8px);
   z-index: 27;
   display: flex;
   justify-content: center;

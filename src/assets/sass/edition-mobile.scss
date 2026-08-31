@@ -110,39 +110,54 @@
 
   // Sticky save bar — the SaveDocumentRow sits at the very bottom of a
   // 3-screen-tall form. On mobile that means the user scrolls forever
-  // just to hit Save. Pinning it above the BottomNav (52 px) keeps the
+  // just to hit Save. Pinning it above the BottomNav (66 px) keeps the
   // primary action reachable at all times. Compound selector so it
   // doesn't collide with the top-level .has-edition-width block above.
+  //
+  // Beta feedback (patapouet, forum 2026-08-10): the full row (Save +
+  // Preview + Comment input) ate ~25 % of the viewport. Trim to just
+  // the primary Save button on mobile — Preview and Comment stay in
+  // the desktop flow above the sticky bar for users who really need
+  // them, but the sticky bar itself is now a slim ~55 px band.
   .has-edition-width > .columns.is-mobile.is-multiline:last-child {
     position: sticky;
-    bottom: calc(52px + env(safe-area-inset-bottom));
+    bottom: calc(66px + env(safe-area-inset-bottom));
     left: 0;
     right: 0;
     background: white;
-    padding: 0.5rem 0.5rem;
+    padding: 0.4rem 0.5rem;
     margin: 0.75rem -0.5rem 0;
     box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.08);
     border-top: 1px solid rgba(0, 0, 0, 0.08);
     z-index: 15;
 
     .column {
-      padding: 0.25rem 0.35rem;
+      padding: 0.2rem 0.35rem;
     }
 
     // Save button dominates the row — bigger, filled, first in tab order.
     .button.is-primary {
       min-height: 44px;
-      padding: 0 1.2rem;
+      padding: 0 1.4rem;
       font-weight: 600;
-    }
-    .button:not(.is-primary) {
-      min-height: 44px;
+      width: 100%;
     }
 
-    // The comment input takes the full row on mobile.
+    // Trim to essentials: hide the Preview button (secondary — still
+    // reachable via the "Prévisualiser" pill in the EditionContainer
+    // title bar) and hide the change-comment input (optional field
+    // used only for edits, saves work fine with an empty comment).
+    // Result on mobile: a slim ~55 px sticky bar with a single big
+    // full-width "Save" button.
+    .column.is-narrow:not(:first-child),
     .column.is-12-mobile {
-      flex: 0 0 100%;
-      max-width: 100%;
+      display: none;
+    }
+
+    // Make the primary Save column take the full width now that the
+    // siblings are hidden.
+    .column.is-narrow:first-child {
+      flex: 1 1 100%;
     }
   }
 

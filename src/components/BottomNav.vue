@@ -104,11 +104,14 @@ export default {
   z-index: 28;
   background: white;
   border-top: 1px solid rgba(0, 0, 0, 0.12);
-  // Padding-bottom keeps a 4px floor (Android where safe-area is 0)
-  // plus the env() inset (iOS home indicator). Total nav height ~52px
-  // on Android, ~52 + indicator on iPhones with notches.
-  padding-bottom: calc(4px + env(safe-area-inset-bottom));
-  padding-top: 2px;
+  // Padding-bottom keeps a 6px floor (Android where safe-area is 0)
+  // plus the env() inset (iOS home indicator). Total nav height 66 px
+  // on Android, 66 + indicator on iPhones with notches. Bumped from
+  // 52 → 66 after beta feedback (patapouet, forum 2026-08-10): the
+  // old 46 px list + 4 px pad was too close to Safari's bottom URL
+  // bar, users kept mis-tapping the URL bar instead of the tab.
+  padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  padding-top: 4px;
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
 }
 
@@ -117,7 +120,7 @@ export default {
   list-style: none;
   margin: 0;
   padding: 0;
-  height: 46px;
+  height: 56px;
 }
 
 .bottom-nav-item {
@@ -131,10 +134,10 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   color: #9a9a9a;
   text-decoration: none;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 500;
   transition: color 0.15s;
 
@@ -157,7 +160,7 @@ export default {
 }
 
 .bottom-nav-icon {
-  font-size: 1.1rem;
+  font-size: 1.3rem;
 }
 
 // Pending-sync badge (#21). Anchored top-right of the icon, small and
