@@ -264,6 +264,25 @@ export default {
 
   mixins: [documentEditionViewMixin],
 
+  // The mixin's beforeRouteLeave runs first (Vue Router 3 chains
+  // guards from mixins and components via the `created` merge
+  // strategy). If the user cancels the confirm-on-unsaved-changes
+  // there, this guard is skipped — session stays intact. If the mixin
+  // lets navigation through with `modified: false` (only happens on a
+  // successful save — the mixin flips it in both the online create
+  // and the offline queue `.then` callbacks), we consume the session
+  // so the "Sortie en cours" banner disappears.
+  //
+  // Preferred over a watch on `modified` because watchers fire
+  // asynchronously and the router transition can tear the component
+  // down before the watcher runs.
+  beforeRouteLeave(to, from, next) {
+    if (this.mode === 'add' && !this.modified && this.$outingSession?.sessionActive) {
+      this.$outingSession.stop();
+    }
+    next();
+  },
+
   data() {
     return {
       showBothDates: false,
@@ -319,19 +338,6 @@ export default {
 
     routeTitle() {
       this.updateRoutes('routeTitle', false);
-    },
-
-    // Feature parity with online creation: when the outing was filled
-    // in offline via a "Démarrer la sortie" session and the mixin has
-    // just marked it saved (modified true → false, on either the
-    // online create path or the offline queue path), clear the
-    // session. This is the only reliable signal — afterSave() fires
-    // synchronously before the network resolves, so hooking it would
-    // clear the session even on validation failures.
-    modified(now, before) {
-      if (before === true && now === false && this.$outingSession?.sessionActive) {
-        this.$outingSession.stop();
-      }
     },
   },
 

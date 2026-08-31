@@ -124,6 +124,22 @@
               </small>
             </span>
           </button>
+          <!-- "Reprendre plus tard": stops the battery-heavy GPS
+               watch but keeps the session (trace + topo) alive so the
+               user can come back and hit "Créer la sortie" later,
+               even offline. Session state survives reloads via
+               localStorage. Typical use: finished a route on the
+               field, want to stop tracking without filling the form
+               right now (driving, tired, phone battery low). -->
+          <button type="button" class="start-outing-stop-btn" @click="pauseForLater">
+            <fa-icon icon="pause" />
+            <span>
+              <strong>{{ $gettext('Reprendre plus tard') }}</strong>
+              <small>{{
+                $gettext('Coupe le GPS mais garde la trace. La sortie reste ouverte, à remplir plus tard.')
+              }}</small>
+            </span>
+          </button>
           <button v-if="hasTrace" type="button" class="start-outing-stop-btn" @click="exportGpxThenStop">
             <fa-icon icon="download" />
             <span>
@@ -160,6 +176,8 @@
 // both the online publish and the offline queue via V1's existing
 // mixin — no custom mini-form here so an outing filled in offline has
 // the exact same shape and richness as one filled in online.
+
+import { toast } from 'bulma-toast';
 
 import { formatElapsed } from '@/pwa/elapsed-label';
 
@@ -294,6 +312,24 @@ export default {
     exportGpxThenStop() {
       this.exportGpx();
       this.finalStop();
+    },
+
+    // Halt the battery-draining GPS watch but keep the session state
+    // intact so the user can pick it back up later from the topo pill
+    // or the persistent bottom banner. Works fully offline: the state
+    // is snapshotted to localStorage by the outing-session plugin.
+    pauseForLater() {
+      this.$outingSession.gpsTracking = false;
+      this.showStopModal = false;
+      this.showMenu = false;
+      toast({
+        type: 'is-info',
+        position: 'bottom-center',
+        duration: 4500,
+        message: this.$gettext(
+          'Sortie mise en pause. GPS coupé, trace conservée. Reprends-la depuis le topo ou la bannière quand tu veux.'
+        ),
+      });
     },
 
     discardAndStop() {
