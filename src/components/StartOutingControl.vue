@@ -507,10 +507,13 @@ export default {
           : this.topoRef.type === 'route'
           ? [Number(this.topoRef.id)]
           : [];
+      // Users association is REQUIRED for an outing (see
+      // constants/documentsProperties.json → outing → users:
+      // required=true). Attach the logged-in user as the participant.
+      const userId = this.$user?.id;
       const payload = {
         // C2C v6 API requires an explicit document type letter on
-        // every payload; outings use 'o'. Missing this field returns a
-        // 400 that surfaces to the sync queue as an "Attempts: N" loop.
+        // every payload; outings use 'o'.
         type: 'o',
         activities: [this.draft.activity],
         date_start: this.draft.date,
@@ -520,11 +523,15 @@ export default {
           {
             lang: this.topoRef.lang,
             title: this.draft.title.trim(),
-            description: this.draft.description.trim() || undefined,
+            // Summary + description both accepted by the API. Description
+            // carries whatever the user wrote in "Conditions / commentaires"
+            // — leave empty if untouched.
+            description: this.draft.description.trim() || '',
           },
         ],
         associations: {
           routes: routeIds.map((id) => ({ document_id: id })),
+          users: userId ? [{ document_id: Number(userId) }] : [],
         },
       };
       if (coords3857.length > 1) {
