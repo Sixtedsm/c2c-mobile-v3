@@ -508,6 +508,10 @@ export default {
           ? [Number(this.topoRef.id)]
           : [];
       const payload = {
+        // C2C v6 API requires an explicit document type letter on
+        // every payload; outings use 'o'. Missing this field returns a
+        // 400 that surfaces to the sync queue as an "Attempts: N" loop.
+        type: 'o',
         activities: [this.draft.activity],
         date_start: this.draft.date,
         date_end: this.draft.date,

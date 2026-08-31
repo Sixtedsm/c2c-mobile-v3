@@ -70,6 +70,19 @@
               {{ $gettext('Attempts:') }} {{ item.attempts }}
             </span>
           </div>
+          <!-- Show the last API error verbatim so the user can screenshot
+               a real diagnostic message rather than the generic "Échec
+               de la synchronisation" toast. Common values: 400 (payload
+               invalid), 401/403 (session expired), 500 (server), or a
+               network error string. -->
+          <p
+            v-if="!item.conflict && item.attempts > 0 && item.lastError"
+            class="pending-outing-error"
+            :title="$gettext('Détail de la dernière erreur API')"
+          >
+            <fa-icon icon="circle-info" />
+            &nbsp;{{ $gettext('Dernière erreur :') }} <code>{{ item.lastError }}</code>
+          </p>
           <!-- Conflict resolution row (Lot 5 §2.4): shown only when the
                API returned 409 on a previous attempt. Three moves:
                retry as-is, export the payload as JSON for later manual
@@ -771,5 +784,26 @@ export default {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+}
+
+.pending-outing-error {
+  flex: 1 1 100%;
+  margin: 0.35rem 0 0;
+  padding: 0.4rem 0.55rem;
+  background: hsl(0, 80%, 96%);
+  border-left: 3px solid hsl(0, 60%, 55%);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: hsl(0, 40%, 30%);
+  overflow-wrap: anywhere;
+
+  code {
+    background: hsl(0, 60%, 90%);
+    color: hsl(0, 60%, 25%);
+    padding: 0.05rem 0.3rem;
+    border-radius: 2px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+  }
 }
 </style>

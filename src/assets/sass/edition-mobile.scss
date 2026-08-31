@@ -108,54 +108,46 @@
     }
   }
 
-  // Sticky save bar — the SaveDocumentRow sits at the very bottom of a
-  // 3-screen-tall form. On mobile that means the user scrolls forever
-  // just to hit Save. Pinning it above the BottomNav (66 px) keeps the
-  // primary action reachable at all times. Compound selector so it
-  // doesn't collide with the top-level .has-edition-width block above.
+  // SaveDocumentRow at the bottom of edition forms.
   //
-  // Beta feedback (patapouet, forum 2026-08-10): the full row (Save +
-  // Preview + Comment input) ate ~25 % of the viewport. Trim to just
-  // the primary Save button on mobile — Preview and Comment stay in
-  // the desktop flow above the sticky bar for users who really need
-  // them, but the sticky bar itself is now a slim ~55 px band.
+  // Beta feedback (patapouet, forum 2026-08-10):
+  //  1. Full row (Save + Preview + Comment input) ate ~25 % of the
+  //     viewport when sticky → trimmed to the primary Save button only.
+  //  2. Sticky bar was floating over content, felt intrusive → reverted
+  //     to natural flow. Users scroll to the bottom of the form to save,
+  //     which is the standard mobile pattern.
+  //
+  // Preview stays reachable via the "Prévisualiser" pill in the
+  // EditionContainer title bar. The change-comment input is optional
+  // (only meaningful in edit mode) — hidden on mobile, saves work fine
+  // with an empty comment.
   .has-edition-width > .columns.is-mobile.is-multiline:last-child {
-    position: sticky;
-    bottom: calc(66px + env(safe-area-inset-bottom));
-    left: 0;
-    right: 0;
-    background: white;
-    padding: 0.4rem 0.5rem;
-    margin: 0.75rem -0.5rem 0;
-    box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.08);
+    margin: 1rem 0 1.5rem;
+    padding: 0.75rem 0.5rem;
+    background: hsl(0, 0%, 98%);
     border-top: 1px solid rgba(0, 0, 0, 0.08);
-    z-index: 15;
+    border-radius: 4px;
 
     .column {
       padding: 0.2rem 0.35rem;
     }
 
-    // Save button dominates the row — bigger, filled, first in tab order.
+    // Save button — big, filled, full-width so it's an obvious tap target.
     .button.is-primary {
-      min-height: 44px;
+      min-height: 48px;
       padding: 0 1.4rem;
       font-weight: 600;
       width: 100%;
+      font-size: 1rem;
     }
 
-    // Trim to essentials: hide the Preview button (secondary — still
-    // reachable via the "Prévisualiser" pill in the EditionContainer
-    // title bar) and hide the change-comment input (optional field
-    // used only for edits, saves work fine with an empty comment).
-    // Result on mobile: a slim ~55 px sticky bar with a single big
-    // full-width "Save" button.
+    // Hide Preview button and Comment input on mobile (see comment above).
     .column.is-narrow:not(:first-child),
     .column.is-12-mobile {
       display: none;
     }
 
-    // Make the primary Save column take the full width now that the
-    // siblings are hidden.
+    // Make the primary Save column take the full width.
     .column.is-narrow:first-child {
       flex: 1 1 100%;
     }
@@ -198,13 +190,12 @@
   }
 }
 
-// Dark mode overrides so the sticky save bar reads on a dark canvas.
+// Dark mode overrides so the save row reads on a dark canvas.
 html[data-theme='dark'] {
   @include mobile {
     .has-edition-width > .columns.is-mobile.is-multiline:last-child {
       background: #232323;
       border-top-color: rgba(255, 255, 255, 0.08);
-      box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.4);
     }
     .section-item .section-header .button.is-info {
       background: transparent !important;
