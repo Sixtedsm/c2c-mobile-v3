@@ -115,6 +115,12 @@ const routes = [
     component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumTopicView'),
     props: true,
   },
+  {
+    path: '/forum/u/:username',
+    name: 'forum-user',
+    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumUserView'),
+    props: true,
+  },
 ];
 
 const addDocumentTypeView = function (def, viewComponent, editionComponent) {
