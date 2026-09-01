@@ -127,6 +127,20 @@
         </section>
       </template>
     </div>
+
+    <!-- Floating action button to compose a new topic. Discourse-
+         standard "+" pattern the whole forum world already knows.
+         Requires login; when the user isn't logged in we still show
+         the button but the target route (meta.requiresAuth: true)
+         will bounce them to /auth. -->
+    <router-link
+      :to="{ name: 'forum-new-topic' }"
+      class="forum-fab"
+      :title="$gettext('Nouveau sujet')"
+      :aria-label="$gettext('Nouveau sujet')"
+    >
+      <fa-icon icon="plus" />
+    </router-link>
   </section>
 </template>
 
@@ -417,6 +431,34 @@ export default {
 
 .forum-error {
   color: #b91c1c;
+}
+
+// Compose-topic FAB — bottom-right, floats above the ForumBottomNav.
+// Uses the same 66-px safe-area offset the BottomNav applies so it
+// nests cleanly on iPhone home-indicator devices.
+.forum-fab {
+  position: fixed;
+  right: 1rem;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  z-index: 27;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #ff9933;
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  text-decoration: none;
+
+  &:hover,
+  &:focus {
+    background: #e6791f;
+    color: white;
+    text-decoration: none;
+  }
 }
 </style>
 

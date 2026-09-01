@@ -22,7 +22,23 @@
         </template>
       </p>
 
-      <h1 v-if="title" class="ft-title">{{ title }}</h1>
+      <div class="ft-header-row">
+        <h1 v-if="title" class="ft-title">{{ title }}</h1>
+        <button
+          v-if="topic && $user.isLogged"
+          type="button"
+          class="ft-bookmark"
+          :class="{ 'is-bookmarked': isBookmarked }"
+          :disabled="bookmarking"
+          :title="isBookmarked ? $gettext('Retirer le marque-page') : $gettext('Ajouter aux marque-pages')"
+          @click="toggleBookmark"
+        >
+          <fa-icon
+            :icon="bookmarking ? 'spinner' : isBookmarked ? 'bookmark' : ['far', 'bookmark']"
+            :spin="bookmarking"
+          />
+        </button>
+      </div>
       <div v-if="topicCategory" class="ft-cat-line">
         <category-pill :category="topicCategory" :parent="topicParentCategory" />
       </div>
@@ -59,8 +75,35 @@
               <time class="ft-post-date">#{{ post.post_number }} · {{ formatDate(post.created_at) }}</time>
             </div>
           </header>
-          <div class="ft-post-body prose" v-html="post.cooked" />
-          <footer class="ft-post-actions">
+          <!-- Inline edit editor for a post, shown in place of the
+               rendered `cooked` HTML when the user is editing one of
+               their own messages. Uses the same ReplyEditor as the
+               reply flow / new-topic flow so formatting stays
+               consistent. -->
+          <div v-if="editingPostId === post.id" class="ft-post-edit">
+            <reply-editor
+              v-model="editRaw"
+              :placeholder="$gettext('Contenu du message…')"
+              :disabled="savingEdit"
+              rows="6"
+            />
+            <div class="ft-reply-actions">
+              <button type="button" class="button is-text is-small" :disabled="savingEdit" @click="cancelEdit">
+                {{ $gettext('Annuler') }}
+              </button>
+              <button
+                type="button"
+                class="button is-primary is-small"
+                :disabled="savingEdit || !editRaw.trim()"
+                @click="saveEdit(post)"
+              >
+                <fa-icon :icon="savingEdit ? 'spinner' : 'check'" :spin="savingEdit" />
+                &nbsp;{{ savingEdit ? $gettext('Enregistrement…') : $gettext('Enregistrer') }}
+              </button>
+            </div>
+          </div>
+          <div v-else class="ft-post-body prose" v-html="post.cooked" />
+          <footer v-if="editingPostId !== post.id" class="ft-post-actions">
             <button
               type="button"
               class="ft-post-action"
@@ -80,6 +123,16 @@
             >
               <fa-icon icon="reply" />
               &nbsp;{{ $gettext('Répondre') }}
+            </button>
+            <button
+              v-if="canEditPost(post)"
+              type="button"
+              class="ft-post-action"
+              :title="$gettext('Modifier votre message')"
+              @click="startEdit(post)"
+            >
+              <fa-icon icon="pen" />
+              &nbsp;{{ $gettext('Modifier') }}
             </button>
           </footer>
         </article>
@@ -125,12 +178,11 @@
                 <fa-icon icon="xmark" />
               </button>
             </p>
-            <textarea
-              ref="replyTextarea"
+            <reply-editor
               v-model="replyText"
-              :placeholder="$gettext('Votre réponse… (Markdown supporté)')"
-              rows="5"
+              :placeholder="$gettext('Votre réponse… (Markdown supporté, images acceptées)')"
               :disabled="sending"
+              rows="5"
             />
             <div class="ft-reply-actions">
               <button type="button" class="button is-text is-small" :disabled="sending" @click="cancelReply">
@@ -173,6 +225,7 @@
 import { toast } from 'bulma-toast';
 
 import CategoryPill from '@/components/forum/CategoryPill.vue';
+import ReplyEditor from '@/components/forum/ReplyEditor.vue';
 import UserAvatar from '@/components/forum/UserAvatar.vue';
 import forum from '@/js/apis/forum';
 import config from '@/js/config';
@@ -185,7 +238,7 @@ const LOAD_MORE_BATCH = 20;
 export default {
   name: 'ForumTopicView',
 
-  components: { CategoryPill, UserAvatar },
+  components: { CategoryPill, ReplyEditor, UserAvatar },
 
   data() {
     return {
@@ -205,6 +258,17 @@ export default {
       likeOverlay: {},
       likePending: null,
       loadingMore: false,
+      // Bookmark state — the topic's first post is what Discourse
+      // bookmarks. `bookmarkedId` is the Discourse bookmark record
+      // id, needed to delete the bookmark on toggle.
+      bookmarkedId: null,
+      bookmarking: false,
+      // In-place edit state — the post_id currently being edited (at
+      // most one at a time), the raw markdown loaded from the server
+      // for that post, and a saving flag.
+      editingPostId: null,
+      editRaw: '',
+      savingEdit: false,
     };
   },
 
@@ -265,6 +329,24 @@ export default {
         n: this.replyToPostNumber,
       });
     },
+
+    // The first post carries the topic-level bookmark. `bookmarked`
+    // (server-side) tells us whether the current user has bookmarked
+    // it; `bookmark_id` gives us the record id needed to delete.
+    firstPost() {
+      const posts = this.hydratedPosts;
+      return posts.find((p) => p.post_number === 1) || posts[0] || null;
+    },
+    isBookmarked() {
+      if (this.bookmarkedId !== null) return true;
+      return !!this.firstPost?.bookmarked;
+    },
+    // Same-user check for the "Modifier" button. Discourse usernames
+    // are case-insensitive server-side but the post payload's
+    // username may not match the user's cached casing — normalise.
+    myLoweredForumUsername() {
+      return String(this.$user?.forumUsername || '').toLowerCase();
+    },
   },
 
   watch: {
@@ -282,6 +364,8 @@ export default {
       this.loading = true;
       this.error = false;
       this.likeOverlay = {};
+      this.bookmarkedId = null;
+      this.editingPostId = null;
       try {
         const [topicRes, catRes] = await Promise.all([
           forum.getTopic(this.$route.params.id).promise_,
@@ -289,10 +373,117 @@ export default {
         ]);
         this.topic = topicRes?.data;
         this.categories = catRes?.data?.category_list?.categories || [];
+        // Bootstrap the bookmark id from whatever Discourse handed us
+        // on the topic payload so the star icon renders in the
+        // correct state.
+        if (this.firstPost?.bookmark_id) {
+          this.bookmarkedId = this.firstPost.bookmark_id;
+        }
       } catch (e) {
         this.error = true;
       } finally {
         this.loading = false;
+      }
+    },
+
+    // ---- Bookmarks -----------------------------------------------
+
+    async toggleBookmark() {
+      if (this.bookmarking) return;
+      const post = this.firstPost;
+      if (!post) return;
+      this.bookmarking = true;
+      try {
+        if (this.isBookmarked) {
+          const id = this.bookmarkedId || this.firstPost?.bookmark_id;
+          if (id) await forum.deleteBookmark(id);
+          this.bookmarkedId = null;
+          if (this.firstPost) this.firstPost.bookmarked = false;
+          toast({
+            type: 'is-info',
+            position: 'bottom-center',
+            message: this.$gettext('Marque-page retiré.'),
+          });
+        } else {
+          const resp = await forum.bookmarkPost(post.id);
+          this.bookmarkedId = resp?.data?.id || 0;
+          if (this.firstPost) this.firstPost.bookmarked = true;
+          toast({
+            type: 'is-success',
+            position: 'bottom-center',
+            message: this.$gettext('Sujet ajouté à vos marque-pages.'),
+          });
+        }
+      } catch (err) {
+        const status = err?.response?.status;
+        toast({
+          type: 'is-warning',
+          position: 'bottom-center',
+          duration: 4500,
+          message:
+            status === 401 || status === 403 || status === 419
+              ? this.$gettext('Connectez-vous au forum pour utiliser les marque-pages.')
+              : this.$gettext('Action impossible sur ce marque-page.'),
+        });
+      } finally {
+        this.bookmarking = false;
+      }
+    },
+
+    // ---- Edit own post -------------------------------------------
+
+    canEditPost(post) {
+      if (!this.$user.isLogged || !this.myLoweredForumUsername) return false;
+      if (!post?.username) return false;
+      return String(post.username).toLowerCase() === this.myLoweredForumUsername;
+    },
+
+    async startEdit(post) {
+      this.editingPostId = post.id;
+      this.editRaw = '';
+      try {
+        // Discourse returns the cooked HTML by default on the post
+        // endpoint. Pass ?raw=1 to get the markdown source suitable
+        // for editing. Fallback: strip cooked HTML if that fails.
+        const resp = await forum.getPostRaw(post.id).promise_;
+        this.editRaw = resp?.data?.raw || this.stripHtml(post.cooked);
+      } catch {
+        this.editRaw = this.stripHtml(post.cooked);
+      }
+    },
+
+    cancelEdit() {
+      this.editingPostId = null;
+      this.editRaw = '';
+    },
+
+    async saveEdit(post) {
+      const raw = this.editRaw.trim();
+      if (!raw || this.savingEdit) return;
+      this.savingEdit = true;
+      try {
+        await forum.editPost(post.id, { raw });
+        toast({
+          type: 'is-success',
+          position: 'bottom-center',
+          message: this.$gettext('Message mis à jour.'),
+        });
+        this.editingPostId = null;
+        this.editRaw = '';
+        await this.load();
+      } catch (err) {
+        const status = err?.response?.status;
+        toast({
+          type: 'is-warning',
+          position: 'bottom-center',
+          duration: 4500,
+          message:
+            status === 401 || status === 403 || status === 419
+              ? this.$gettext('Connectez-vous au forum pour modifier votre message.')
+              : this.$gettext('Impossible de sauvegarder la modification.'),
+        });
+      } finally {
+        this.savingEdit = false;
       }
     },
 
@@ -526,13 +717,52 @@ export default {
   color: #b5b5b5;
 }
 
-.ft-title {
+.ft-header-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
   margin: 0 0 0.4rem;
+}
+.ft-title {
+  flex: 1;
+  margin: 0;
   font-size: 1.15rem;
   line-height: 1.3;
   font-weight: 700;
   color: #4a4a4a;
   overflow-wrap: break-word;
+}
+.ft-bookmark {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: #6b6b6b;
+  cursor: pointer;
+  padding: 0.4rem 0.55rem;
+  border-radius: 6px;
+  font-size: 1rem;
+
+  &:hover:not(:disabled),
+  &:focus:not(:disabled) {
+    background: rgba(0, 0, 0, 0.04);
+    color: #4a4a4a;
+    outline: none;
+  }
+  &.is-bookmarked {
+    background: #fff5e6;
+    border-color: #ff9933;
+    color: #cc7a29;
+  }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+.ft-post-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
 }
 
 .ft-cat-line {

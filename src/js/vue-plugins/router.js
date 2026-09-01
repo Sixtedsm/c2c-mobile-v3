@@ -137,6 +137,29 @@ const routes = [
     name: 'forum-search',
     component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumSearchView'),
   },
+  {
+    // Full-screen "new topic" composer. Optional ?category=<id> to
+    // pre-select a category (used by the FAB button when the user is
+    // browsing a specific category).
+    path: '/forum/new-topic',
+    name: 'forum-new-topic',
+    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumNewTopicView'),
+    meta: { requiresAuth: true },
+  },
+  {
+    // User's own bookmarks — the Discourse "sauvegardés" inbox.
+    path: '/forum/bookmarks',
+    name: 'forum-bookmarks',
+    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumBookmarksView'),
+    meta: { requiresAuth: true },
+  },
+  {
+    // Notifications inbox (the bell in the top bar links here).
+    path: '/forum/notifications',
+    name: 'forum-notifications',
+    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumNotificationsView'),
+    meta: { requiresAuth: true },
+  },
 ];
 
 const addDocumentTypeView = function (def, viewComponent, editionComponent) {

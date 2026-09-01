@@ -156,6 +156,126 @@ Forum.prototype.unlikePost = async function (postId) {
   });
 };
 
+// Create a brand-new topic in a category. Discourse's /posts.json
+// creates a topic when `title` + `category` are passed alongside
+// `raw`. Returns the created topic id so the caller can redirect.
+Forum.prototype.createTopic = async function ({ title, raw, category } = {}) {
+  if (!title || !raw || !category) throw new Error('title, raw and category are required');
+  const csrf = await this._getCsrf();
+  if (!csrf) throw new Error('no-csrf');
+  const body = new URLSearchParams({
+    title,
+    raw,
+    category: String(category),
+    // 'regular' = normal topic (as opposed to private message).
+    archetype: 'regular',
+  });
+  return this.authAxios.post('/posts.json', body.toString(), {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRF-Token': csrf,
+      'Discourse-Logged-In': 'true',
+    },
+  });
+};
+
+// Edit an existing post (user's own). Discourse expects the raw
+// markdown body + an edit_reason (optional). Returns the updated
+// post payload.
+Forum.prototype.editPost = async function (postId, { raw, editReason } = {}) {
+  if (!postId || !raw) throw new Error('postId and raw are required');
+  const csrf = await this._getCsrf();
+  if (!csrf) throw new Error('no-csrf');
+  const body = new URLSearchParams({ 'post[raw]': raw });
+  if (editReason) body.set('post[edit_reason]', editReason);
+  return this.authAxios.put(`/posts/${postId}.json`, body.toString(), {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRF-Token': csrf,
+      'Discourse-Logged-In': 'true',
+    },
+  });
+};
+
+// Bookmark endpoints — Discourse's bookmark model attaches to a
+// specific post (bookmarking the first post of a topic = bookmarking
+// the topic itself, which is how the site UI does it too).
+Forum.prototype.bookmarkPost = async function (postId, { reminderAt } = {}) {
+  if (!postId) throw new Error('postId is required');
+  const csrf = await this._getCsrf();
+  if (!csrf) throw new Error('no-csrf');
+  const body = new URLSearchParams({
+    bookmarkable_id: String(postId),
+    bookmarkable_type: 'Post',
+  });
+  if (reminderAt) body.set('reminder_at', reminderAt);
+  return this.authAxios.post('/bookmarks.json', body.toString(), {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRF-Token': csrf,
+      'Discourse-Logged-In': 'true',
+    },
+  });
+};
+
+Forum.prototype.deleteBookmark = async function (bookmarkId) {
+  if (!bookmarkId) throw new Error('bookmarkId is required');
+  const csrf = await this._getCsrf();
+  if (!csrf) throw new Error('no-csrf');
+  return this.authAxios.delete(`/bookmarks/${bookmarkId}.json`, {
+    headers: {
+      'X-CSRF-Token': csrf,
+      'Discourse-Logged-In': 'true',
+    },
+  });
+};
+
+// Bookmarks list for the current user — Discourse exposes it under
+// /u/:username/bookmarks.json. Requires login (cookie).
+Forum.prototype.getUserBookmarks = function (username) {
+  return this.get(`/u/${canonicalUsername(username)}/bookmarks.json`);
+};
+
+// Notifications — the bell icon in the top-right. Requires login.
+// Endpoint returns the latest notifications + unread counts.
+Forum.prototype.getNotifications = function ({ recent = false, limit = 30 } = {}) {
+  const params = new URLSearchParams();
+  if (recent) params.set('recent', 'true');
+  if (limit) params.set('limit', String(limit));
+  return this.get(`/notifications.json?${params.toString()}`);
+};
+
+Forum.prototype.markNotificationsRead = async function (notificationId) {
+  const csrf = await this._getCsrf();
+  if (!csrf) throw new Error('no-csrf');
+  const body = notificationId ? new URLSearchParams({ id: String(notificationId) }) : new URLSearchParams();
+  return this.authAxios.put('/notifications/mark-read.json', body.toString(), {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRF-Token': csrf,
+      'Discourse-Logged-In': 'true',
+    },
+  });
+};
+
+// Upload endpoint — used by the reply editor when the user picks an
+// image. Returns the URL to embed in the markdown as ![alt](url).
+// `type` is 'composer' for a post upload.
+Forum.prototype.uploadFile = async function (file, { type = 'composer' } = {}) {
+  if (!file) throw new Error('file is required');
+  const csrf = await this._getCsrf();
+  if (!csrf) throw new Error('no-csrf');
+  const form = new FormData();
+  form.append('file', file, file.name);
+  form.append('type', type);
+  return this.authAxios.post('/uploads.json', form, {
+    headers: {
+      'X-CSRF-Token': csrf,
+      'Discourse-Logged-In': 'true',
+    },
+  });
+};
+
 // ---- Legacy helpers (kept for existing callers) --------------------
 
 Forum.prototype.readAnnouncement = function (lang) {

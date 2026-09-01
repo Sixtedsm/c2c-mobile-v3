@@ -67,6 +67,17 @@
 
       <p v-else class="fc-empty">{{ $gettext('Aucune discussion dans cette catégorie.') }}</p>
     </div>
+
+    <!-- Compose-topic FAB — pre-fills the current category so the
+         "+ Nouveau sujet" flow lands in the right context. -->
+    <router-link
+      :to="{ name: 'forum-new-topic', query: { category: id } }"
+      class="fc-fab"
+      :title="$gettext('Nouveau sujet dans cette catégorie')"
+      :aria-label="$gettext('Nouveau sujet dans cette catégorie')"
+    >
+      <fa-icon icon="plus" />
+    </router-link>
   </section>
 </template>
 
@@ -322,6 +333,31 @@ export default {
 }
 .fc-error {
   color: #b91c1c;
+}
+
+.fc-fab {
+  position: fixed;
+  right: 1rem;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  z-index: 27;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #ff9933;
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  text-decoration: none;
+
+  &:hover,
+  &:focus {
+    background: #e6791f;
+    color: white;
+    text-decoration: none;
+  }
 }
 </style>
 

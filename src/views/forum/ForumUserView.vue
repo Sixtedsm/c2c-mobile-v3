@@ -35,6 +35,24 @@
           </div>
         </header>
 
+        <!-- Own-profile actions row — one-tap access to Bookmarks
+             and Notifications. Hidden on someone else's profile, so
+             a visitor doesn't see personal shortcuts. -->
+        <section v-if="isMyProfile" class="fu-my-actions">
+          <router-link :to="{ name: 'forum-bookmarks' }" class="fu-my-action-btn">
+            <fa-icon icon="bookmark" />
+            &nbsp;{{ $gettext('Mes marque-pages') }}
+          </router-link>
+          <router-link :to="{ name: 'forum-notifications' }" class="fu-my-action-btn">
+            <fa-icon icon="bell" />
+            &nbsp;{{ $gettext('Notifications') }}
+          </router-link>
+          <router-link :to="{ name: 'forum-new-topic' }" class="fu-my-action-btn">
+            <fa-icon icon="pen-to-square" />
+            &nbsp;{{ $gettext('Nouveau sujet') }}
+          </router-link>
+        </section>
+
         <!-- Stat tiles — Discourse gives us a fairly rich summary; the
              ones exposed here match what forum.camptocamp.org shows
              on the user card (likes given/received, days visited,
@@ -201,6 +219,15 @@ export default {
   computed: {
     username() {
       return this.$route.params.username;
+    },
+    // True when the user is viewing their OWN forum profile — drives
+    // the "Bookmarks / Notifications / New topic" quick-actions row.
+    // Compared case-insensitively because Discourse usernames are
+    // canonical lowercase, but the C2C-side forumUsername may not be.
+    isMyProfile() {
+      const me = String(this.$user?.forumUsername || '').toLowerCase();
+      const shown = String(this.username || '').toLowerCase();
+      return !!me && me === shown;
     },
     avatarLarge() {
       return forum.getAvatarUrl(this.user, 240);
@@ -443,6 +470,35 @@ export default {
   font-size: 0.75rem;
   color: #6b6b6b;
   margin: 0;
+}
+
+.fu-my-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+.fu-my-action-btn {
+  flex: 1 1 30%;
+  min-width: 130px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 0.7rem;
+  background: white;
+  border: 1px solid rgba(255, 153, 51, 0.5);
+  border-radius: 6px;
+  color: #b26f1e;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: none;
+
+  &:hover,
+  &:focus {
+    background: #fff5e6;
+    color: #b26f1e;
+    text-decoration: none;
+  }
 }
 
 .fu-stats-grid {
