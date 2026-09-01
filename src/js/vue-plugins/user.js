@@ -24,11 +24,6 @@ export default function install(Vue) {
       const name = data['name'] ?? null;
       // forum name
       const forumUsername = data['forumUsername'] ?? null;
-      // Discourse `avatar_template` (path with a {size} placeholder).
-      // Cached in localStorage so the profile picture shows up
-      // immediately on cold boot without waiting for the Discourse
-      // round-trip.
-      const avatarTemplate = data['avatarTemplate'] ?? null;
       // private token used for API auth
       const token = data['token'] ?? null;
 
@@ -42,7 +37,6 @@ export default function install(Vue) {
             roles: [],
             name: null,
             forumUsername: null,
-            avatarTemplate: null,
             token: null,
             expire: null,
           }
@@ -53,7 +47,6 @@ export default function install(Vue) {
             roles,
             name,
             forumUsername,
-            avatarTemplate,
             token,
             expire,
           };
@@ -73,29 +66,11 @@ export default function install(Vue) {
         handler: 'updateToken',
         immediate: true,
       },
-      // Refresh the Discourse avatar whenever the forumUsername
-      // changes — covers first sign-in AND account-page edits. Kept
-      // silent on failure: the initials fallback keeps the UI
-      // usable without a photo.
-      forumUsername: {
-        handler(value) {
-          if (value) this.refreshDiscourseAvatar(value);
-        },
-        immediate: false,
-      },
     },
 
     created() {
       this.commitToLocaleStorage_();
       this.installExpiredTokenInterceptor();
-      // Warm the avatar on cold boot when the user is already logged
-      // in (came back to the app after quitting). The cached
-      // avatarTemplate paints instantly; the refresh below ensures a
-      // profile picture change made on the forum eventually reaches
-      // the app.
-      if (this.isLogged && this.forumUsername) {
-        this.refreshDiscourseAvatar(this.forumUsername);
-      }
     },
 
     methods: {
@@ -128,23 +103,9 @@ export default function install(Vue) {
         this.userName = null;
         this.name = null;
         this.forumUsername = null;
-        this.avatarTemplate = null;
         this.expire = null;
 
         this.commitToLocaleStorage_();
-      },
-
-      // Kept as a no-op for backwards-compat with callers (MobileTopBar,
-      // MeView) that used to trigger a Discourse /u/:username.json
-      // fetch to warm the cache. That endpoint returns HTML when
-      // profiles are private (Camptocamp's Discourse config), so we
-      // abandoned it — the avatar URL is now built directly from the
-      // forumUsername with the pattern V1's Navigation.vue already
-      // uses. See avatarUrl() below. Method stays so future callers
-      // don't blow up on `TypeError: refreshDiscourseAvatar is not a
-      // function`.
-      refreshDiscourseAvatar() {
-        return Promise.resolve(null);
       },
 
       // Build the Discourse avatar URL from the forumUsername alone
@@ -154,8 +115,9 @@ export default function install(Vue) {
       // logged-in user. Discourse serves the current avatar at
       // `/user_avatar/{hostname}/{username}/{size}/1_1.png` regardless
       // of the actual version hash — internal redirects handle it.
-      // Username must be lowercase to avoid the same 302→HTML dance
-      // that broke the JSON endpoint.
+      // Username must be lowercase to avoid a 302 → HTML redirect on
+      // camptocamp's Discourse (which hides /u/:username.json behind
+      // a login wall for the uppercase canonical variant).
       //
       // Falling back to initials in the UI is handled by the caller
       // via <img @error>; if this URL 404s (unknown username, offline,
@@ -248,19 +210,14 @@ export default function install(Vue) {
     },
   });
 
-  // Expose a debug entry point OUTSIDE any Vue hook so it is
-  // guaranteed available as soon as this plugin is installed —
-  // even if the User instance's created() hook errored out
-  // for some reason. Usage from any devtools console:
+  // Debug helper exposed at module scope so it is guaranteed
+  // available as soon as this plugin is installed. Usage from any
+  // devtools console (Chrome desktop, remote Safari inspector, etc.):
   //   await __c2cAvatarDebug()
-  // Prints logged/username/forumUsername/cached avatarTemplate,
-  // the URL the plugin builds, and a fresh live fetch response
-  // (status + body) so we can pinpoint why an avatar doesn't show.
+  // Prints logged / userName / forumUsername / the URL the plugin
+  // builds, plus a live HEAD probe on that URL (status + content-type)
+  // so we can pinpoint why an avatar doesn't show.
   if (typeof window !== 'undefined') {
-    // Debug helper — dumps the state and probes the avatar URL that
-    // gets rendered in <img src>. If the URL loads, `imgOk` is true
-    // and the current app should show the avatar; if not, the img
-    // 404s and the initials fallback is expected.
     window.__c2cAvatarDebug = async () => {
       const u = Vue.prototype.$user;
       const url96 = u?.avatarUrl?.(96);

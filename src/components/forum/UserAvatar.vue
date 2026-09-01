@@ -7,11 +7,11 @@
     :title="username"
     @click.native.stop
   >
-    <img v-if="src" :src="src" :alt="username" loading="lazy" />
+    <img v-if="src && !imgFailed" :src="src" :alt="username" loading="lazy" @error="imgFailed = true" />
     <span v-else class="fu-avatar-placeholder">{{ initials }}</span>
   </router-link>
   <span v-else class="fu-avatar" :class="{ 'is-small': small }">
-    <img v-if="src" :src="src" alt="" loading="lazy" />
+    <img v-if="src && !imgFailed" :src="src" alt="" loading="lazy" @error="imgFailed = true" />
     <span v-else class="fu-avatar-placeholder">?</span>
   </span>
 </template>
@@ -36,6 +36,15 @@ export default {
     small: { type: Boolean, default: false },
   },
 
+  data() {
+    return {
+      // Set on <img @error> — flips the template back to the initials
+      // block so a broken avatar_template (deleted user, network issue,
+      // Discourse rate-limit) never leaves a broken-image icon.
+      imgFailed: false,
+    };
+  },
+
   computed: {
     username() {
       return this.user?.username || null;
@@ -48,6 +57,13 @@ export default {
     initials() {
       const name = this.user?.name || this.user?.username || '';
       return name.slice(0, 1).toUpperCase();
+    },
+  },
+
+  watch: {
+    // Fresh template = fresh loading attempt.
+    src() {
+      this.imgFailed = false;
     },
   },
 };

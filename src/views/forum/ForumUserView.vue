@@ -16,7 +16,12 @@
       <template v-else-if="user">
         <header class="fu-header">
           <div class="fu-avatar-lg">
-            <img v-if="avatarLarge" :src="avatarLarge" :alt="user.username" />
+            <img
+              v-if="avatarLarge && !avatarLargeFailed"
+              :src="avatarLarge"
+              :alt="user.username"
+              @error="avatarLargeFailed = true"
+            />
             <span v-else>{{ initials }}</span>
           </div>
           <div class="fu-header-text">
@@ -186,6 +191,10 @@ export default {
       summaryUsers: {},
       loading: true,
       error: false,
+      // Flipped to true when the header <img> 404s / errors so we
+      // fall back to the initials block instead of showing a broken
+      // image icon. Reset when the URL changes (see watch).
+      avatarLargeFailed: false,
     };
   },
 
@@ -252,6 +261,10 @@ export default {
 
   watch: {
     username: 'load',
+    // Fresh avatar URL = fresh loading attempt.
+    avatarLarge() {
+      this.avatarLargeFailed = false;
+    },
   },
 
   mounted() {

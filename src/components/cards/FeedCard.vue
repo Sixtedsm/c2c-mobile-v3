@@ -22,7 +22,7 @@
           class="avatar"
           alt="Avatar"
           @error="useDefaultAvatarIcon = true"
-          :src="$options.forumAvatarUrl + item.user.forum_username + '/36/1_1.png'"
+          :src="$options.forumAvatarUrl + (item.user.forum_username || '').toLowerCase() + '/36/1_1.png'"
           loading="lazy"
         />
         <fa-icon v-else icon="user" class="is-size-3 has-text-grey" />
