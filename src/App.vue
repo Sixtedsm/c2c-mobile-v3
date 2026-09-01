@@ -184,11 +184,18 @@ export default {
     // SW for offline use.
     warmCriticalChunks() {
       const warm = () => {
-        // Outing creation — feeds into the offline queue (#21). Pulling
-        // any one component from wiki-tools / view-account pulls the
-        // whole named chunk into the SW cache.
+        // Pull one component from each named chunk we ship — webpack
+        // hydrates the whole chunk into the SW cache in one go, so
+        // any later navigation into that chunk hits a warm cache
+        // instead of racing the network. wiki-tools is required by
+        // the offline outing queue (#21); view-account is the login
+        // path; forum is the one Sixte tapped into and hit a cold-
+        // chunk load-error on 2026-09-02 — warming it here removes
+        // the transient "not available offline" toast on the first
+        // /forum navigation.
         import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/OutingEditionView').catch(() => {});
         import(/* webpackChunkName: "view-account" */ '@/views/user/LoginView').catch(() => {});
+        import(/* webpackChunkName: "forum" */ '@/views/forum/ForumView').catch(() => {});
       };
       if ('requestIdleCallback' in window) {
         window.requestIdleCallback(warm, { timeout: 5000 });

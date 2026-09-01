@@ -20,54 +20,101 @@ import HomeView from '@/views/portals/HomeView';
 import NotFoundView from '@/views/static-views/NotFoundView';
 import MeView from '@/views/user/MeView';
 
+// Lazy-import wrapper with automatic retries. Chunk fetches transiently
+// fail all the time on mobile — the SW cache is cold, the network
+// hiccups for one RTT, a captive-portal probe is running, whatever.
+// Vue Router 3 surfaces those failures via router.onError with no way
+// to retry the pending navigation cleanly, so we retry the import
+// itself: 2 additional attempts, 400 ms then 900 ms apart. Only if
+// all three attempts fail does the error bubble up to router.onError
+// (which then shows a toast — see App.vue warmCriticalChunks). Every
+// `component: lazy(() => import(...))` in this file is wrapped so no
+// route is left unprotected. Cost: a few bytes and a maybe-100-ms
+// delay when the very first attempt was going to succeed anyway
+// (we DO await it before returning, so nothing changes for the
+// happy path — the retries only run on failure).
+const lazy =
+  (importer, attempts = 3) =>
+  async () => {
+    const delaysMs = [0, 400, 900];
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+      if (delaysMs[i]) await new Promise((r) => setTimeout(r, delaysMs[i]));
+      try {
+        return await importer();
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr;
+  };
+
 // Rarely-visited or post-login views — lazy chunks so they don't bloat
 // the initial bundle. Grouped into a few named chunks for cache reuse.
-const AreaView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/document/AreaView');
-const ArticleView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/document/ArticleView');
-const BookView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/document/BookView');
-const ImageView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/document/ImageView');
-const MapView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/document/MapView');
-const ProfileView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/document/ProfileView');
-const DocumentsPrintingView = () =>
-  import(/* webpackChunkName: "view-secondary" */ '@/views/documents/DocumentsPrintingView');
-const ItinevertView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/portals/ItinevertView.vue');
-const SophiePictureContestView = () =>
-  import(/* webpackChunkName: "view-secondary" */ '@/views/portals/SophiePictureContestView');
-const OutingsStatsView = () =>
-  import(/* webpackChunkName: "view-secondary" */ '@/views/portals/outings-stats/OutingsStatsView');
-const SeracView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/static-views/SeracView');
-const TopoguideView = () => import(/* webpackChunkName: "view-secondary" */ '@/views/static-views/TopoguideView');
+const AreaView = lazy(() => import(/* webpackChunkName: "view-secondary" */ '@/views/document/AreaView'));
+const ArticleView = lazy(() => import(/* webpackChunkName: "view-secondary" */ '@/views/document/ArticleView'));
+const BookView = lazy(() => import(/* webpackChunkName: "view-secondary" */ '@/views/document/BookView'));
+const ImageView = lazy(() => import(/* webpackChunkName: "view-secondary" */ '@/views/document/ImageView'));
+const MapView = lazy(() => import(/* webpackChunkName: "view-secondary" */ '@/views/document/MapView'));
+const ProfileView = lazy(() => import(/* webpackChunkName: "view-secondary" */ '@/views/document/ProfileView'));
+const DocumentsPrintingView = lazy(() =>
+  import(/* webpackChunkName: "view-secondary" */ '@/views/documents/DocumentsPrintingView')
+);
+const ItinevertView = lazy(() => import(/* webpackChunkName: "view-secondary" */ '@/views/portals/ItinevertView.vue'));
+const SophiePictureContestView = lazy(() =>
+  import(/* webpackChunkName: "view-secondary" */ '@/views/portals/SophiePictureContestView')
+);
+const OutingsStatsView = lazy(() =>
+  import(/* webpackChunkName: "view-secondary" */ '@/views/portals/outings-stats/OutingsStatsView')
+);
+const SeracView = lazy(() => import(/* webpackChunkName: "view-secondary" */ '@/views/static-views/SeracView'));
+const TopoguideView = lazy(() => import(/* webpackChunkName: "view-secondary" */ '@/views/static-views/TopoguideView'));
 
 // Auth / account views — gated behind auth most of the time.
-const AccountView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/AccountView');
-const AppSettingsView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/AppSettingsView');
-const FollowingView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/FollowingView');
-const LoginView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/LoginView');
-const PreferencesView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/PreferencesView');
-const TrackersExchangeTokenView = () =>
-  import(/* webpackChunkName: "view-account" */ '@/views/user/TrackersExchangeTokenView');
-const TrackersView = () => import(/* webpackChunkName: "view-account" */ '@/views/user/TrackersView');
+const AccountView = lazy(() => import(/* webpackChunkName: "view-account" */ '@/views/user/AccountView'));
+const AppSettingsView = lazy(() => import(/* webpackChunkName: "view-account" */ '@/views/user/AppSettingsView'));
+const FollowingView = lazy(() => import(/* webpackChunkName: "view-account" */ '@/views/user/FollowingView'));
+const LoginView = lazy(() => import(/* webpackChunkName: "view-account" */ '@/views/user/LoginView'));
+const PreferencesView = lazy(() => import(/* webpackChunkName: "view-account" */ '@/views/user/PreferencesView'));
+const TrackersExchangeTokenView = lazy(() =>
+  import(/* webpackChunkName: "view-account" */ '@/views/user/TrackersExchangeTokenView')
+);
+const TrackersView = lazy(() => import(/* webpackChunkName: "view-account" */ '@/views/user/TrackersView'));
 
 // lazy-load components
 // actually, only diff is quite big, because of diff computation
 // but lets group together this three views.
-const AreaEditionView = () => import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/AreaEditionView');
-const ArticleEditionView = () => import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/ArticleEditionView');
-const BookEditionView = () => import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/BookEditionView');
-const ImageEditionView = () => import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/ImageEditionView');
-const MapEditionView = () => import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/MapEditionView');
-const OutingEditionView = () => import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/OutingEditionView');
-const ProfileEditionView = () => import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/ProfileEditionView');
-const RouteEditionView = () => import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/RouteEditionView');
-const WaypointEditionView = () =>
-  import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/WaypointEditionView');
-const XreportEditionView = () => import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/XreportEditionView');
-const WhatsNewView = () => import(/* webpackChunkName: "wiki-tools" */ `@/views/wiki/WhatsNewView.vue`);
-const HistoryView = () => import(/* webpackChunkName: "wiki-tools" */ `@/views/wiki/HistoryView.vue`);
-const AssociationsHistoryView = () =>
-  import(/* webpackChunkName: "wiki-tools" */ `@/views/wiki/AssociationsHistoryView.vue`);
-const DiffView = () => import(/* webpackChunkName: "wiki-tools" */ `@/views/wiki/DiffView.vue`);
-const YetiView = () => import(/* webpackChunkName: "yeti" */ `@/views/portals/YetiView.vue`);
+const AreaEditionView = lazy(() => import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/AreaEditionView'));
+const ArticleEditionView = lazy(() =>
+  import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/ArticleEditionView')
+);
+const BookEditionView = lazy(() => import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/BookEditionView'));
+const ImageEditionView = lazy(() =>
+  import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/ImageEditionView')
+);
+const MapEditionView = lazy(() => import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/MapEditionView'));
+const OutingEditionView = lazy(() =>
+  import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/OutingEditionView')
+);
+const ProfileEditionView = lazy(() =>
+  import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/ProfileEditionView')
+);
+const RouteEditionView = lazy(() =>
+  import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/RouteEditionView')
+);
+const WaypointEditionView = lazy(() =>
+  import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/WaypointEditionView')
+);
+const XreportEditionView = lazy(() =>
+  import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/XreportEditionView')
+);
+const WhatsNewView = lazy(() => import(/* webpackChunkName: "wiki-tools" */ `@/views/wiki/WhatsNewView.vue`));
+const HistoryView = lazy(() => import(/* webpackChunkName: "wiki-tools" */ `@/views/wiki/HistoryView.vue`));
+const AssociationsHistoryView = lazy(() =>
+  import(/* webpackChunkName: "wiki-tools" */ `@/views/wiki/AssociationsHistoryView.vue`)
+);
+const DiffView = lazy(() => import(/* webpackChunkName: "wiki-tools" */ `@/views/wiki/DiffView.vue`));
+const YetiView = lazy(() => import(/* webpackChunkName: "yeti" */ `@/views/portals/YetiView.vue`));
 
 const routes = [
   { path: '/', name: 'home', component: HomeView },
@@ -101,24 +148,24 @@ const routes = [
   {
     path: '/forum',
     name: 'forum',
-    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumView'),
+    component: lazy(() => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumView')),
   },
   {
     path: '/forum/c/:slug/:id(\\d+)',
     name: 'forum-category',
-    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumCategoryView'),
+    component: lazy(() => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumCategoryView')),
     props: true,
   },
   {
     path: '/forum/t/:id(\\d+)/:slug?',
     name: 'forum-topic',
-    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumTopicView'),
+    component: lazy(() => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumTopicView')),
     props: true,
   },
   {
     path: '/forum/u/:username',
     name: 'forum-user',
-    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumUserView'),
+    component: lazy(() => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumUserView')),
     props: true,
   },
   {
@@ -127,7 +174,7 @@ const routes = [
     // on /forum, but full screen with its own active state.
     path: '/forum/categories',
     name: 'forum-categories',
-    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumCategoriesView'),
+    component: lazy(() => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumCategoriesView')),
   },
   {
     // Dedicated search page — landing route for the "Rechercher" tab
@@ -135,7 +182,7 @@ const routes = [
     // the search is shareable and reload-safe.
     path: '/forum/search',
     name: 'forum-search',
-    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumSearchView'),
+    component: lazy(() => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumSearchView')),
   },
   {
     // Full-screen "new topic" composer. Optional ?category=<id> to
@@ -143,21 +190,21 @@ const routes = [
     // browsing a specific category).
     path: '/forum/new-topic',
     name: 'forum-new-topic',
-    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumNewTopicView'),
+    component: lazy(() => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumNewTopicView')),
     meta: { requiresAuth: true },
   },
   {
     // User's own bookmarks — the Discourse "sauvegardés" inbox.
     path: '/forum/bookmarks',
     name: 'forum-bookmarks',
-    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumBookmarksView'),
+    component: lazy(() => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumBookmarksView')),
     meta: { requiresAuth: true },
   },
   {
     // Notifications inbox (the bell in the top bar links here).
     path: '/forum/notifications',
     name: 'forum-notifications',
-    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumNotificationsView'),
+    component: lazy(() => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumNotificationsView')),
     meta: { requiresAuth: true },
   },
   {
@@ -167,7 +214,7 @@ const routes = [
     // uses the tag name itself as the key).
     path: '/forum/tag/:tag',
     name: 'forum-tag',
-    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumTagView'),
+    component: lazy(() => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumTagView')),
     props: true,
   },
 ];
