@@ -134,107 +134,41 @@ export default function install(Vue) {
         this.commitToLocaleStorage_();
       },
 
-      // Look up the current user's Discourse profile to grab their
-      // `avatar_template` — Discourse serves the same avatar to
-      // camptocamp.org (via SSO) so this is the profile picture the
-      // user set on the C2C site.
-      //
-      // Written against the browser `fetch` API on purpose: BaseApi's
-      // Promise wrapper (ApiData) has broken chaining under some
-      // conditions (a rejection on the outer promise_ can slip past
-      // the .then, and the .catch is attached to a sibling chain),
-      // which made this fetch look "silent" in practice. Straight
-      // fetch is a handful of lines and lets us surface every failure
-      // mode clearly in the console — the caller (MobileTopBar,
-      // MeView, ForumBottomNav) can decide when to re-trigger.
-      //
-      // Concurrent-call guard: multiple views mount at the same time
-      // and each calls refreshDiscourseAvatar. Cache the in-flight
-      // promise so a burst of calls results in one network request.
-      async refreshDiscourseAvatar(usernameArg) {
-        const username = usernameArg || this.forumUsername;
-        if (!username) return null;
-        if (this._avatarFetch) return this._avatarFetch;
-        // Discourse routes are case-insensitive on the server but
-        // canonical on the URL: `/u/Sixte-dsm.json` gets 302-ed to
-        // `/u/sixte-dsm.json`, and depending on the middleware the
-        // redirect may serve the HTML page instead of the JSON — the
-        // fetch then chokes on `<!DOCTYPE ...` (Sixte's debug output
-        // 2026-09-01). Normalising the case here avoids the whole
-        // redirect dance and lands directly on the JSON endpoint.
-        const canonical = String(username).toLowerCase();
-        const url = `${config.urls.forum}/u/${encodeURIComponent(canonical)}.json`;
-        this._avatarFetch = (async () => {
-          try {
-            // eslint-disable-next-line no-console
-            console.info('[$user] fetching avatar from', url);
-            const resp = await fetch(url, {
-              method: 'GET',
-              // Discourse's /u/:username.json is public, no cookies
-              // needed. omit avoids preflight and the CORS-with-
-              // credentials trap when the SSO domain differs.
-              credentials: 'omit',
-              headers: { Accept: 'application/json' },
-            });
-            const ct = resp.headers.get('content-type') || '';
-            if (!resp.ok) {
-              // eslint-disable-next-line no-console
-              console.warn(`[$user] Discourse avatar fetch: HTTP ${resp.status} on ${url}`);
-              return null;
-            }
-            if (!ct.includes('application/json')) {
-              // Discourse can still serve HTML (redirect / auth wall / rate
-              // limit page) with a 200 status. Reading .json() then throws
-              // SyntaxError. Surface the actual content type so a
-              // maintainer instantly sees the mismatch.
-              // eslint-disable-next-line no-console
-              console.warn(`[$user] Discourse avatar fetch: unexpected content-type '${ct}' on ${url}`);
-              return null;
-            }
-            const payload = await resp.json();
-            const template = payload?.user?.avatar_template;
-            if (!template) {
-              // eslint-disable-next-line no-console
-              console.warn('[$user] Discourse response missing avatar_template', payload?.user);
-              return null;
-            }
-            if (template !== this.avatarTemplate) {
-              this.avatarTemplate = template;
-              this.commitToLocaleStorage_();
-            }
-            // eslint-disable-next-line no-console
-            console.info(
-              '[$user] avatar template set:',
-              template,
-              '→ resolved image URL for size 96:',
-              this.avatarUrl(96)
-            );
-            return template;
-          } catch (err) {
-            // Network error, DNS, CORS. Kept warn-level so it shows
-            // up in devtools without blowing up the app.
-            // eslint-disable-next-line no-console
-            console.warn('[$user] Discourse avatar fetch failed', err?.message || err);
-            return null;
-          } finally {
-            this._avatarFetch = null;
-          }
-        })();
-        return this._avatarFetch;
+      // Kept as a no-op for backwards-compat with callers (MobileTopBar,
+      // MeView) that used to trigger a Discourse /u/:username.json
+      // fetch to warm the cache. That endpoint returns HTML when
+      // profiles are private (Camptocamp's Discourse config), so we
+      // abandoned it — the avatar URL is now built directly from the
+      // forumUsername with the pattern V1's Navigation.vue already
+      // uses. See avatarUrl() below. Method stays so future callers
+      // don't blow up on `TypeError: refreshDiscourseAvatar is not a
+      // function`.
+      refreshDiscourseAvatar() {
+        return Promise.resolve(null);
       },
 
-      // Build a fully-qualified avatar URL for a given pixel size.
-      // Returns null when no template has been fetched yet, so the
-      // caller can render the initials placeholder in the meantime.
-      // Also a no-op guard against non-string templates (defensive
-      // — a corrupted localStorage entry would otherwise 500 the
-      // template string manipulation below).
+      // Build the Discourse avatar URL from the forumUsername alone
+      // — no JSON round-trip needed. Same URL pattern V1's
+      // Navigation.vue uses (line 128), which we know works because
+      // camptocamp.org uses it to show the top-right avatar of every
+      // logged-in user. Discourse serves the current avatar at
+      // `/user_avatar/{hostname}/{username}/{size}/1_1.png` regardless
+      // of the actual version hash — internal redirects handle it.
+      // Username must be lowercase to avoid the same 302→HTML dance
+      // that broke the JSON endpoint.
+      //
+      // Falling back to initials in the UI is handled by the caller
+      // via <img @error>; if this URL 404s (unknown username, offline,
+      // etc.) the fa-icon takes over.
       avatarUrl(size = 96) {
-        const template = this.avatarTemplate;
-        if (!template || typeof template !== 'string') return null;
-        const path = template.replace('{size}', String(size));
-        if (path.startsWith('http://') || path.startsWith('https://')) return path;
-        return config.urls.forum + (path.startsWith('/') ? path : '/' + path);
+        if (!this.forumUsername) return null;
+        const username = String(this.forumUsername).toLowerCase();
+        // Extract the hostname from config.urls.forum without adding
+        // a URL constructor dependency — the config value is stable
+        // (`https://forum.camptocamp.org` / `.demov6.` variants) so
+        // stripping the scheme is enough.
+        const hostname = config.urls.forum.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        return `${config.urls.forum}/user_avatar/${hostname}/${encodeURIComponent(username)}/${size}/1_1.png`;
       },
 
       updateAccount(currentpassword, name, forum_username, email, is_profile_public, newpassword) {
@@ -323,40 +257,40 @@ export default function install(Vue) {
   // the URL the plugin builds, and a fresh live fetch response
   // (status + body) so we can pinpoint why an avatar doesn't show.
   if (typeof window !== 'undefined') {
+    // Debug helper — dumps the state and probes the avatar URL that
+    // gets rendered in <img src>. If the URL loads, `imgOk` is true
+    // and the current app should show the avatar; if not, the img
+    // 404s and the initials fallback is expected.
     window.__c2cAvatarDebug = async () => {
       const u = Vue.prototype.$user;
+      const url96 = u?.avatarUrl?.(96);
       const state = {
         isLogged: u?.isLogged,
         userName: u?.userName,
         forumUsername: u?.forumUsername,
-        avatarTemplate: u?.avatarTemplate,
-        avatarUrl96: u?.avatarUrl?.(96),
         forumBase: config.urls.forum,
+        avatarUrl96: url96,
       };
       // eslint-disable-next-line no-console
       console.log('[c2cAvatarDebug] state:', state);
-      if (!u?.forumUsername) return state;
-      const url = `${config.urls.forum}/u/${encodeURIComponent(String(u.forumUsername).toLowerCase())}.json`;
+      if (!url96) return state;
       try {
-        const resp = await fetch(url, {
-          credentials: 'omit',
-          headers: { Accept: 'application/json' },
-        });
-        const body = resp.ok ? await resp.json() : await resp.text();
+        // HEAD probe — cheap, follows redirects, tells us if the
+        // pattern URL resolves to a real image on Discourse.
+        const resp = await fetch(url96, { method: 'HEAD', credentials: 'omit' });
         const result = {
-          url,
+          url: url96,
           status: resp.status,
           ok: resp.ok,
-          template: typeof body === 'object' ? body?.user?.avatar_template : undefined,
-          body,
+          contentType: resp.headers.get('content-type'),
         };
         // eslint-disable-next-line no-console
-        console.log('[c2cAvatarDebug] fetch:', result);
-        return { state, fetch: result };
+        console.log('[c2cAvatarDebug] image probe:', result);
+        return { state, probe: result };
       } catch (err) {
-        const errInfo = { url, name: err?.name, message: err?.message || String(err) };
+        const errInfo = { url: url96, name: err?.name, message: err?.message || String(err) };
         // eslint-disable-next-line no-console
-        console.log('[c2cAvatarDebug] fetch error:', errInfo);
+        console.log('[c2cAvatarDebug] probe error:', errInfo);
         return { state, error: errInfo };
       }
     };
