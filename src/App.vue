@@ -196,23 +196,32 @@ export default {
         setTimeout(warm, 2000);
       }
 
-      // Network-failed lazy imports (offline + chunk not yet cached)
-      // reject silently and the navigation just hangs. Surface it so
-      // the user knows why the page didn't open.
+      // Network-failed lazy imports reject silently and the navigation
+      // just hangs. Surface it, but stay honest about the cause: the
+      // chunk load can fail for many reasons (real offline, transient
+      // CDN issue, service-worker cache miss on a stale build) — the
+      // old wording accused the user of being offline even when they
+      // weren't, which was noisy. If we can, ping the network to give
+      // the user a specific diagnosis.
       this.$router.onError((error) => {
         const msg = error?.message || '';
-        if (/Loading chunk|ChunkLoadError|Failed to fetch/i.test(msg)) {
-          import('bulma-toast').then(({ toast }) => {
-            toast({
-              type: 'is-warning',
-              position: 'bottom-center',
-              duration: 4000,
-              message: this.$gettext(
-                "Cette page n'est pas disponible hors-ligne. Reconnectez-vous au réseau et réessayez."
-              ),
-            });
+        if (!/Loading chunk|ChunkLoadError|Failed to fetch/i.test(msg)) return;
+        import('bulma-toast').then(({ toast }) => {
+          // If $offline plugin says we're offline (real ping-verified
+          // check now), tell the user that. Otherwise say it's a load
+          // hiccup — usually resolves by tapping the link again.
+          const looksOffline = this.$offline && this.$offline.online === false;
+          toast({
+            type: 'is-warning',
+            position: 'bottom-center',
+            duration: 4000,
+            message: looksOffline
+              ? this.$gettext(
+                  "Cette page n'est pas encore disponible hors-ligne. Reconnectez-vous au réseau et réessayez."
+                )
+              : this.$gettext('Chargement de la page interrompu. Réessayez dans un instant.'),
           });
-        }
+        });
       });
     },
     updateWidth() {

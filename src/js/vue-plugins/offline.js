@@ -231,18 +231,60 @@ function updateAppBadge(count) {
   }
 }
 
+// Real-connectivity ping. `navigator.onLine` is only a coarse hint —
+// it goes false whenever a NIC drops (VPN toggle, Wi-Fi handoff, wake
+// from sleep on Windows) and can stay stuck false for tens of seconds
+// after the connection is really back. We verify with a tiny fetch
+// against the C2C API before flipping the app into offline mode.
+// Falls back to the forum origin if the API host is unreachable but
+// the network is up. Returns a boolean; never throws.
+async function pingReachable() {
+  const targets = [config.urls.api, config.urls.forum].filter(Boolean);
+  for (const base of targets) {
+    try {
+      // A GET with no-store beats HEAD here — some C2C endpoints 405
+      // on HEAD and the browser reports that as a network error to
+      // JS. no-cors keeps the request cheap (opaque response is
+      // enough: what we care about is that any byte came back).
+      const url = base.replace(/\/+$/, '') + '/?_ping=' + Date.now();
+      const ctl = new AbortController();
+      const timer = window.setTimeout(() => ctl.abort(), 4000);
+      await fetch(url, {
+        method: 'GET',
+        mode: 'no-cors',
+        cache: 'no-store',
+        credentials: 'omit',
+        signal: ctl.signal,
+      });
+      window.clearTimeout(timer);
+      return true;
+    } catch {
+      // try the next target
+    }
+  }
+  return false;
+}
+
 export default function install(Vue) {
   const vm = new Vue({
     name: 'OfflinePlugin',
 
     data() {
       return {
-        online: navigator.onLine,
+        // Start optimistic: many browsers boot with navigator.onLine
+        // set to `false` for the first few ms after cold-launch, which
+        // otherwise flashes the offline banner. If we're really offline,
+        // pingReachable() will bring us back within a couple of seconds.
+        online: true,
         savedDocs: [],
         folders: [],
         pendingOutings: [],
         downloading: new Set(),
         syncing: false,
+        // Timers used by the connectivity verifier — kept on the
+        // instance so we can cancel them on teardown / re-entry.
+        offlineDebounceT: null,
+        offlineRecheckT: null,
       };
     },
 
@@ -259,6 +301,18 @@ export default function install(Vue) {
     created() {
       window.addEventListener('online', this.handleOnline);
       window.addEventListener('offline', this.handleOffline);
+      // Wake-up hook: after a laptop sleep/resume or a tab returning
+      // to foreground, navigator.onLine may still be stuck false even
+      // though the network is back. Verify on visibility change and
+      // on window focus.
+      document.addEventListener('visibilitychange', this.handleVisibility);
+      window.addEventListener('focus', this.handleFocus);
+      // If navigator says we're offline at boot, verify before
+      // trusting it (Windows Chrome frequently boots with the flag
+      // wrongly false in a corporate/hotel network).
+      if (navigator.onLine === false) {
+        this.verifyConnectivity({ trigger: 'boot' });
+      }
       // Refresh in the background so the plugin is immediately usable
       // and the first paint isn't blocked by IndexedDB reads (which
       // can be 100-200 ms on a user with 20+ saved docs). Components
@@ -279,14 +333,72 @@ export default function install(Vue) {
 
     methods: {
       handleOnline() {
+        // Coming back up: trust it immediately. If it's a false
+        // positive, the next real request will fail and we'll bounce
+        // back through handleOffline / verifyConnectivity.
+        if (this.offlineDebounceT) {
+          window.clearTimeout(this.offlineDebounceT);
+          this.offlineDebounceT = null;
+        }
+        if (this.offlineRecheckT) {
+          window.clearTimeout(this.offlineRecheckT);
+          this.offlineRecheckT = null;
+        }
         this.online = true;
         if (this.pendingOutings.length) {
           this.syncPendingOutings();
         }
       },
 
+      // navigator.onLine has a long track record of false negatives
+      // (Chrome on Windows especially: reports offline for tens of
+      // seconds after wake, after a VPN toggle, after a Wi-Fi handoff,
+      // and sometimes stays stuck until the tab is refocused). So we
+      // don't flip the app immediately — we defer 1.5 s and confirm
+      // with an actual network probe. If the probe succeeds, we stay
+      // online; the browser event was a lie.
       handleOffline() {
+        if (this.offlineDebounceT) window.clearTimeout(this.offlineDebounceT);
+        this.offlineDebounceT = window.setTimeout(() => {
+          this.verifyConnectivity({ trigger: 'offline-event' });
+        }, 1500);
+      },
+
+      // Re-check on tab return / window focus. If the app was left
+      // in the background during a network hiccup and the browser
+      // never re-fired an `online` event, this catches it.
+      handleVisibility() {
+        if (document.visibilityState === 'visible' && !this.online) {
+          this.verifyConnectivity({ trigger: 'visibility' });
+        }
+      },
+      handleFocus() {
+        if (!this.online) {
+          this.verifyConnectivity({ trigger: 'focus' });
+        }
+      },
+
+      // Real-connectivity probe with recovery. When the app is
+      // currently marked offline, this schedules a follow-up probe
+      // every 15 s so we auto-recover as soon as the network is
+      // actually back, without the user having to reload.
+      async verifyConnectivity() {
+        const reachable = await pingReachable();
+        if (reachable) {
+          this.handleOnline();
+          return;
+        }
+        // Only flip to offline once we have actually confirmed the
+        // network is down. This is the ONE codepath allowed to set
+        // `online = false` — the browser event never does directly.
         this.online = false;
+        // Auto-recovery: keep polling every 15 s while offline. Only
+        // one loop at a time.
+        if (this.offlineRecheckT) window.clearTimeout(this.offlineRecheckT);
+        this.offlineRecheckT = window.setTimeout(() => {
+          this.offlineRecheckT = null;
+          if (!this.online) this.verifyConnectivity({ trigger: 'recheck' });
+        }, 15000);
       },
 
       async refresh() {
