@@ -155,7 +155,15 @@ export default function install(Vue) {
         const username = usernameArg || this.forumUsername;
         if (!username) return null;
         if (this._avatarFetch) return this._avatarFetch;
-        const url = `${config.urls.forum}/u/${encodeURIComponent(username)}.json`;
+        // Discourse routes are case-insensitive on the server but
+        // canonical on the URL: `/u/Sixte-dsm.json` gets 302-ed to
+        // `/u/sixte-dsm.json`, and depending on the middleware the
+        // redirect may serve the HTML page instead of the JSON — the
+        // fetch then chokes on `<!DOCTYPE ...` (Sixte's debug output
+        // 2026-09-01). Normalising the case here avoids the whole
+        // redirect dance and lands directly on the JSON endpoint.
+        const canonical = String(username).toLowerCase();
+        const url = `${config.urls.forum}/u/${encodeURIComponent(canonical)}.json`;
         this._avatarFetch = (async () => {
           try {
             const resp = await fetch(url, {
@@ -309,7 +317,7 @@ export default function install(Vue) {
       // eslint-disable-next-line no-console
       console.log('[c2cAvatarDebug] state:', state);
       if (!u?.forumUsername) return state;
-      const url = `${config.urls.forum}/u/${encodeURIComponent(u.forumUsername)}.json`;
+      const url = `${config.urls.forum}/u/${encodeURIComponent(String(u.forumUsername).toLowerCase())}.json`;
       try {
         const resp = await fetch(url, {
           credentials: 'omit',

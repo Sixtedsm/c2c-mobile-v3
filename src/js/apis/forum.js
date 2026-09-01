@@ -69,16 +69,26 @@ Forum.prototype.getCategoryTopics = function (slug, id, page) {
 
 // User summary (profile page). Discourse returns a rich blob:
 // user (bio, badges, stats), user_actions (recent activity), etc.
+// Discourse usernames are case-insensitive server-side but their URLs
+// are canonical lowercase. Hitting `/u/Sixte-dsm.json` triggers a
+// 302 redirect to `/u/sixte-dsm.json` and, depending on the
+// middleware, the redirect can end up serving the HTML page instead
+// of the JSON — the caller then chokes on a `<!DOCTYPE ...>` reply.
+// Normalise here so every callsite lands directly on the JSON.
+function canonicalUsername(username) {
+  return encodeURIComponent(String(username || '').toLowerCase());
+}
+
 Forum.prototype.getUser = function (username) {
-  return this.get(`/u/${encodeURIComponent(username)}.json`);
+  return this.get(`/u/${canonicalUsername(username)}.json`);
 };
 
 Forum.prototype.getUserSummary = function (username) {
-  return this.get(`/u/${encodeURIComponent(username)}/summary.json`);
+  return this.get(`/u/${canonicalUsername(username)}/summary.json`);
 };
 
 Forum.prototype.getUserTopics = function (username) {
-  const result = this.get(`/topics/created-by/${encodeURIComponent(username)}.json`);
+  const result = this.get(`/topics/created-by/${canonicalUsername(username)}.json`);
   result.then((response) => Forum.prototype._hydrateLastPosters(response.data));
   return result;
 };
