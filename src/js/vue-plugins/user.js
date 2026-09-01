@@ -1,5 +1,4 @@
 import c2c from '@/js/apis/c2c';
-import forum from '@/js/apis/forum';
 import trackingService from '@/js/apis/tracking-service';
 import config from '@/js/config';
 import router from '@/js/vue-plugins/router';
@@ -138,42 +137,77 @@ export default function install(Vue) {
       // Look up the current user's Discourse profile to grab their
       // `avatar_template` — Discourse serves the same avatar to
       // camptocamp.org (via SSO) so this is the profile picture the
-      // user set on the C2C site. Cheap: one JSON call, silent on
-      // failure. The template lives in localStorage between sessions
-      // via commitToLocaleStorage_().
-      refreshDiscourseAvatar(username) {
-        forum
-          .getUser(username)
-          .then((response) => {
-            const template = response?.data?.user?.avatar_template;
-            if (template && template !== this.avatarTemplate) {
+      // user set on the C2C site.
+      //
+      // Written against the browser `fetch` API on purpose: BaseApi's
+      // Promise wrapper (ApiData) has broken chaining under some
+      // conditions (a rejection on the outer promise_ can slip past
+      // the .then, and the .catch is attached to a sibling chain),
+      // which made this fetch look "silent" in practice. Straight
+      // fetch is a handful of lines and lets us surface every failure
+      // mode clearly in the console — the caller (MobileTopBar,
+      // MeView, ForumBottomNav) can decide when to re-trigger.
+      //
+      // Concurrent-call guard: multiple views mount at the same time
+      // and each calls refreshDiscourseAvatar. Cache the in-flight
+      // promise so a burst of calls results in one network request.
+      async refreshDiscourseAvatar(usernameArg) {
+        const username = usernameArg || this.forumUsername;
+        if (!username) return null;
+        if (this._avatarFetch) return this._avatarFetch;
+        const url = `${config.urls.forum}/u/${encodeURIComponent(username)}.json`;
+        this._avatarFetch = (async () => {
+          try {
+            const resp = await fetch(url, {
+              method: 'GET',
+              // Discourse's /u/:username.json is public, no cookies
+              // needed. omit avoids preflight and the CORS-with-
+              // credentials trap when the SSO domain differs.
+              credentials: 'omit',
+              headers: { Accept: 'application/json' },
+            });
+            if (!resp.ok) {
+              // eslint-disable-next-line no-console
+              console.warn(`[$user] Discourse avatar fetch: HTTP ${resp.status} on ${url}`);
+              return null;
+            }
+            const payload = await resp.json();
+            const template = payload?.user?.avatar_template;
+            if (!template) {
+              // eslint-disable-next-line no-console
+              console.warn('[$user] Discourse response missing avatar_template', payload?.user);
+              return null;
+            }
+            if (template !== this.avatarTemplate) {
               this.avatarTemplate = template;
               this.commitToLocaleStorage_();
-            } else if (!template) {
-              // Discourse answered but had no avatar_template on the
-              // user payload — highly unusual. Surface it in the
-              // console so a maintainer can inspect the response
-              // shape rather than staring at "no photo shows up".
-              // eslint-disable-next-line no-console
-              console.warn('Discourse user response missing avatar_template', response?.data?.user);
             }
-          })
-          .catch((err) => {
-            // 404 / offline / rate-limited / CORS — keep whatever we
-            // had cached, fall back to initials in the UI. A one-line
-            // warning helps diagnose the "photo doesn't show" case
-            // without breaking anything at runtime.
+            return template;
+          } catch (err) {
+            // Network error, DNS, CORS. Kept warn-level so it shows
+            // up in devtools without blowing up the app.
             // eslint-disable-next-line no-console
-            console.warn('Discourse avatar fetch failed for', username, err?.message || err);
-          });
+            console.warn('[$user] Discourse avatar fetch failed', err?.message || err);
+            return null;
+          } finally {
+            this._avatarFetch = null;
+          }
+        })();
+        return this._avatarFetch;
       },
 
       // Build a fully-qualified avatar URL for a given pixel size.
       // Returns null when no template has been fetched yet, so the
       // caller can render the initials placeholder in the meantime.
+      // Also a no-op guard against non-string templates (defensive
+      // — a corrupted localStorage entry would otherwise 500 the
+      // template string manipulation below).
       avatarUrl(size = 96) {
-        if (!this.avatarTemplate) return null;
-        return forum.avatarUrlFromTemplate(this.avatarTemplate, size);
+        const template = this.avatarTemplate;
+        if (!template || typeof template !== 'string') return null;
+        const path = template.replace('{size}', String(size));
+        if (path.startsWith('http://') || path.startsWith('https://')) return path;
+        return config.urls.forum + (path.startsWith('/') ? path : '/' + path);
       },
 
       updateAccount(currentpassword, name, forum_username, email, is_profile_public, newpassword) {

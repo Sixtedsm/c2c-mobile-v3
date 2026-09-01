@@ -1,6 +1,10 @@
 <template>
   <div class="start-outing">
-    <!-- Idle: prominent CTA "Démarrer" -->
+    <!-- Idle: prominent CTA "Démarrer". Feedback Gilles
+         (forum 2026-09-01): the pill-and-play-icon was too discreet
+         on mobile and users missed it. Full-width label on every
+         viewport + bigger padding so the target reads as the primary
+         terrain action. -->
     <button
       v-if="!isActiveOnThisTopo"
       type="button"
@@ -9,7 +13,7 @@
       @click="openStartModal"
     >
       <fa-icon icon="play" />
-      <span class="is-hidden-mobile">&nbsp;{{ $gettext('Démarrer la sortie') }}</span>
+      &nbsp;{{ $gettext('Démarrer la sortie') }}
     </button>
 
     <!-- Active on this topo: status pill + dropdown -->
@@ -278,9 +282,12 @@ export default {
       if (this.topoRef.type === 'route') {
         query.r = String(this.topoRef.id);
       }
-      if (Array.isArray(this.route?.activities) && this.route.activities.length) {
-        query.act = this.route.activities.join(',');
-      }
+      // Feedback Gilles (forum 2026-09-01): a topo often has multiple
+      // activities (ski rando + rando été + raquettes). Pre-checking
+      // them all pushed the user to publish sorties with incompatible
+      // activities. Leave `activities` empty on purpose — the V1
+      // form's validator will bark if the user tries to save without
+      // picking their real activity of the day.
       this.showStopModal = false;
       this.showMenu = false;
       this.$router.push({ name: 'outing-add', params: { lang: this.topoRef.lang }, query }).catch(() => {
@@ -371,11 +378,21 @@ export default {
 }
 
 .start-outing-btn-idle {
+  // Bumped from the pill baseline: bigger tap target + full label
+  // so "Démarrer la sortie" reads at a glance. Slight shadow +
+  // pulse on the play icon draw the eye to the primary CTA of
+  // the topo page.
+  padding: 0.6rem 1.1rem;
+  font-size: 0.95rem;
   background: #ff9933;
   color: white;
+  box-shadow: 0 2px 6px rgba(255, 153, 51, 0.35);
+  white-space: nowrap;
+
   &:hover,
   &:focus {
     background: #e6791f;
+    box-shadow: 0 4px 10px rgba(255, 153, 51, 0.45);
   }
 }
 
@@ -420,18 +437,32 @@ export default {
   top: 100%;
   right: 0;
   margin-top: 0.4rem;
-  min-width: 260px;
+  min-width: 280px;
+  // Guard against narrow viewports (feedback Gilles, forum
+  // 2026-09-01): with `right: 0` alone, a min-width larger than
+  // the viewport pushed the menu's left edge off-screen and the
+  // "Enregistrer la trace GPS" text ended up glued to the phone
+  // border. Cap the box so it never exceeds the screen width and
+  // give it real breathing room on both sides.
+  max-width: calc(100vw - 0.8rem);
   background: white;
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-  padding: 0.5rem 0.6rem;
+  padding: 0.75rem 0.9rem;
   z-index: 50;
 
   hr {
-    margin: 0.5rem 0;
+    margin: 0.6rem 0;
     border: none;
     border-top: 1px solid rgba(0, 0, 0, 0.06);
   }
+}
+
+.start-outing-menu-row {
+  // Explicit inner padding so the toggle label + hint never touch
+  // the menu edges, even when the menu itself is cropped by the
+  // viewport width guard above.
+  padding: 0 0.15rem;
 }
 
 .start-outing-overlay {

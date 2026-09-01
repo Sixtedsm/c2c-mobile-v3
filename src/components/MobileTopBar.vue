@@ -129,6 +129,17 @@ export default {
     return { searchOpen: false };
   },
 
+  mounted() {
+    // Belt-and-braces: nudge the Discourse avatar fetch here too, so
+    // the top-bar photo shows up on the very first cold boot even
+    // if the User plugin's own created() hook lost the race with
+    // localStorage warm-up. Silent no-op when there is already a
+    // template cached.
+    if (this.$user?.isLogged && this.$user?.forumUsername && !this.$user?.avatarTemplate) {
+      this.$user.refreshDiscourseAvatar();
+    }
+  },
+
   computed: {
     routeName() {
       return this.$route?.name || '';
