@@ -208,6 +208,8 @@ export default {
         q: this.searchText,
         t: this.letterTypes.join(','),
         limit: 7,
+        l: this.$language.current,
+        pl: this.$language.current,
       });
       this.promise = apiSearch;
 

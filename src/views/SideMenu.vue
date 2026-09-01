@@ -1,8 +1,8 @@
 <template>
   <aside>
-    <router-link :to="{ name: 'home' }" class="menu-brand has-text-centered">
+    <a :href="'/'" class="menu-brand has-text-centered">
       <img src="@/assets/img/logo.svg" alt="Camptocamp.org" />
-    </router-link>
+    </a>
     <router-link :to="{ name: 'topoguide' }">
       <span
         class="menu-item is-ellipsed"
@@ -51,12 +51,6 @@
       >
         <icon-article fixed-width />
         <span class="menu-item-text"> {{ $gettext('articles') | uppercaseFirstLetter }} </span>
-      </span>
-    </router-link>
-    <router-link :to="{ name: 'offline' }">
-      <span class="menu-item is-ellipsed" :class="{ 'router-link-active': $route.name === 'offline' }">
-        <fa-icon icon="download" fixed-width />
-        <span class="menu-item-text"> {{ $gettext('My offline topos') | uppercaseFirstLetter }} </span>
       </span>
     </router-link>
     <router-link :to="{ name: 'yeti' }" v-if="isTall">

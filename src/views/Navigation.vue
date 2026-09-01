@@ -17,14 +17,14 @@
       </span>
     </span>
 
-    <router-link
+    <a
       v-if="$screen.isMobile || $screen.isTablet"
-      :to="{ name: 'home' }"
+      :href="'/'"
       class="navigation-item navigation-brand has-text-centered"
       :class="{ 'is-hidden-mobile': !hideSearchInput }"
     >
       <img src="@/assets/img/logo.svg" alt="Camptocamp.org" />
-    </router-link>
+    </a>
 
     <dfm-ad-large v-if="!homePage() && !$screen.isMobile && !$screen.isTablet && !$screen.isDesktop" />
 
