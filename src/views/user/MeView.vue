@@ -8,7 +8,7 @@
            splits the wiki nav from the Discourse nav. -->
       <header v-if="$user.isLogged" class="me-header">
         <div class="avatar" aria-hidden="true">
-          <img v-if="avatarUrl" :src="avatarUrl" :alt="$user.userName" />
+          <img v-if="avatarUrl && !avatarFailed" :src="avatarUrl" :alt="$user.userName" @error="onAvatarError" />
           <span v-else>{{ initial }}</span>
         </div>
         <div class="me-header-text">
@@ -161,6 +161,17 @@ export default {
 
   components: { CustomIcon },
 
+  data() {
+    return {
+      // Set to true if the <img> fails to load (404, network, CORS on
+      // the actual image file). Flips the template back to the
+      // initials block so the user still gets a coherent header
+      // instead of a broken-image icon. Reset whenever the URL we're
+      // trying changes.
+      avatarFailed: false,
+    };
+  },
+
   computed: {
     initial() {
       const src = this.$user.name || this.$user.userName || '?';
@@ -271,6 +282,14 @@ export default {
     },
   },
 
+  watch: {
+    // Reset the "image errored" flag when the URL changes — a fresh
+    // template deserves a fresh loading attempt.
+    avatarUrl() {
+      this.avatarFailed = false;
+    },
+  },
+
   mounted() {
     // Poke the Discourse avatar fetch every time the user lands on
     // "Moi" — the first cold boot after enabling this feature may
@@ -283,6 +302,12 @@ export default {
   },
 
   methods: {
+    onAvatarError() {
+      // eslint-disable-next-line no-console
+      console.warn('[MeView] avatar image failed to load:', this.avatarUrl);
+      this.avatarFailed = true;
+    },
+
     signOut() {
       // Always sign out locally and bounce home — even if the API call
       // fails (offline, expired session, etc.), the user's intent is

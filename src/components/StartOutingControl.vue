@@ -433,18 +433,19 @@ export default {
 }
 
 .start-outing-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 0.4rem;
+  // Anchored to the viewport (position: fixed) instead of to the
+  // pill trigger (position: absolute). The pill sits wherever the
+  // topo header puts it — often centred or left-of-centre — and an
+  // absolute menu with `right: 0` then drifts off the left side of
+  // the screen on narrow phones (Gilles' Vivaldi report, forum
+  // 2026-09-01). Pinning to the viewport gives us a predictable
+  // right-aligned card whatever the underlying layout does.
+  position: fixed;
+  top: calc(52px + env(safe-area-inset-top) + 0.5rem);
+  right: 0.5rem;
+  left: auto;
   min-width: 280px;
-  // Guard against narrow viewports (feedback Gilles, forum
-  // 2026-09-01): with `right: 0` alone, a min-width larger than
-  // the viewport pushed the menu's left edge off-screen and the
-  // "Enregistrer la trace GPS" text ended up glued to the phone
-  // border. Cap the box so it never exceeds the screen width and
-  // give it real breathing room on both sides.
-  max-width: calc(100vw - 0.8rem);
+  max-width: calc(100vw - 1rem);
   background: white;
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);

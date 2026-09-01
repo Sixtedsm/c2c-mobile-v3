@@ -93,7 +93,7 @@
           :class="{ 'is-forum': isForumRoute }"
           :aria-label="profileShortcutLabel"
         >
-          <img v-if="myAvatarUrl" :src="myAvatarUrl" :alt="$user.userName" />
+          <img v-if="myAvatarUrl && !avatarFailed" :src="myAvatarUrl" :alt="$user.userName" @error="onAvatarError" />
           <fa-icon v-else icon="user" />
         </router-link>
         <login-button v-else class="top-bar-btn" :aria-label="$gettext('Se connecter')">
@@ -126,7 +126,13 @@ export default {
   },
 
   data() {
-    return { searchOpen: false };
+    return {
+      searchOpen: false,
+      // Fall back to the generic fa-icon when the <img> fails (404,
+      // network, CORS on the actual bitmap). Reset when the URL
+      // changes so a fresh template gets a fresh loading attempt.
+      avatarFailed: false,
+    };
   },
 
   mounted() {
@@ -242,9 +248,21 @@ export default {
       // Auto-close the search panel whenever the user navigates.
       this.searchOpen = false;
     },
+    // A fresh URL means a fresh loading attempt — clear the failed
+    // flag so we don't stay on the fa-icon fallback after a valid
+    // template arrives later.
+    myAvatarUrl() {
+      this.avatarFailed = false;
+    },
   },
 
   methods: {
+    onAvatarError() {
+      // eslint-disable-next-line no-console
+      console.warn('[MobileTopBar] avatar image failed to load:', this.myAvatarUrl);
+      this.avatarFailed = true;
+    },
+
     goBack() {
       if (window.history.length > 1) {
         this.$router.back();

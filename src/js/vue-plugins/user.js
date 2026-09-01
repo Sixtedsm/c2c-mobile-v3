@@ -96,6 +96,45 @@ export default function install(Vue) {
       if (this.isLogged && this.forumUsername) {
         this.refreshDiscourseAvatar(this.forumUsername);
       }
+      // Expose a debug entry point so a maintainer without full
+      // devtools access (mobile PWA) can still read the current
+      // state and re-trigger the fetch from the JS console via a
+      // remote inspector. Prints:
+      //   - logged/username/forumUsername/cached avatarTemplate
+      //   - the URL the plugin builds for size 96
+      //   - the raw response from a fresh /u/:username.json call
+      //     (status + parsed body) so we see exactly why the fetch
+      //     succeeds/fails
+      // Kept off the ESLint no-console rule via inline disable — we
+      // only want it in prod when someone types it in on purpose.
+      if (typeof window !== 'undefined') {
+        // eslint-disable-next-line no-console
+        window.__c2cAvatarDebug = async () => {
+          const state = {
+            isLogged: this.isLogged,
+            userName: this.userName,
+            forumUsername: this.forumUsername,
+            avatarTemplate: this.avatarTemplate,
+            avatarUrl96: this.avatarUrl(96),
+          };
+          // eslint-disable-next-line no-console
+          console.log('[c2cAvatarDebug] state:', state);
+          if (!this.forumUsername) return state;
+          const url = `${config.urls.forum}/u/${encodeURIComponent(this.forumUsername)}.json`;
+          try {
+            const resp = await fetch(url, { credentials: 'omit', headers: { Accept: 'application/json' } });
+            const body = resp.ok ? await resp.json() : await resp.text();
+            const result = { url, status: resp.status, ok: resp.ok, template: body?.user?.avatar_template, body };
+            // eslint-disable-next-line no-console
+            console.log('[c2cAvatarDebug] fetch:', result);
+            return { state, fetch: result };
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.log('[c2cAvatarDebug] fetch error:', err);
+            return { state, error: err?.message || String(err) };
+          }
+        };
+      }
     },
 
     methods: {
