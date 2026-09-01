@@ -23,6 +23,8 @@
           <div style="clear: both" />
         </div>
 
+        <fundraiser-banner :document="document" />
+
         <!-- Local flex row replaces Bulma's .level so we can drop the
              bulma/sass/components/level.sass import (#23). -->
         <div class="box no-print">
