@@ -200,8 +200,12 @@ import waypointwebcam from '@/assets/font-awesome-custom/js/waypoint/webcam';
 // Ordered by V3-feature grouping rather than strict alphabetical to keep
 // related icons together; the `V3` alias suffix distinguishes them from
 // any V1 imports of the same name above.
+import { faCalendarCheck as faCalendarCheckV3 } from '@fortawesome/free-solid-svg-icons/faCalendarCheck';
+import { faCircleCheck as faCircleCheckV3 } from '@fortawesome/free-solid-svg-icons/faCircleCheck';
 import { faMobileScreen as faMobileScreenV3 } from '@fortawesome/free-solid-svg-icons/faMobileScreen';
 import { faMountain as faMountainV3 } from '@fortawesome/free-solid-svg-icons/faMountain';
+import { faReply as faReplyV3 } from '@fortawesome/free-solid-svg-icons/faReply';
+import { faThumbsUp as faThumbsUpV3 } from '@fortawesome/free-solid-svg-icons/faThumbsUp';
 import { faPaperPlane as faPaperPlaneV3 } from '@fortawesome/free-solid-svg-icons/faPaperPlane';
 import { faPenToSquare as faPenToSquareV3 } from '@fortawesome/free-solid-svg-icons/faPenToSquare';
 import { faPlay as faPlayV3 } from '@fortawesome/free-solid-svg-icons/faPlay';
@@ -225,9 +229,13 @@ export default function install(Vue) {
     faEnvelopeV3,
     faFloppyDiskV3,
     faLocationDotV3,
+    faCalendarCheckV3,
+    faCircleCheckV3,
     faMagnifyingGlassV3,
     faMobileScreenV3,
     faMountainV3,
+    faReplyV3,
+    faThumbsUpV3,
     faPaperPlaneV3,
     faPenToSquareV3,
     faPlayV3,

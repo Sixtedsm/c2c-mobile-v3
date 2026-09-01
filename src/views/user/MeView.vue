@@ -1,35 +1,27 @@
 <template>
   <section class="section me-view">
     <div class="container">
-      <!-- Header: avatar, name, username, two public profile links
-           (C2C wiki + Discourse forum) — same split camptocamp.org
-           has, brought inside the app so the two shortcuts don't
-           silently kick the user out to Safari. -->
+      <!-- Header: avatar (Discourse profile picture, initials fallback),
+           name, username, single "Mon profil Camptocamp" link. The
+           forum profile is accessible from the forum section itself
+           via its own avatar shortcut, matching how camptocamp.org
+           splits the wiki nav from the Discourse nav. -->
       <header v-if="$user.isLogged" class="me-header">
-        <div class="avatar" aria-hidden="true">{{ initial }}</div>
+        <div class="avatar" aria-hidden="true">
+          <img v-if="avatarUrl" :src="avatarUrl" :alt="$user.userName" />
+          <span v-else>{{ initial }}</span>
+        </div>
         <div class="me-header-text">
           <p class="me-display-name">{{ displayName }}</p>
           <p class="me-username">@{{ $user.userName }}</p>
-          <div class="public-profile-links">
-            <router-link
-              v-if="$user.id"
-              :to="{ name: 'profile', params: { id: $user.id, lang: $user.lang || 'fr' } }"
-              class="public-profile-link"
-            >
-              <fa-icon icon="mountain" />
-              &nbsp;{{ $gettext('Mon profil Camptocamp') }}
-              <fa-icon icon="chevron-right" />
-            </router-link>
-            <router-link
-              v-if="$user.forumUsername"
-              :to="{ name: 'forum-user', params: { username: $user.forumUsername } }"
-              class="public-profile-link"
-            >
-              <fa-icon icon="comment" />
-              &nbsp;{{ $gettext('Mon profil forum') }}
-              <fa-icon icon="chevron-right" />
-            </router-link>
-          </div>
+          <router-link
+            v-if="$user.id"
+            :to="{ name: 'profile', params: { id: $user.id, lang: $user.lang || 'fr' } }"
+            class="public-profile-link"
+          >
+            {{ $gettext('Voir mon profil') }}
+            <fa-icon icon="chevron-right" />
+          </router-link>
         </div>
       </header>
 
@@ -175,6 +167,14 @@ export default {
       return src.charAt(0).toUpperCase();
     },
 
+    // Discourse profile picture. Same URL that camptocamp.org uses
+    // in every other C2C surface — SSO makes the two accounts share
+    // one avatar. Falls back to the initials block when no
+    // avatar_template has been fetched yet.
+    avatarUrl() {
+      return this.$user.avatarUrl?.(160) || null;
+    },
+
     displayName() {
       // If the user has set a "name" distinct from their login, prefer it,
       // otherwise just use the username. We never concatenate the two — that
@@ -312,6 +312,14 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
 }
 
 .avatar--guest {

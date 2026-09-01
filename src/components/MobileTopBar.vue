@@ -78,13 +78,22 @@
           </add-link>
         </dropdown-button>
 
+        <!-- Profile shortcut — context-aware:
+             on /forum/* it opens the user's Discourse forum profile,
+             everywhere else the C2C "Moi" page (which itself links
+             to the wiki profile). Matches how camptocamp.org and
+             forum.camptocamp.org each expose their own avatar
+             shortcut in the top-right, without kicking the user
+             out to a different tab. Shows the Discourse avatar
+             when we have one, otherwise the generic user icon. -->
         <router-link
           v-if="$user.isLogged"
-          :to="{ name: 'me' }"
-          class="top-bar-btn"
-          :aria-label="$gettext('Mon compte')"
+          :to="profileShortcutTo"
+          class="top-bar-btn top-bar-avatar"
+          :aria-label="profileShortcutLabel"
         >
-          <fa-icon icon="user" />
+          <img v-if="myAvatarUrl" :src="myAvatarUrl" :alt="$user.userName" />
+          <fa-icon v-else icon="user" />
         </router-link>
         <login-button v-else class="top-bar-btn" :aria-label="$gettext('Se connecter')">
           <fa-icon icon="user" />
@@ -177,6 +186,32 @@ export default {
 
     addableTypes() {
       return ADDABLE_TYPES;
+    },
+
+    // Route the top-right shortcut points to. On forum pages we open
+    // the Discourse profile — mirrors the two-nav split of the web
+    // site (forum.camptocamp.org has its own avatar in its own top
+    // bar). If we don't have a forum username, fall back to /me so
+    // the icon never leads to a dead route.
+    isForumRoute() {
+      return this.routeName.startsWith('forum');
+    },
+    profileShortcutTo() {
+      if (this.isForumRoute && this.$user.forumUsername) {
+        return { name: 'forum-user', params: { username: this.$user.forumUsername } };
+      }
+      return { name: 'me' };
+    },
+    profileShortcutLabel() {
+      return this.isForumRoute && this.$user.forumUsername
+        ? this.$gettext('Mon profil forum')
+        : this.$gettext('Mon compte');
+    },
+    // Discourse avatar for the current user (same picture the site
+    // displays via SSO). Null while the async fetch is still in flight
+    // on first login — the <fa-icon> falls back visually.
+    myAvatarUrl() {
+      return this.$user.avatarUrl?.(48) || null;
     },
   },
 
@@ -276,6 +311,19 @@ export default {
   &:hover {
     background: rgba(0, 0, 0, 0.05);
     color: #4a4a4a;
+  }
+}
+
+.top-bar-avatar {
+  overflow: hidden;
+  padding: 2px;
+
+  img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
   }
 }
 

@@ -1,4 +1,5 @@
 import c2c from '@/js/apis/c2c';
+import forum from '@/js/apis/forum';
 import trackingService from '@/js/apis/tracking-service';
 import config from '@/js/config';
 import router from '@/js/vue-plugins/router';
@@ -24,6 +25,11 @@ export default function install(Vue) {
       const name = data['name'] ?? null;
       // forum name
       const forumUsername = data['forumUsername'] ?? null;
+      // Discourse `avatar_template` (path with a {size} placeholder).
+      // Cached in localStorage so the profile picture shows up
+      // immediately on cold boot without waiting for the Discourse
+      // round-trip.
+      const avatarTemplate = data['avatarTemplate'] ?? null;
       // private token used for API auth
       const token = data['token'] ?? null;
 
@@ -37,6 +43,7 @@ export default function install(Vue) {
             roles: [],
             name: null,
             forumUsername: null,
+            avatarTemplate: null,
             token: null,
             expire: null,
           }
@@ -47,6 +54,7 @@ export default function install(Vue) {
             roles,
             name,
             forumUsername,
+            avatarTemplate,
             token,
             expire,
           };
@@ -66,11 +74,29 @@ export default function install(Vue) {
         handler: 'updateToken',
         immediate: true,
       },
+      // Refresh the Discourse avatar whenever the forumUsername
+      // changes — covers first sign-in AND account-page edits. Kept
+      // silent on failure: the initials fallback keeps the UI
+      // usable without a photo.
+      forumUsername: {
+        handler(value) {
+          if (value) this.refreshDiscourseAvatar(value);
+        },
+        immediate: false,
+      },
     },
 
     created() {
       this.commitToLocaleStorage_();
       this.installExpiredTokenInterceptor();
+      // Warm the avatar on cold boot when the user is already logged
+      // in (came back to the app after quitting). The cached
+      // avatarTemplate paints instantly; the refresh below ensures a
+      // profile picture change made on the forum eventually reaches
+      // the app.
+      if (this.isLogged && this.forumUsername) {
+        this.refreshDiscourseAvatar(this.forumUsername);
+      }
     },
 
     methods: {
@@ -103,9 +129,40 @@ export default function install(Vue) {
         this.userName = null;
         this.name = null;
         this.forumUsername = null;
+        this.avatarTemplate = null;
         this.expire = null;
 
         this.commitToLocaleStorage_();
+      },
+
+      // Look up the current user's Discourse profile to grab their
+      // `avatar_template` — Discourse serves the same avatar to
+      // camptocamp.org (via SSO) so this is the profile picture the
+      // user set on the C2C site. Cheap: one JSON call, silent on
+      // failure. The template lives in localStorage between sessions
+      // via commitToLocaleStorage_().
+      refreshDiscourseAvatar(username) {
+        forum
+          .getUser(username)
+          .then((response) => {
+            const template = response?.data?.user?.avatar_template;
+            if (template && template !== this.avatarTemplate) {
+              this.avatarTemplate = template;
+              this.commitToLocaleStorage_();
+            }
+          })
+          .catch(() => {
+            // 404 / offline / rate-limited — keep whatever we had
+            // cached, fall back to initials in the UI.
+          });
+      },
+
+      // Build a fully-qualified avatar URL for a given pixel size.
+      // Returns null when no template has been fetched yet, so the
+      // caller can render the initials placeholder in the meantime.
+      avatarUrl(size = 96) {
+        if (!this.avatarTemplate) return null;
+        return forum.avatarUrlFromTemplate(this.avatarTemplate, size);
       },
 
       updateAccount(currentpassword, name, forum_username, email, is_profile_public, newpassword) {
