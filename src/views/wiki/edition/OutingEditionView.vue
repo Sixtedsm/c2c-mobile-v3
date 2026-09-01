@@ -53,6 +53,39 @@
         </div>
       </div>
 
+      <!-- Offline-saved routes picker — SHOWN FIRST so the user's
+           pre-saved topo is immediately reachable when they fill a
+           sortie right after coming off it. Feedback Gilles74
+           (forum 2026-09-01): the API-proposed list can contain
+           hundreds of routes for a large bbox and was drowning
+           the user's actual choice at the very bottom of the page.
+           The V1 upstream flow is otherwise preserved as-is below. -->
+      <div v-if="offlineRoutes.length" class="field offline-routes-field">
+        <label class="label offline-routes-label">
+          <fa-icon icon="bookmark" />&nbsp;{{ $gettext('Mes itinéraires hors-ligne') }}
+          <span class="tag is-light">{{ offlineRoutes.length }}</span>
+        </label>
+        <div class="offline-routes-list">
+          <div v-for="route of offlineRoutes" :key="route.document_id" class="offline-route-item">
+            <input-checkbox
+              :value="routeIsAssociated(route.document_id)"
+              @input="changeRouteAssociation($event, route)"
+            >
+              <activities
+                v-if="route.activities && route.activities.length"
+                :activities="route.activities"
+                class="is-size-4 has-text-secondary"
+              />
+              <document-title :document="route" />
+              <span v-if="route.elevation_max" class="offline-route-meta"> · {{ route.elevation_max }} m </span>
+            </input-checkbox>
+          </div>
+        </div>
+      </div>
+
+      <!-- V1 upstream picker — kept identical (bbox-based propositions
+           + "please move the map" hint + "more results" banner). It's
+           the primary picker on camptocamp.org and stays that way. -->
       <div v-if="possibleRoutes && possibleRoutes.length !== 0" class="field">
         <div v-for="route of possibleRoutes" :key="route.document_id">
           <input-checkbox :value="routeIsAssociated(route.document_id)" @input="changeRouteAssociation($event, route)">
@@ -75,34 +108,6 @@
         <span v-translate>
           More routes are available. You can move the map, specify the name or set an activity to filter them out.
         </span>
-      </div>
-
-      <!-- Offline-saved routes picker. Always available so a user can
-           grab a topo they prepared before going on a trip even if
-           they're back online. Critical for the offline flow: when the
-           map-based search can't reach the API, this is the only way to
-           associate a route with the outing. -->
-      <div v-if="offlineRoutes.length" class="field offline-routes-field">
-        <label class="label offline-routes-label">
-          <fa-icon icon="bookmark" />&nbsp;{{ $gettext('Mes itinéraires hors-ligne') }}
-          <span class="tag is-light">{{ offlineRoutes.length }}</span>
-        </label>
-        <div class="offline-routes-list">
-          <div v-for="route of offlineRoutes" :key="route.document_id" class="offline-route-item">
-            <input-checkbox
-              :value="routeIsAssociated(route.document_id)"
-              @input="changeRouteAssociation($event, route)"
-            >
-              <activities
-                v-if="route.activities && route.activities.length"
-                :activities="route.activities"
-                class="is-size-4 has-text-secondary"
-              />
-              <document-title :document="route" />
-              <span v-if="route.elevation_max" class="offline-route-meta"> · {{ route.elevation_max }} m </span>
-            </input-checkbox>
-          </div>
-        </div>
       </div>
 
       <!-- "Enregistrer sans itinéraire (à compléter plus tard)" — the
