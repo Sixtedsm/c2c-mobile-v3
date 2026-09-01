@@ -149,11 +149,22 @@ export default function install(Vue) {
             if (template && template !== this.avatarTemplate) {
               this.avatarTemplate = template;
               this.commitToLocaleStorage_();
+            } else if (!template) {
+              // Discourse answered but had no avatar_template on the
+              // user payload — highly unusual. Surface it in the
+              // console so a maintainer can inspect the response
+              // shape rather than staring at "no photo shows up".
+              // eslint-disable-next-line no-console
+              console.warn('Discourse user response missing avatar_template', response?.data?.user);
             }
           })
-          .catch(() => {
-            // 404 / offline / rate-limited — keep whatever we had
-            // cached, fall back to initials in the UI.
+          .catch((err) => {
+            // 404 / offline / rate-limited / CORS — keep whatever we
+            // had cached, fall back to initials in the UI. A one-line
+            // warning helps diagnose the "photo doesn't show" case
+            // without breaking anything at runtime.
+            // eslint-disable-next-line no-console
+            console.warn('Discourse avatar fetch failed for', username, err?.message || err);
           });
       },
 

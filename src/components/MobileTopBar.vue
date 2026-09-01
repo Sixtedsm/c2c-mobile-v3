@@ -90,6 +90,7 @@
           v-if="$user.isLogged"
           :to="profileShortcutTo"
           class="top-bar-btn top-bar-avatar"
+          :class="{ 'is-forum': isForumRoute }"
           :aria-label="profileShortcutLabel"
         >
           <img v-if="myAvatarUrl" :src="myAvatarUrl" :alt="$user.userName" />
@@ -324,6 +325,20 @@ export default {
     border-radius: 50%;
     object-fit: cover;
     display: block;
+  }
+
+  // Match camptocamp.org's convention: the wiki avatar is round, the
+  // forum avatar is square (a small rounded square) so the user
+  // instantly sees which side of the site they're on. Same rule
+  // applies to the fallback fa-icon glyph so the shape reads even
+  // before the Discourse avatar_template resolves.
+  &.is-forum {
+    padding: 3px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.05);
+    img {
+      border-radius: 4px;
+    }
   }
 }
 

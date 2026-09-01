@@ -271,6 +271,17 @@ export default {
     },
   },
 
+  mounted() {
+    // Poke the Discourse avatar fetch every time the user lands on
+    // "Moi" — the first cold boot after enabling this feature may
+    // have raced against SW installation and left avatarTemplate
+    // null in localStorage. A fresh call here is cheap (one JSON,
+    // silent on failure) and self-heals that case.
+    if (this.$user.isLogged && this.$user.forumUsername) {
+      this.$user.refreshDiscourseAvatar(this.$user.forumUsername);
+    }
+  },
+
   methods: {
     signOut() {
       // Always sign out locally and bounce home — even if the API call

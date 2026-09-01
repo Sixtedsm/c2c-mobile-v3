@@ -639,6 +639,20 @@ export default {
     margin: 0.5rem 0;
     font-size: 0.85rem;
   }
+  // Lists — Discourse renders <ol>/<ul> with `list-style-position:
+  // outside` (default), which places the marker LEFT of the list's
+  // own box. Without a left inset, the "1." / "2." / "•" ends up
+  // outside the post card's padding and looks like it's dripping off
+  // the card. Push the whole list right so both the marker and the
+  // text sit inside the card.
+  ::v-deep ol,
+  ::v-deep ul {
+    padding-left: 1.5rem;
+    margin: 0.4rem 0;
+  }
+  ::v-deep li {
+    margin: 0.15rem 0;
+  }
 }
 
 .ft-post-actions {
