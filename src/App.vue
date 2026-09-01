@@ -46,7 +46,12 @@
       </transition>
     </div>
     <gdpr-banner></gdpr-banner>
-    <bottom-nav v-if="!isDesktopShell" />
+    <!-- Two coherent worlds, two coherent bars: BottomNav for the
+         topoguide tree, ForumBottomNav for the /forum tree. Never
+         both, never neither. In desktop shell mode both are skipped
+         — the V1 SideMenu owns navigation there. -->
+    <bottom-nav v-if="!isDesktopShell && !isForumRoute" />
+    <forum-bottom-nav v-if="!isDesktopShell && isForumRoute" />
     <onboarding-tour />
     <pull-to-refresh />
     <outing-session-banner v-if="!isDesktopShell" />
@@ -55,6 +60,7 @@
 
 <script>
 import BottomNav from './components/BottomNav.vue';
+import ForumBottomNav from './components/ForumBottomNav.vue';
 import MobileTopBar from './components/MobileTopBar.vue';
 import OnboardingTour from './components/OnboardingTour.vue';
 import OutingSessionBanner from './components/OutingSessionBanner.vue';
@@ -73,6 +79,7 @@ export default {
 
   components: {
     BottomNav,
+    ForumBottomNav,
     DfmAdSmall,
     SideMenu,
     Navigation,
@@ -110,6 +117,16 @@ export default {
       if (mode === 'desktop') return true;
       if (mode === 'mobile') return false;
       return this.widthBucket === 'desktop';
+    },
+
+    // True whenever the current route is a forum page. Drives the
+    // BottomNav vs ForumBottomNav split so the app hosts two
+    // coherent worlds side-by-side. Any route name starting with
+    // "forum" counts (forum, forum-category, forum-topic,
+    // forum-user, forum-categories, forum-search).
+    isForumRoute() {
+      const name = this.$route?.name || '';
+      return name === 'forum' || name.startsWith('forum-');
     },
   },
 

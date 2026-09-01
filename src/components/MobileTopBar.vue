@@ -107,7 +107,11 @@
 <script>
 import LogoCtc from './LogoCtc.vue';
 
-const TAB_ROUTES = new Set(['topoguide', 'home', 'offline', 'me', 'more']);
+// Routes considered "tabs" — the ones the BottomNav (or
+// ForumBottomNav) sits on top of. On these, the top-bar shows the
+// logo + no back arrow. Add the forum tab routes here so their
+// header matches the top-level tabs of the topoguide world.
+const TAB_ROUTES = new Set(['topoguide', 'home', 'offline', 'me', 'more', 'forum', 'forum-categories', 'forum-search']);
 // Static — used as a v-for source. No reactive deps, no need for a
 // per-render computed. Hoisted to module scope.
 const ADDABLE_TYPES = ['outing', 'route', 'waypoint', 'article', 'book', 'xreport'];
@@ -177,6 +181,12 @@ export default {
         yeti: this.$gettext('Yeti'),
         serac: this.$gettext('À propos de Sérac'),
         whatsnew: this.$gettext('Nouveautés'),
+        forum: this.$gettext('Camptocamp'),
+        'forum-category': this.$gettext('Camptocamp'),
+        'forum-topic': this.$gettext('Camptocamp'),
+        'forum-user': this.$gettext('Camptocamp'),
+        'forum-categories': this.$gettext('Camptocamp'),
+        'forum-search': this.$gettext('Camptocamp'),
         'outings-stats': this.$gettext('Statistiques'),
         'sophie-picture-contest': this.$gettext('Concours photo'),
         'associations-history': this.$gettext('Historique des associations'),

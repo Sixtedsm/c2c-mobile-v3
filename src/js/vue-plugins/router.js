@@ -121,6 +121,22 @@ const routes = [
     component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumUserView'),
     props: true,
   },
+  {
+    // Dedicated categories page — landing route for the "Catégories"
+    // tab of the forum bottom-nav. Same data as the categories block
+    // on /forum, but full screen with its own active state.
+    path: '/forum/categories',
+    name: 'forum-categories',
+    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumCategoriesView'),
+  },
+  {
+    // Dedicated search page — landing route for the "Rechercher" tab
+    // of the forum bottom-nav. Query survives in the URL (?q=…) so
+    // the search is shareable and reload-safe.
+    path: '/forum/search',
+    name: 'forum-search',
+    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumSearchView'),
+  },
 ];
 
 const addDocumentTypeView = function (def, viewComponent, editionComponent) {

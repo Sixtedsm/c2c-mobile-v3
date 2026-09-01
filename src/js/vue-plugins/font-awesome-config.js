@@ -202,6 +202,8 @@ import waypointwebcam from '@/assets/font-awesome-custom/js/waypoint/webcam';
 // any V1 imports of the same name above.
 import { faCalendarCheck as faCalendarCheckV3 } from '@fortawesome/free-solid-svg-icons/faCalendarCheck';
 import { faCircleCheck as faCircleCheckV3 } from '@fortawesome/free-solid-svg-icons/faCircleCheck';
+import { faClockRotateLeft as faClockRotateLeftV3 } from '@fortawesome/free-solid-svg-icons/faClockRotateLeft';
+import { faFolder as faFolderV3 } from '@fortawesome/free-solid-svg-icons/faFolder';
 import { faMobileScreen as faMobileScreenV3 } from '@fortawesome/free-solid-svg-icons/faMobileScreen';
 import { faMountain as faMountainV3 } from '@fortawesome/free-solid-svg-icons/faMountain';
 import { faReply as faReplyV3 } from '@fortawesome/free-solid-svg-icons/faReply';
@@ -231,6 +233,8 @@ export default function install(Vue) {
     faLocationDotV3,
     faCalendarCheckV3,
     faCircleCheckV3,
+    faClockRotateLeftV3,
+    faFolderV3,
     faMagnifyingGlassV3,
     faMobileScreenV3,
     faMountainV3,
