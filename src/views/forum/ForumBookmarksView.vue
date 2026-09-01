@@ -125,8 +125,19 @@ export default {
         this.bookmarks = bmRes?.data?.user_bookmark_list?.bookmarks || [];
         this.categories = catRes?.data?.category_list?.categories || [];
       } catch (err) {
+        // Every realistic failure on this cross-origin endpoint means
+        // the Discourse session cookie is not shared with our origin.
+        // Real 401/403/419 obviously; a 200-HTML "please log in" page
+        // that fails JSON.parse (Discourse serves that anonymously
+        // when hide_user_profiles_from_public is on); and network
+        // errors when the browser blocks the credentialed request.
+        // Treating them all the same means the user sees the honest
+        // "session not shared yet" notice instead of a red error.
         const status = err?.response?.status;
-        if (status === 401 || status === 403 || status === 419) {
+        const rawBody = err?.response?.data;
+        const looksHtml = typeof rawBody === 'string' && rawBody.trim().startsWith('<');
+        const jsonParseFail = /JSON|Unexpected token/i.test(String(err?.message || ''));
+        if (status === 401 || status === 403 || status === 419 || looksHtml || jsonParseFail || !status) {
           this.needsForumLogin = true;
         } else {
           this.error = true;

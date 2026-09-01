@@ -156,8 +156,17 @@ export default {
         const res = await forum.getNotifications({ limit: 50 });
         this.notifications = res?.data?.notifications || [];
       } catch (err) {
+        // Same broadened fallback as ForumBookmarksView: any failure
+        // on this cross-origin endpoint effectively means the session
+        // cookie isn't shared with our origin. Real 401/403/419, a
+        // 200-HTML login page that fails JSON.parse, or a blocked
+        // credentialed request all land in the honest notice instead
+        // of a red "Impossible de charger" panel.
         const status = err?.response?.status;
-        if (status === 401 || status === 403 || status === 419) {
+        const rawBody = err?.response?.data;
+        const looksHtml = typeof rawBody === 'string' && rawBody.trim().startsWith('<');
+        const jsonParseFail = /JSON|Unexpected token/i.test(String(err?.message || ''));
+        if (status === 401 || status === 403 || status === 419 || looksHtml || jsonParseFail || !status) {
           this.needsForumLogin = true;
         } else {
           this.error = true;

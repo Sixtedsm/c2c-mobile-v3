@@ -220,11 +220,43 @@
           </div>
         </section>
 
-        <p class="ft-external">
-          <a :href="topicExternalUrl" target="_self" rel="noopener">
-            {{ $gettext('Ouvrir sur le forum Camptocamp') }} →
-          </a>
-        </p>
+        <!-- Discourse "N sur N" progress + topic actions. The progress
+             mirrors the green pill camptocamp.org shows at the bottom
+             of a thread; the actions block hosts Watch/Track/Mute
+             toggles (session-cookie required — the picker asks the
+             user to connect on forum.camptocamp.org when there's no
+             session, in line with bookmarks/notifs behaviour). -->
+        <footer v-if="topic" class="ft-footer">
+          <div v-if="totalPostsCount" class="ft-progress" :title="postsProgressLabel">
+            <span class="ft-progress-bar">
+              <span class="ft-progress-fill" :style="{ width: postsProgressPercent + '%' }"></span>
+            </span>
+            <span class="ft-progress-label">
+              {{ postsProgressLabel }}
+            </span>
+          </div>
+
+          <div v-if="$user.isLogged" class="ft-actions">
+            <label class="ft-actions-label" for="ft-notif-level">{{ $gettext('Actions sur le sujet') }}</label>
+            <div class="ft-actions-picker">
+              <select
+                id="ft-notif-level"
+                v-model.number="notificationLevel"
+                :disabled="settingNotifLevel"
+                @change="onNotifLevelChange"
+              >
+                <option :value="1">{{ $gettext('Normal') }}</option>
+                <option :value="2">{{ $gettext('Suivi (Tracking)') }}</option>
+                <option :value="3">{{ $gettext('Surveillé (Watching)') }}</option>
+                <option :value="0">{{ $gettext('Muet (Muted)') }}</option>
+              </select>
+              <fa-icon v-if="settingNotifLevel" icon="spinner" spin class="ft-actions-spinner" />
+            </div>
+            <p class="ft-actions-hint">
+              {{ notificationLevelLabel }}
+            </p>
+          </div>
+        </footer>
       </template>
     </div>
   </section>
@@ -284,6 +316,14 @@ export default {
       editingPostId: null,
       editRaw: '',
       savingEdit: false,
+      // Notification level for the current viewer on this topic.
+      // 0 = Muted, 1 = Regular, 2 = Tracking, 3 = Watching. Bootstrap
+      // from topic.notification_level when the payload includes it
+      // (only present with a session cookie). Session-cookie-less
+      // browsers see it stuck at 1 until forum.camptocamp.org and
+      // sixtedsm.github.io share cookies.
+      notificationLevel: 1,
+      settingNotifLevel: false,
     };
   },
 
@@ -386,6 +426,40 @@ export default {
       const p = this.hydratedPosts.find((pp) => pp.accepted_answer);
       return p?.id || null;
     },
+
+    // Posts progress — number of posts we currently render vs the
+    // total in the thread. Powers the green pill camptocamp.org
+    // shows at the bottom of a topic ("N sur N").
+    totalPostsCount() {
+      const t = this.topic;
+      if (!t) return 0;
+      // posts_count is the authoritative Discourse value; the stream
+      // length matches after all posts hydrate, and highest_post_number
+      // is a decent last-resort fallback on very old payloads.
+      return t.posts_count || (t.post_stream?.stream?.length ?? 0) || t.highest_post_number || 0;
+    },
+    postsProgressPercent() {
+      if (!this.totalPostsCount) return 0;
+      const p = Math.min(this.visiblePosts.length, this.totalPostsCount);
+      return Math.round((p / this.totalPostsCount) * 100);
+    },
+    postsProgressLabel() {
+      return `${this.visiblePosts.length} / ${this.totalPostsCount}`;
+    },
+    notificationLevelLabel() {
+      // Same wording Discourse itself surfaces on the "Actions sur le
+      // sujet" dropdown at forum.camptocamp.org.
+      switch (Number(this.notificationLevel)) {
+        case 3:
+          return this.$gettext('Vous recevrez des notifications pour chaque nouveau message.');
+        case 2:
+          return this.$gettext('Vous serez notifié·e si quelqu’un vous mentionne ou répond à votre message.');
+        case 0:
+          return this.$gettext('Vous ne recevrez aucune notification pour ce sujet.');
+        default:
+          return this.$gettext('Vous serez notifié·e uniquement pour les mentions et les réponses directes.');
+      }
+    },
   },
 
   watch: {
@@ -417,6 +491,12 @@ export default {
         // correct state.
         if (this.firstPost?.bookmark_id) {
           this.bookmarkedId = this.firstPost.bookmark_id;
+        }
+        // notification_level is only present when Discourse could
+        // identify the viewer via cookie. Anonymous callers get no
+        // field, so we leave the default (1 = Regular).
+        if (this.topic?.notification_level != null) {
+          this.notificationLevel = this.topic.notification_level;
         }
       } catch (e) {
         this.error = true;
@@ -466,6 +546,39 @@ export default {
         });
       } finally {
         this.bookmarking = false;
+      }
+    },
+
+    // ---- Notification level (Watch / Track / Mute) ---------------
+
+    async onNotifLevelChange() {
+      if (!this.topic?.id || this.settingNotifLevel) return;
+      const target = Number(this.notificationLevel);
+      this.settingNotifLevel = true;
+      try {
+        await forum.setTopicNotificationLevel(this.topic.id, target);
+        toast({
+          type: 'is-success',
+          position: 'bottom-center',
+          message: this.$gettext('Préférence de notification enregistrée.'),
+        });
+      } catch (err) {
+        // Any failure here almost always means the cross-origin cookie
+        // isn't set. Revert the picker to the last known good level
+        // (or default 1) and surface an honest message.
+        this.notificationLevel = Number(this.topic?.notification_level ?? 1);
+        const status = err?.response?.status;
+        toast({
+          type: 'is-warning',
+          position: 'bottom-center',
+          duration: 5000,
+          message:
+            status === 401 || status === 403 || status === 419
+              ? this.$gettext('Connectez-vous sur forum.camptocamp.org pour modifier vos préférences.')
+              : this.$gettext('Cette action n’est pas encore disponible depuis l’app (session forum non partagée).'),
+        });
+      } finally {
+        this.settingNotifLevel = false;
       }
     },
 
@@ -709,7 +822,7 @@ export default {
             type: 'is-warning',
             position: 'bottom-center',
             duration: 4500,
-            message: this.$gettext("Impossible d'envoyer depuis l'app. Utilisez « Ouvrir sur le forum »."),
+            message: this.$gettext("Impossible d'envoyer votre réponse depuis l'app pour l'instant."),
           });
         }
       } finally {
@@ -1106,6 +1219,97 @@ export default {
   }
 }
 
+// Bottom-of-topic footer — progress pill + notification-level picker.
+// Matches the green "N sur N" indicator + "Actions sur le sujet"
+// dropdown that camptocamp.org shows in the same spot on desktop.
+.ft-footer {
+  margin: 1rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.ft-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  background: rgba(43, 143, 76, 0.1);
+  border: 1px solid rgba(43, 143, 76, 0.3);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #2b8f4c;
+  font-weight: 600;
+}
+.ft-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(43, 143, 76, 0.2);
+  border-radius: 999px;
+  overflow: hidden;
+  min-width: 60px;
+}
+.ft-progress-fill {
+  display: block;
+  height: 100%;
+  background: #2b8f4c;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+.ft-progress-label {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+.ft-actions {
+  padding: 0.6rem 0.75rem;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.ft-actions-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #6b6b6b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ft-actions-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+
+  select {
+    flex: 1;
+    padding: 0.4rem 0.6rem;
+    background: white;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 4px;
+    font-size: 0.9rem;
+    color: #4a4a4a;
+
+    &:focus {
+      outline: none;
+      border-color: #ff9933;
+      box-shadow: 0 0 0 0.125em rgba(255, 153, 51, 0.2);
+    }
+    &:disabled {
+      opacity: 0.6;
+    }
+  }
+}
+.ft-actions-spinner {
+  color: #ff9933;
+}
+.ft-actions-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #6b6b6b;
+  line-height: 1.35;
+}
+
 .ft-loading,
 .ft-error {
   padding: 0.75rem;
@@ -1186,6 +1390,30 @@ html[data-theme='dark'] {
       color: #4bc26b;
       background: linear-gradient(90deg, rgba(75, 194, 107, 0.15), rgba(75, 194, 107, 0.03));
       border-bottom-color: rgba(75, 194, 107, 0.25);
+    }
+    .ft-progress {
+      background: rgba(75, 194, 107, 0.15);
+      border-color: rgba(75, 194, 107, 0.35);
+      color: #4bc26b;
+    }
+    .ft-progress-bar {
+      background: rgba(75, 194, 107, 0.25);
+    }
+    .ft-progress-fill {
+      background: #4bc26b;
+    }
+    .ft-actions {
+      background: #2a2a2a;
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+    .ft-actions-label,
+    .ft-actions-hint {
+      color: #b5b5b5;
+    }
+    .ft-actions-picker select {
+      background: #1f1f1f;
+      color: #e5e5e5;
+      border-color: rgba(255, 255, 255, 0.15);
     }
   }
 }

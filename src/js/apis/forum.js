@@ -289,6 +289,23 @@ Forum.prototype.markNotificationsRead = async function (notificationId) {
   });
 };
 
+// Set the current user's notification level on a topic. Discourse
+// levels: 0 = Muted, 1 = Regular (default), 2 = Tracking (notify on
+// mentions + first unread on visit), 3 = Watching (notify on every
+// new post). Requires a session cookie on forum.camptocamp.org.
+Forum.prototype.setTopicNotificationLevel = async function (topicId, level) {
+  const csrf = await this._getCsrf();
+  if (!csrf) throw new Error('no-csrf');
+  const body = new URLSearchParams({ notification_level: String(level) });
+  return this.authAxios.post(`/t/${topicId}/notifications.json`, body.toString(), {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRF-Token': csrf,
+      'Discourse-Logged-In': 'true',
+    },
+  });
+};
+
 // Upload endpoint — used by the reply editor when the user picks an
 // image. Returns the URL to embed in the markdown as ![alt](url).
 // `type` is 'composer' for a post upload.
@@ -322,6 +339,19 @@ Forum.prototype.getAvatarUrl = function (user, size) {
   if (!user?.avatar_template) return null;
   const template = user.avatar_template.startsWith('/') ? this.url + user.avatar_template : user.avatar_template;
   return template.replace('{size}', String(size));
+};
+
+// Direct-URL fallback for when we don't have the user object (e.g.
+// Discourse serves an HTML login page instead of /u/:username.json
+// because `hide_user_profiles_from_public` is on). This mirrors the
+// V1 pattern in Navigation.vue and is what forum.camptocamp.org
+// itself serves at that path. Always use for the current viewer's
+// own avatar or when we only have a username.
+Forum.prototype.avatarUrlByUsername = function (username, size = 96) {
+  if (!username) return null;
+  const lower = String(username).toLowerCase();
+  const hostname = this.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  return `${this.url}/user_avatar/${hostname}/${encodeURIComponent(lower)}/${size}/1_1.png`;
 };
 
 // Convert a Discourse `avatar_template` (path with {size} placeholder)

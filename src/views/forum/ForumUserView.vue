@@ -230,11 +230,21 @@ export default {
       return !!me && me === shown;
     },
     avatarLarge() {
-      return forum.getAvatarUrl(this.user, 240);
+      // Prefer the avatar_template served on /u/:username.json; when
+      // that endpoint returns HTML (Discourse's `hide_user_profiles_
+      // from_public` setting sends a login page anonymously), fall
+      // back to the direct /user_avatar/ path Discourse serves for
+      // every account, keyed on the username from the URL. This is
+      // the same pattern V1's Navigation.vue uses for the top-right
+      // avatar and matches what forum.camptocamp.org itself serves.
+      return forum.getAvatarUrl(this.user, 240) || forum.avatarUrlByUsername(this.username, 240);
     },
     initials() {
-      const s = this.user?.name || this.user?.username || '?';
-      return s.slice(0, 1).toUpperCase();
+      // Same fallback ladder as avatarLarge: user object → URL param
+      // → '?'. So a profile whose /u/:username.json returned HTML
+      // still shows the first letter of the username, not a bare '?'.
+      const s = this.user?.name || this.user?.username || this.username || '?';
+      return String(s).slice(0, 1).toUpperCase();
     },
     joinedLabel() {
       const d = this.user?.created_at;
@@ -363,8 +373,12 @@ export default {
     },
 
     peopleAvatarUrl(u) {
-      if (!u?.avatar_template) return null;
-      return forum.avatarUrlFromTemplate(u.avatar_template, 48);
+      // Same fallback ladder as the header avatar — if the users[]
+      // summary blob lacks `avatar_template` for some reason,
+      // reconstruct from the username so we don't fall through to
+      // the initials block for every liked-by row.
+      if (u?.avatar_template) return forum.avatarUrlFromTemplate(u.avatar_template, 48);
+      return forum.avatarUrlByUsername(u?.username, 48);
     },
 
     badgeIcon(badge) {
