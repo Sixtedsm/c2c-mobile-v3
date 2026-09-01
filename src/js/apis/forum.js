@@ -52,6 +52,27 @@ Forum.prototype.getLatest = function (excludeCategoryIds) {
   return result;
 };
 
+// Top topics — most popular over a period. Public endpoint (no
+// cookie needed). period: 'all' | 'yearly' | 'quarterly' | 'monthly'
+// | 'weekly' | 'daily'.
+Forum.prototype.getTop = function (period = 'monthly') {
+  const result = this.get(`/top.json?period=${encodeURIComponent(period)}`);
+  result.then((response) => Forum.prototype._hydrateLastPosters(response.data));
+  return result;
+};
+
+// All tags known to Discourse (grouped or ungrouped). Public.
+Forum.prototype.getTags = function () {
+  return this.get('/tags.json');
+};
+
+// Topics carrying a given tag. Public.
+Forum.prototype.getTagTopics = function (tag) {
+  const result = this.get(`/tag/${encodeURIComponent(tag)}.json`);
+  result.then((response) => Forum.prototype._hydrateLastPosters(response.data));
+  return result;
+};
+
 // All categories, subcategories included. Discourse returns a flat
 // list; the tree is reconstructed via `parent_category_id` in the
 // components that need it.
@@ -94,10 +115,17 @@ Forum.prototype.getUserTopics = function (username) {
 };
 
 // Full-text search across the forum. Discourse `q` accepts operators
-// (in:pinned, category:slug, …) but we pass the raw query and let the
-// user learn what they want.
-Forum.prototype.search = function (query) {
-  return this.get(`/search.json?q=${encodeURIComponent(query)}`);
+// (in:pinned, category:slug, user:xxx, after:yyyy-mm-dd, …). Callers
+// pass the raw query plus optional structured filters that we glue
+// on with the right operators — keeps the callers from having to
+// remember the exact operator syntax.
+Forum.prototype.search = function (query, { categorySlug, username, after, before } = {}) {
+  let full = String(query || '').trim();
+  if (categorySlug) full += ` category:${categorySlug}`;
+  if (username) full += ` user:${String(username).toLowerCase()}`;
+  if (after) full += ` after:${after}`;
+  if (before) full += ` before:${before}`;
+  return this.get(`/search.json?q=${encodeURIComponent(full.trim())}`);
 };
 
 // Read the raw markdown of a post — used to build a `[quote]` block

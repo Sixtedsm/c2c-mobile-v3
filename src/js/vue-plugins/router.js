@@ -160,6 +160,16 @@ const routes = [
     component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumNotificationsView'),
     meta: { requiresAuth: true },
   },
+  {
+    // Topics carrying a given Discourse tag. Landing route for the
+    // "Étiquettes populaires" pills on ForumView and the tag pills on
+    // TopicRow. Tag name lives in the URL segment (no id — Discourse
+    // uses the tag name itself as the key).
+    path: '/forum/tag/:tag',
+    name: 'forum-tag',
+    component: () => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumTagView'),
+    props: true,
+  },
 ];
 
 const addDocumentTypeView = function (def, viewComponent, editionComponent) {

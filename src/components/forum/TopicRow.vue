@@ -4,7 +4,24 @@
     <div class="fr-body">
       <div class="fr-title-line">
         <fa-icon v-if="isPinned" icon="thumbtack" class="fr-pinned-icon" :title="$gettext('Épinglé')" />
+        <fa-icon
+          v-if="hasSolution"
+          icon="circle-check"
+          class="fr-solved-icon"
+          :title="$gettext('Résolu — une solution a été acceptée')"
+        />
         <span class="fr-title">{{ topic.fancy_title || topic.title }}</span>
+      </div>
+      <div v-if="tags.length" class="fr-tags">
+        <router-link
+          v-for="tag in tags"
+          :key="tag"
+          :to="{ name: 'forum-tag', params: { tag } }"
+          class="fr-tag"
+          @click.native.stop
+        >
+          # {{ tag }}
+        </router-link>
       </div>
       <div class="fr-meta-line">
         <category-pill v-if="category" :category="category" :parent="parentCategory" class="fr-cat" />
@@ -72,6 +89,19 @@ export default {
     },
     isPinned() {
       return !!(this.topic.pinned || this.topic.pinned_globally);
+    },
+    // Discourse topic-list payloads expose tags as an array of names
+    // (`tags`). Also caps display to 4 to keep rows compact — extras
+    // become a "+N" chip.
+    tags() {
+      const list = Array.isArray(this.topic.tags) ? this.topic.tags : [];
+      return list.slice(0, 4);
+    },
+    // Discourse "Solved" plugin flag. Present when the topic has a
+    // post marked as the accepted answer. Older payloads use
+    // `accepted_answer` — accept both shapes.
+    hasSolution() {
+      return !!(this.topic.has_accepted_answer || this.topic.accepted_answer);
     },
     unreadCount() {
       // Discourse's own `unread` + `new_posts` counters (present on
@@ -171,6 +201,35 @@ export default {
   font-size: 0.72rem;
   flex: 0 0 auto;
 }
+.fr-solved-icon {
+  color: #2b8f4c;
+  font-size: 0.85rem;
+  flex: 0 0 auto;
+}
+.fr-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.1rem;
+}
+.fr-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.4rem;
+  background: rgba(51, 122, 183, 0.08);
+  color: #337ab7;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  text-decoration: none;
+  line-height: 1.35;
+
+  &:hover,
+  &:focus {
+    background: rgba(51, 122, 183, 0.16);
+    color: #285a8f;
+    text-decoration: none;
+  }
+}
 
 .fr-title {
   font-weight: 600;
@@ -257,6 +316,18 @@ html[data-theme='dark'] {
   }
   .fr-meta-line {
     color: #b5b5b5;
+  }
+  .fr-tag {
+    background: rgba(109, 180, 255, 0.14);
+    color: #6db4ff;
+    &:hover,
+    &:focus {
+      background: rgba(109, 180, 255, 0.24);
+      color: #a3ccff;
+    }
+  }
+  .fr-solved-icon {
+    color: #4bc26b;
   }
 }
 </style>

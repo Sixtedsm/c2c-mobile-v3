@@ -23,7 +23,15 @@
       </p>
 
       <div class="ft-header-row">
-        <h1 v-if="title" class="ft-title">{{ title }}</h1>
+        <h1 v-if="title" class="ft-title">
+          <fa-icon
+            v-if="hasSolution"
+            icon="circle-check"
+            class="ft-solved-icon"
+            :title="$gettext('Résolu — une solution a été acceptée')"
+          />
+          {{ title }}
+        </h1>
         <button
           v-if="topic && $user.isLogged"
           type="button"
@@ -39,8 +47,11 @@
           />
         </button>
       </div>
-      <div v-if="topicCategory" class="ft-cat-line">
-        <category-pill :category="topicCategory" :parent="topicParentCategory" />
+      <div v-if="topicCategory || topicTags.length" class="ft-cat-line">
+        <category-pill v-if="topicCategory" :category="topicCategory" :parent="topicParentCategory" />
+        <router-link v-for="tag in topicTags" :key="tag" :to="{ name: 'forum-tag', params: { tag } }" class="ft-tag">
+          # {{ tag }}
+        </router-link>
       </div>
 
       <div v-if="loading" class="ft-loading"><fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}</div>
@@ -54,8 +65,12 @@
           v-for="post in visiblePosts"
           :key="post.id"
           class="ft-post"
-          :class="{ 'is-op': post.post_number === 1 }"
+          :class="{ 'is-op': post.post_number === 1, 'is-solution': isSolutionPost(post) }"
         >
+          <div v-if="isSolutionPost(post)" class="ft-solution-banner">
+            <fa-icon icon="circle-check" />
+            &nbsp;{{ $gettext('Solution acceptée') }}
+          </div>
           <header class="ft-post-header">
             <user-avatar :user="postUser(post)" :size="48" />
             <div class="ft-post-meta">
@@ -347,6 +362,30 @@ export default {
     myLoweredForumUsername() {
       return String(this.$user?.forumUsername || '').toLowerCase();
     },
+
+    // Tags on the topic — Discourse exposes them as string[]. Empty
+    // when the plugin is off or the topic has none.
+    topicTags() {
+      return Array.isArray(this.topic?.tags) ? this.topic.tags : [];
+    },
+
+    // Discourse "Solved" plugin surfaces the accepted answer in
+    // several shapes depending on payload version. Try each in turn.
+    hasSolution() {
+      if (!this.topic) return false;
+      if (this.topic.has_accepted_answer) return true;
+      if (this.topic.accepted_answer) return true;
+      return this.hydratedPosts.some((p) => p.accepted_answer);
+    },
+    solutionPostId() {
+      if (!this.topic) return null;
+      // Preferred shape: topic.accepted_answer.post_number (topic
+      // payload). Fallback: scan hydrated posts for accepted_answer.
+      const acc = this.topic.accepted_answer;
+      if (acc?.post_id) return acc.post_id;
+      const p = this.hydratedPosts.find((pp) => pp.accepted_answer);
+      return p?.id || null;
+    },
   },
 
   watch: {
@@ -436,6 +475,12 @@ export default {
       if (!this.$user.isLogged || !this.myLoweredForumUsername) return false;
       if (!post?.username) return false;
       return String(post.username).toLowerCase() === this.myLoweredForumUsername;
+    },
+
+    isSolutionPost(post) {
+      if (!post) return false;
+      if (post.accepted_answer) return true;
+      return this.solutionPostId && post.id === this.solutionPostId;
     },
 
     async startEdit(post) {
@@ -765,8 +810,53 @@ export default {
   margin: 0 0 0.5rem;
 }
 
+.ft-solved-icon {
+  color: #2b8f4c;
+  font-size: 0.95rem;
+  margin-right: 0.15rem;
+  vertical-align: -1px;
+}
+
 .ft-cat-line {
   margin-bottom: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ft-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.5rem;
+  background: rgba(51, 122, 183, 0.08);
+  color: #337ab7;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  text-decoration: none;
+
+  &:hover,
+  &:focus {
+    background: rgba(51, 122, 183, 0.16);
+    color: #285a8f;
+    text-decoration: none;
+  }
+}
+
+.ft-solution-banner {
+  margin: -0.85rem -0.85rem 0.7rem;
+  padding: 0.35rem 0.85rem;
+  background: linear-gradient(90deg, rgba(43, 143, 76, 0.14), rgba(43, 143, 76, 0.04));
+  color: #2b8f4c;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(43, 143, 76, 0.25);
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  display: flex;
+  align-items: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .ft-post {
@@ -778,6 +868,10 @@ export default {
 
   &.is-op {
     border-color: rgba(255, 153, 51, 0.35);
+  }
+  &.is-solution {
+    border-color: rgba(43, 143, 76, 0.5);
+    background: linear-gradient(180deg, rgba(43, 143, 76, 0.04) 0%, transparent 100%);
   }
 }
 
@@ -1071,6 +1165,27 @@ html[data-theme='dark'] {
     .ft-external a,
     .ft-load-more {
       color: #6db4ff;
+    }
+    .ft-tag {
+      background: rgba(109, 180, 255, 0.14);
+      color: #6db4ff;
+      &:hover,
+      &:focus {
+        background: rgba(109, 180, 255, 0.24);
+        color: #a3ccff;
+      }
+    }
+    .ft-solved-icon {
+      color: #4bc26b;
+    }
+    .ft-post.is-solution {
+      border-color: rgba(75, 194, 107, 0.5);
+      background: linear-gradient(180deg, rgba(75, 194, 107, 0.06) 0%, transparent 100%);
+    }
+    .ft-solution-banner {
+      color: #4bc26b;
+      background: linear-gradient(90deg, rgba(75, 194, 107, 0.15), rgba(75, 194, 107, 0.03));
+      border-bottom-color: rgba(75, 194, 107, 0.25);
     }
   }
 }

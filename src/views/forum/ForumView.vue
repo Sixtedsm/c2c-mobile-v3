@@ -106,24 +106,87 @@
           </ul>
         </section>
 
-        <!-- Latest — the default landing feed. -->
+        <!-- Feed: Latest vs Top over a period. Two tabs; Top opens a
+             sub-selector for the time window (mensuel / hebdo / …).
+             All endpoints are public — no cookie needed. -->
         <section class="forum-block">
           <h2 class="forum-block-title">
             <fa-icon icon="clock-rotate-left" />
-            &nbsp;{{ $gettext('Discussions récentes') }}
+            &nbsp;{{ feedTab === 'latest' ? $gettext('Discussions récentes') : $gettext('Discussions populaires') }}
           </h2>
-          <div v-if="loadingLatest" class="forum-loading">
+
+          <div class="forum-tabs" role="tablist">
+            <button
+              type="button"
+              class="forum-tab"
+              :class="{ 'is-active': feedTab === 'latest' }"
+              role="tab"
+              :aria-selected="feedTab === 'latest' ? 'true' : 'false'"
+              @click="switchFeed('latest')"
+            >
+              {{ $gettext('Récentes') }}
+            </button>
+            <button
+              type="button"
+              class="forum-tab"
+              :class="{ 'is-active': feedTab === 'top' }"
+              role="tab"
+              :aria-selected="feedTab === 'top' ? 'true' : 'false'"
+              @click="switchFeed('top')"
+            >
+              {{ $gettext('Populaires') }}
+            </button>
+          </div>
+
+          <div v-if="feedTab === 'top'" class="forum-period">
+            <label
+              v-for="p in periods"
+              :key="p.value"
+              class="forum-period-pill"
+              :class="{ 'is-active': topPeriod === p.value }"
+            >
+              <input v-model="topPeriod" type="radio" name="topPeriod" :value="p.value" @change="loadTop" />
+              <span>{{ p.label }}</span>
+            </label>
+          </div>
+
+          <div v-if="loadingFeed" class="forum-loading">
             <fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}
           </div>
-          <div v-else-if="latestError" class="forum-error">
+          <div v-else-if="feedError" class="forum-error">
             {{ $gettext('Impossible de joindre le forum.') }}
           </div>
-          <ul v-else-if="unpinnedLatest.length" class="forum-list">
-            <li v-for="t in unpinnedLatest" :key="t.id">
+          <ul v-else-if="feedTopics.length" class="forum-list">
+            <li v-for="t in feedTopics" :key="t.id">
               <topic-row :topic="t" :categories="categories" />
             </li>
           </ul>
-          <p v-else class="forum-empty">{{ $gettext('Aucune discussion récente.') }}</p>
+          <p v-else class="forum-empty">
+            {{
+              feedTab === 'top'
+                ? $gettext('Aucune discussion populaire sur cette période.')
+                : $gettext('Aucune discussion récente.')
+            }}
+          </p>
+        </section>
+
+        <!-- Popular tags — public endpoint. Tap a tag to browse the
+             topics carrying it. Cap the display to top-N so this
+             block doesn't push the feed off screen on mobile. -->
+        <section v-if="topTags.length" class="forum-block">
+          <h2 class="forum-block-title">
+            <fa-icon icon="tag" />
+            &nbsp;{{ $gettext('Étiquettes populaires') }}
+          </h2>
+          <ul class="forum-tags">
+            <li v-for="tag in topTags" :key="tag.name || tag.id" class="forum-tag-item">
+              <router-link :to="{ name: 'forum-tag', params: { tag: tag.name || tag.id } }" class="forum-tag-pill">
+                <fa-icon icon="tag" />
+                <span>{{ tag.name || tag.id }}</span>
+                <span v-if="tag.count" class="forum-tag-count">{{ tag.count }}</span>
+              </router-link>
+            </li>
+          </ul>
         </section>
       </template>
     </div>
@@ -163,9 +226,16 @@ export default {
     return {
       categories: [],
       latest: [],
+      top: [],
+      topLoadedFor: null, // remember last period fetched, avoid refetch
       myTopics: [],
       loadingLatest: true,
+      loadingTop: false,
       latestError: false,
+      topError: false,
+      feedTab: 'latest',
+      topPeriod: 'monthly',
+      topTags: [],
       // Search
       searchQuery: '',
       searchActive: false,
@@ -197,6 +267,27 @@ export default {
     myTopicsUsername() {
       return this.$user?.forumUsername || null;
     },
+    // Feed data source depending on the active tab. For Top, we also
+    // skip pinned since the Épinglés block already shows them.
+    feedTopics() {
+      const src = this.feedTab === 'top' ? this.top : this.latest;
+      return src.filter((t) => !t.pinned && !t.pinned_globally);
+    },
+    loadingFeed() {
+      return this.feedTab === 'top' ? this.loadingTop : this.loadingLatest;
+    },
+    feedError() {
+      return this.feedTab === 'top' ? this.topError : this.latestError;
+    },
+    periods() {
+      return [
+        { value: 'daily', label: this.$gettext('Jour') },
+        { value: 'weekly', label: this.$gettext('Semaine') },
+        { value: 'monthly', label: this.$gettext('Mois') },
+        { value: 'yearly', label: this.$gettext('Année') },
+        { value: 'all', label: this.$gettext('Tout') },
+      ];
+    },
   },
 
   mounted() {
@@ -225,6 +316,50 @@ export default {
         } catch {
           this.myTopics = [];
         }
+      }
+      // Popular tags — best effort, silent on failure (endpoint may
+      // be disabled by admin). The whole block just doesn't render.
+      try {
+        const tagRes = await forum.getTags().promise_;
+        // Discourse exposes tags either flat (`tags`) or grouped
+        // (`extras.tag_groups[].tags`). Merge and rank by count.
+        const flat = tagRes?.data?.tags || [];
+        const grouped = (tagRes?.data?.extras?.tag_groups || []).flatMap((g) => g.tags || []);
+        const all = [...flat, ...grouped];
+        // De-dupe by name and keep only the top 12 by usage.
+        const seen = new Set();
+        this.topTags = all
+          .filter((t) => {
+            const name = t?.name || t?.id;
+            if (!name || seen.has(name)) return false;
+            seen.add(name);
+            return true;
+          })
+          .sort((a, b) => (b.count || 0) - (a.count || 0))
+          .slice(0, 12);
+      } catch {
+        this.topTags = [];
+      }
+    },
+
+    // Switch between latest and top feeds; loads Top lazily on first
+    // pick to save a request when the user never leaves Latest.
+    switchFeed(tab) {
+      this.feedTab = tab;
+      if (tab === 'top' && this.topLoadedFor !== this.topPeriod) this.loadTop();
+    },
+
+    async loadTop() {
+      this.loadingTop = true;
+      this.topError = false;
+      try {
+        const res = await forum.getTop(this.topPeriod).promise_;
+        this.top = res?.data?.topic_list?.topics || [];
+        this.topLoadedFor = this.topPeriod;
+      } catch {
+        this.topError = true;
+      } finally {
+        this.loadingTop = false;
       }
     },
 
@@ -433,6 +568,99 @@ export default {
   color: #b91c1c;
 }
 
+// Latest/Top feed tabs — segmented control style, tap-friendly on
+// mobile. Matches the visual weight of category pills below.
+.forum-tabs {
+  display: inline-flex;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 999px;
+  padding: 3px;
+  margin: 0 0.25rem 0.6rem;
+  gap: 2px;
+}
+.forum-tab {
+  border: none;
+  background: transparent;
+  color: #6b6b6b;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &.is-active {
+    background: white;
+    color: #ff9933;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+}
+.forum-period {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0 0.25rem 0.6rem;
+}
+.forum-period-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.72rem;
+  border-radius: 999px;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: #6b6b6b;
+  cursor: pointer;
+  user-select: none;
+
+  input {
+    display: none;
+  }
+  &.is-active {
+    background: #ff9933;
+    color: white;
+    border-color: #ff9933;
+  }
+}
+
+// Popular tags pills — flow layout so 12 tags don't push the feed off.
+.forum-tags {
+  list-style: none;
+  padding: 0 0.25rem;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.forum-tag-item {
+  display: inline-flex;
+}
+.forum-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  background: rgba(51, 122, 183, 0.08);
+  color: #337ab7;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  text-decoration: none;
+
+  &:hover,
+  &:focus {
+    background: rgba(51, 122, 183, 0.15);
+    color: #285a8f;
+    text-decoration: none;
+  }
+}
+.forum-tag-count {
+  font-size: 0.65rem;
+  color: #6b6b6b;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0 0.35rem;
+  border-radius: 999px;
+}
+
 // Compose-topic FAB — bottom-right, floats above the ForumBottomNav.
 // Uses the same 66-px safe-area offset the BottomNav applies so it
 // nests cleanly on iPhone home-indicator devices.
@@ -493,6 +721,40 @@ html[data-theme='dark'] {
     }
     .forum-block-more a {
       color: #6db4ff;
+    }
+    .forum-tabs {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .forum-tab {
+      color: #b5b5b5;
+      &.is-active {
+        background: #333333;
+        color: #ffb866;
+        box-shadow: none;
+      }
+    }
+    .forum-period-pill {
+      background: #2a2a2a;
+      border-color: rgba(255, 255, 255, 0.1);
+      color: #b5b5b5;
+      &.is-active {
+        background: #ff9933;
+        color: white;
+        border-color: #ff9933;
+      }
+    }
+    .forum-tag-pill {
+      background: rgba(109, 180, 255, 0.14);
+      color: #6db4ff;
+      &:hover,
+      &:focus {
+        background: rgba(109, 180, 255, 0.24);
+        color: #a3ccff;
+      }
+    }
+    .forum-tag-count {
+      background: rgba(255, 255, 255, 0.08);
+      color: #cfcfcf;
     }
   }
 }

@@ -26,6 +26,62 @@
         </button>
       </form>
 
+      <!-- Filters (collapsed by default so the input stays airy on
+           small screens). Toggling adds Discourse `q` operators
+           (category:, user:, after:, before:) to the search — no
+           extra endpoint. -->
+      <button
+        type="button"
+        class="button is-text is-small fsv-filters-toggle"
+        :class="{ 'has-filters': hasAnyFilter }"
+        @click="showFilters = !showFilters"
+      >
+        <fa-icon :icon="showFilters ? 'chevron-up' : 'sliders'" />
+        &nbsp;{{ showFilters ? $gettext('Masquer les filtres') : $gettext('Filtres') }}
+        <span v-if="hasAnyFilter && !showFilters" class="fsv-filters-badge">{{ activeFilterCount }}</span>
+      </button>
+
+      <fieldset v-if="showFilters" class="fsv-filters">
+        <label class="fsv-filter">
+          <span class="fsv-filter-label">{{ $gettext('Catégorie') }}</span>
+          <select v-model="filterCategorySlug" class="fsv-filter-input" @change="runSearchIfQuery">
+            <option value="">{{ $gettext('Toutes') }}</option>
+            <optgroup v-for="grp in categoryGroups" :key="grp.parent.id" :label="grp.parent.name">
+              <option :value="grp.parent.slug">{{ grp.parent.name }}</option>
+              <option v-for="c in grp.children" :key="c.id" :value="c.slug">— {{ c.name }}</option>
+            </optgroup>
+          </select>
+        </label>
+        <label class="fsv-filter">
+          <span class="fsv-filter-label">{{ $gettext('Utilisateur') }}</span>
+          <input
+            v-model="filterUsername"
+            type="text"
+            class="fsv-filter-input"
+            :placeholder="$gettext('Nom d’utilisateur forum')"
+            autocomplete="off"
+            @change="runSearchIfQuery"
+          />
+        </label>
+        <label class="fsv-filter">
+          <span class="fsv-filter-label">{{ $gettext('Après le') }}</span>
+          <input v-model="filterAfter" type="date" class="fsv-filter-input" @change="runSearchIfQuery" />
+        </label>
+        <label class="fsv-filter">
+          <span class="fsv-filter-label">{{ $gettext('Avant le') }}</span>
+          <input v-model="filterBefore" type="date" class="fsv-filter-input" @change="runSearchIfQuery" />
+        </label>
+        <button
+          v-if="hasAnyFilter"
+          type="button"
+          class="button is-small is-text fsv-filters-reset"
+          @click="resetFilters"
+        >
+          <fa-icon icon="xmark" />
+          &nbsp;{{ $gettext('Réinitialiser') }}
+        </button>
+      </fieldset>
+
       <div v-if="searching" class="fsv-loading"><fa-icon icon="spinner" spin />&nbsp;{{ $gettext('Recherche…') }}</div>
 
       <div v-else-if="error" class="fsv-error">
@@ -75,7 +131,44 @@ export default {
       categories: [],
       searching: false,
       error: false,
+      // Filters — restored from the URL so a shared/reloaded search
+      // keeps them applied. Discourse operators: category:, user:,
+      // after:, before:.
+      showFilters: !!(
+        this.$route.query.cat ||
+        this.$route.query.user ||
+        this.$route.query.after ||
+        this.$route.query.before
+      ),
+      filterCategorySlug: this.$route.query.cat || '',
+      filterUsername: this.$route.query.user || '',
+      filterAfter: this.$route.query.after || '',
+      filterBefore: this.$route.query.before || '',
     };
+  },
+
+  computed: {
+    // Discourse categories grouped by parent for the filter dropdown.
+    categoryGroups() {
+      const parents = this.categories.filter((c) => c.parent_category_id == null);
+      return parents
+        .map((p) => ({
+          parent: p,
+          children: this.categories.filter((c) => c.parent_category_id === p.id),
+        }))
+        .filter((g) => g.parent.slug); // guard against malformed rows
+    },
+    hasAnyFilter() {
+      return !!(this.filterCategorySlug || this.filterUsername || this.filterAfter || this.filterBefore);
+    },
+    activeFilterCount() {
+      return (
+        (this.filterCategorySlug ? 1 : 0) +
+        (this.filterUsername ? 1 : 0) +
+        (this.filterAfter ? 1 : 0) +
+        (this.filterBefore ? 1 : 0)
+      );
+    },
   },
 
   mounted() {
@@ -122,15 +215,26 @@ export default {
       if (this._searchT) window.clearTimeout(this._searchT);
       this.searching = true;
       this.error = false;
-      // Keep the query in the URL so a browser reload / share keeps
-      // the search alive — matches how Discourse itself does it.
-      if (fromSubmit || this.$route.query.q !== q) {
-        this.$router.replace({ query: { ...this.$route.query, q } }).catch(() => {
+      // Keep the query + active filters in the URL so a browser reload
+      // or a shared link keeps the exact search alive. Skip empty
+      // filters so the URL doesn't collect noise.
+      const query = { q };
+      if (this.filterCategorySlug) query.cat = this.filterCategorySlug;
+      if (this.filterUsername) query.user = this.filterUsername;
+      if (this.filterAfter) query.after = this.filterAfter;
+      if (this.filterBefore) query.before = this.filterBefore;
+      if (fromSubmit || !this._queryEqualsUrl(query)) {
+        this.$router.replace({ query }).catch(() => {
           /* NavigationDuplicated is benign */
         });
       }
       try {
-        const res = await forum.search(q).promise_;
+        const res = await forum.search(q, {
+          categorySlug: this.filterCategorySlug || undefined,
+          username: this.filterUsername || undefined,
+          after: this.filterAfter || undefined,
+          before: this.filterBefore || undefined,
+        }).promise_;
         const topics = res?.data?.topics || [];
         // Merge users so TopicRow shows an avatar for the poster.
         const usersById = {};
@@ -148,6 +252,27 @@ export default {
       } finally {
         this.searching = false;
       }
+    },
+
+    // Re-run the search when a filter changes, but only if there's a
+    // query — filters alone don't make a search.
+    runSearchIfQuery() {
+      if (this.query.trim()) this.runSearch(false);
+    },
+
+    resetFilters() {
+      this.filterCategorySlug = '';
+      this.filterUsername = '';
+      this.filterAfter = '';
+      this.filterBefore = '';
+      this.runSearchIfQuery();
+    },
+
+    _queryEqualsUrl(q) {
+      const url = this.$route.query || {};
+      const keys = new Set([...Object.keys(url), ...Object.keys(q)]);
+      for (const k of keys) if ((url[k] || '') !== (q[k] || '')) return false;
+      return true;
     },
 
     clear() {
@@ -218,6 +343,79 @@ export default {
   }
 }
 
+.fsv-filters-toggle {
+  color: #6b6b6b;
+  padding: 0.2rem 0.35rem;
+  margin-bottom: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+
+  &.has-filters {
+    color: #ff9933;
+  }
+}
+.fsv-filters-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  min-width: 1.1rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: #ff9933;
+  color: white;
+  font-size: 0.68rem;
+  line-height: 1.1rem;
+  text-align: center;
+  font-weight: 700;
+}
+.fsv-filters {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  padding: 0.6rem 0.7rem;
+  margin: 0 0 0.8rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.6rem;
+}
+.fsv-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+
+  &:first-child {
+    grid-column: 1 / -1;
+  }
+}
+.fsv-filter-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #6b6b6b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.fsv-filter-input {
+  min-width: 0;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #4a4a4a;
+
+  &:focus {
+    outline: none;
+    border-color: #ff9933;
+    box-shadow: 0 0 0 0.125em rgba(255, 153, 51, 0.2);
+  }
+}
+.fsv-filters-reset {
+  grid-column: 1 / -1;
+  justify-self: end;
+  color: #6b6b6b;
+}
+
 .fsv-results {
   list-style: none;
   padding: 0;
@@ -254,6 +452,21 @@ html[data-theme='dark'] {
     .fsv-empty,
     .fsv-hint {
       color: #b5b5b5;
+    }
+    .fsv-filters {
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+    .fsv-filter-label,
+    .fsv-filters-toggle {
+      color: #b5b5b5;
+    }
+    .fsv-filters-toggle.has-filters {
+      color: #ffb866;
+    }
+    .fsv-filter-input {
+      background: #2a2a2a;
+      color: #e5e5e5;
+      border-color: rgba(255, 255, 255, 0.12);
     }
   }
 }
