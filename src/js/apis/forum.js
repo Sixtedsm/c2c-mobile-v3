@@ -231,18 +231,21 @@ Forum.prototype.deleteBookmark = async function (bookmarkId) {
 };
 
 // Bookmarks list for the current user — Discourse exposes it under
-// /u/:username/bookmarks.json. Requires login (cookie).
-Forum.prototype.getUserBookmarks = function (username) {
-  return this.get(`/u/${canonicalUsername(username)}/bookmarks.json`);
+// /u/:username/bookmarks.json. Requires the user's Discourse session
+// cookie so we go through authAxios (withCredentials: true) so any
+// cookie already set for forum.camptocamp.org (via a previous SSO
+// login on that domain) is sent along.
+Forum.prototype.getUserBookmarks = async function (username) {
+  return this.authAxios.get(`/u/${canonicalUsername(username)}/bookmarks.json`);
 };
 
-// Notifications — the bell icon in the top-right. Requires login.
-// Endpoint returns the latest notifications + unread counts.
-Forum.prototype.getNotifications = function ({ recent = false, limit = 30 } = {}) {
+// Notifications — the bell inbox on the forum. Same cookie-based
+// auth as bookmarks: needs the Discourse session cookie to succeed.
+Forum.prototype.getNotifications = async function ({ recent = false, limit = 30 } = {}) {
   const params = new URLSearchParams();
   if (recent) params.set('recent', 'true');
   if (limit) params.set('limit', String(limit));
-  return this.get(`/notifications.json?${params.toString()}`);
+  return this.authAxios.get(`/notifications.json?${params.toString()}`);
 };
 
 Forum.prototype.markNotificationsRead = async function (notificationId) {

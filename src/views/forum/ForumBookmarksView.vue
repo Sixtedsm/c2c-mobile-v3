@@ -22,11 +22,16 @@
       <template v-else>
         <div v-if="loading" class="fb-loading"><fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}</div>
 
+        <div v-else-if="needsForumLogin" class="fb-notice">
+          {{
+            $gettext(
+              'Vos marque-pages sont stockés sur le forum Discourse et requièrent une session sur forum.camptocamp.org qui n’est pas encore partagée avec l’application. Cette fonctionnalité arrive bientôt.'
+            )
+          }}
+        </div>
+
         <div v-else-if="error" class="fb-error">
           {{ $gettext('Impossible de charger vos marque-pages.') }}
-          <p v-if="needsForumLogin" class="fb-signin-hint">
-            <a :href="forumLoginUrl" target="_blank" rel="noopener"> {{ $gettext('Se connecter au forum') }} → </a>
-          </p>
         </div>
 
         <ul v-else-if="bookmarks.length" class="fb-list">
@@ -110,21 +115,22 @@ export default {
       this.error = false;
       this.needsForumLogin = false;
       try {
+        // getUserBookmarks now goes through authAxios (cookie-based)
+        // and returns a raw axios Promise. Categories still through
+        // BaseApi (no cookie needed) — hence the mixed unwrap below.
         const [bmRes, catRes] = await Promise.all([
-          forum.getUserBookmarks(this.$user.forumUsername).promise_,
+          forum.getUserBookmarks(this.$user.forumUsername),
           forum.getCategories().promise_,
         ]);
-        // Discourse returns { user_bookmark_list: { bookmarks: [...] } }
-        // for logged-in users, or an error for anonymous. The bookmark
-        // items carry the topic + first-post metadata inline.
         this.bookmarks = bmRes?.data?.user_bookmark_list?.bookmarks || [];
         this.categories = catRes?.data?.category_list?.categories || [];
       } catch (err) {
         const status = err?.response?.status;
         if (status === 401 || status === 403 || status === 419) {
           this.needsForumLogin = true;
+        } else {
+          this.error = true;
         }
-        this.error = true;
       } finally {
         this.loading = false;
       }
@@ -190,7 +196,8 @@ export default {
   align-items: center;
 }
 
-.fb-signin-notice {
+.fb-signin-notice,
+.fb-notice {
   padding: 0.75rem;
   background: #fff5e6;
   border-left: 3px solid #ff9933;
@@ -200,6 +207,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  line-height: 1.4;
 }
 
 .fb-list {

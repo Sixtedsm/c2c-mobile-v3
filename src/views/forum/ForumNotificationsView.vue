@@ -34,11 +34,16 @@
       <template v-else>
         <div v-if="loading" class="fn-loading"><fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}</div>
 
+        <div v-else-if="needsForumLogin" class="fn-notice">
+          {{
+            $gettext(
+              'Vos notifications sont stockées sur le forum Discourse et requièrent une session sur forum.camptocamp.org qui n’est pas encore partagée avec l’application. Cette fonctionnalité arrive bientôt.'
+            )
+          }}
+        </div>
+
         <div v-else-if="error" class="fn-error">
           {{ $gettext('Impossible de charger vos notifications.') }}
-          <p v-if="needsForumLogin" class="fn-signin-hint">
-            <a :href="forumLoginUrl" target="_blank" rel="noopener"> {{ $gettext('Se connecter au forum') }} → </a>
-          </p>
         </div>
 
         <ul v-else-if="notifications.length" class="fn-list">
@@ -146,14 +151,17 @@ export default {
       this.error = false;
       this.needsForumLogin = false;
       try {
-        const res = await forum.getNotifications({ limit: 50 }).promise_;
+        // getNotifications now goes through authAxios (cookie auth)
+        // and returns a raw axios Promise, hence no .promise_ unwrap.
+        const res = await forum.getNotifications({ limit: 50 });
         this.notifications = res?.data?.notifications || [];
       } catch (err) {
         const status = err?.response?.status;
         if (status === 401 || status === 403 || status === 419) {
           this.needsForumLogin = true;
+        } else {
+          this.error = true;
         }
-        this.error = true;
       } finally {
         this.loading = false;
       }
@@ -260,7 +268,8 @@ export default {
   display: flex;
   align-items: center;
 }
-.fn-signin-notice {
+.fn-signin-notice,
+.fn-notice {
   padding: 0.75rem;
   background: #fff5e6;
   border-left: 3px solid #ff9933;
@@ -270,6 +279,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  line-height: 1.4;
 }
 .fn-list {
   list-style: none;

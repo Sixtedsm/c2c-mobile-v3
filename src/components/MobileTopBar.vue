@@ -78,22 +78,6 @@
           </add-link>
         </dropdown-button>
 
-        <!-- Notifications bell — only inside /forum/*, only when the
-             user is logged. Shows a count badge from Discourse. Tap
-             opens the in-app notifications inbox. Mirrors what
-             forum.camptocamp.org has in its own top-right corner. -->
-        <router-link
-          v-if="isForumRoute && $user.isLogged"
-          :to="{ name: 'forum-notifications' }"
-          class="top-bar-btn top-bar-bell"
-          :aria-label="$gettext('Notifications')"
-        >
-          <fa-icon icon="bell" />
-          <span v-if="unreadNotifCount > 0" class="top-bar-bell-badge" :aria-label="$gettext('notifications non lues')">
-            {{ unreadNotifCount > 9 ? '9+' : unreadNotifCount }}
-          </span>
-        </router-link>
-
         <!-- Profile shortcut — context-aware:
              on /forum/* it opens the user's Discourse forum profile,
              everywhere else the C2C "Moi" page (which itself links
@@ -123,8 +107,6 @@
 <script>
 import LogoCtc from './LogoCtc.vue';
 
-import forum from '@/js/apis/forum';
-
 // Routes considered "tabs" — the ones the BottomNav (or
 // ForumBottomNav) sits on top of. On these, the top-bar shows the
 // logo + no back arrow. Add the forum tab routes here so their
@@ -150,10 +132,6 @@ export default {
       // network, CORS on the actual bitmap). Reset when the URL
       // changes so a fresh template gets a fresh loading attempt.
       avatarFailed: false,
-      // Discourse unread-notifications count, driving the top-bar
-      // bell badge on /forum/*. Refreshed on route change into the
-      // forum tree so it stays honest without a periodic poller.
-      unreadNotifCount: 0,
     };
   },
 
@@ -258,10 +236,6 @@ export default {
     $route() {
       // Auto-close the search panel whenever the user navigates.
       this.searchOpen = false;
-      // Refresh the notifications badge whenever the user lands on
-      // the forum world — cheap poll piggy-backed on navigation
-      // rather than a periodic timer that fires forever.
-      this.refreshUnreadNotifs();
     },
     // A fresh URL means a fresh loading attempt — clear the failed
     // flag so we don't stay on the fa-icon fallback after a valid
@@ -271,34 +245,11 @@ export default {
     },
   },
 
-  mounted() {
-    this.refreshUnreadNotifs();
-  },
-
   methods: {
     onAvatarError() {
       // eslint-disable-next-line no-console
       console.warn('[MobileTopBar] avatar image failed to load:', this.myAvatarUrl);
       this.avatarFailed = true;
-    },
-
-    // Fetch the unread notification count from Discourse. Skipped
-    // silently when the user isn't logged in or we're not in the
-    // forum tree (Discourse's session cookie may not be there,
-    // and the badge is only visible on /forum/* anyway).
-    async refreshUnreadNotifs() {
-      if (!this.$user?.isLogged || !this.isForumRoute) {
-        this.unreadNotifCount = 0;
-        return;
-      }
-      try {
-        const res = await forum.getNotifications({ recent: true, limit: 30 }).promise_;
-        const list = res?.data?.notifications || [];
-        this.unreadNotifCount = list.filter((n) => !n.read).length;
-      } catch {
-        // 401 (not logged into Discourse), CORS, offline — silent.
-        this.unreadNotifCount = 0;
-      }
     },
 
     goBack() {
@@ -417,29 +368,6 @@ export default {
       border-radius: 4px;
     }
   }
-}
-
-// Forum notification bell — floating badge in the top-right of the
-// bell icon showing the unread-notif count. Kept small so it doesn't
-// crowd the neighbouring avatar shortcut.
-.top-bar-bell {
-  position: relative;
-}
-.top-bar-bell-badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  background: #ff9933;
-  color: white;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 16px;
-  border-radius: 8px;
-  text-align: center;
-  box-shadow: 0 0 0 2px white;
 }
 
 .back-btn {

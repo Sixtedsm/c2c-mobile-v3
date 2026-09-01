@@ -740,6 +740,22 @@ export default {
 }
 .incomplete-draft-save {
   font-weight: 600;
+  // Bulma buttons default to `white-space: nowrap` + a fixed height,
+  // which made "Enregistrer sans itinéraire (à compléter plus tard)"
+  // spill past the notice card on narrow phones (Sixte's report
+  // 2026-09-01). Let the label wrap onto two lines and grow the
+  // button vertically so the icon and text stay inside the border.
+  white-space: normal;
+  height: auto;
+  min-height: 2.5em;
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+  line-height: 1.25;
+  // Belt-and-braces: cap the button width to the notice's content
+  // box so `is-fullwidth` never bleeds through the left border-
+  // accent (which extra 4 px would push it past the right edge).
+  max-width: 100%;
+  box-sizing: border-box;
 }
 </style>
 
