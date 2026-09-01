@@ -105,6 +105,49 @@
         </div>
       </div>
 
+      <!-- "Enregistrer sans itinéraire (à compléter plus tard)" — the
+           offline escape hatch when the terrain-changed use case hits:
+           user is offline, hasn't pre-saved the topo they're now on,
+           can't associate a route through the map or search either.
+           Rather than losing the sortie, they type a free-text note
+           describing the itinéraire and save. The item lives in
+           OfflineView with an "Itinéraire à renseigner" badge; once
+           back online they resolve the association from there and
+           the sync auto-publishes. See offline.js queueOuting +
+           attachRoutesToPendingOuting for the machinery. -->
+      <div v-if="showIncompleteDraftHelper" class="notification incomplete-draft-notice">
+        <p class="incomplete-draft-title">
+          <fa-icon icon="triangle-exclamation" />
+          &nbsp;{{ $gettext('Aucun itinéraire disponible hors ligne') }}
+        </p>
+        <p class="incomplete-draft-sub">
+          {{
+            $gettext(
+              'Notez ci-dessous à quel itinéraire cette sortie correspond, vous ferez l’association depuis « Mes topos » une fois la connexion retrouvée.'
+            )
+          }}
+        </p>
+        <textarea
+          v-model="routeNote"
+          class="textarea incomplete-draft-note"
+          rows="2"
+          :placeholder="$gettext('Ex : Face S de la Dent du Requin, voie normale')"
+        />
+        <button
+          type="button"
+          class="button is-warning is-fullwidth incomplete-draft-save"
+          :disabled="savingIncomplete || !routeNote.trim()"
+          @click="saveAsIncompleteDraft"
+        >
+          <fa-icon :icon="savingIncomplete ? 'spinner' : 'floppy-disk'" :spin="savingIncomplete" />
+          &nbsp;{{
+            savingIncomplete
+              ? $gettext('Enregistrement…')
+              : $gettext('Enregistrer sans itinéraire (à compléter plus tard)')
+          }}
+        </button>
+      </div>
+
       <div class="columns is-multiline">
         <form-field :document="document" :field="fields.title" />
         <form-field class="is-narrow" :document="document" :field="fields.partial_trip" />
@@ -253,6 +296,8 @@
 </template>
 
 <script>
+import { toast } from 'bulma-toast';
+
 import CotometerWindow from './utils/CotometerWindow';
 import documentEditionViewMixin from './utils/document-edition-view-mixin';
 
@@ -291,6 +336,11 @@ export default {
       bbox: null,
       showMoreResultsBanner: false,
       currentDate: this.getCurrentDateString(),
+      // "à compléter plus tard" state — free-text description of the
+      // itinéraire when the user is offline and can't associate a
+      // real one. Consumed by saveAsIncompleteDraft() below.
+      routeNote: '',
+      savingIncomplete: false,
     };
   },
 
@@ -314,6 +364,22 @@ export default {
       const routes = saved.filter((entry) => entry.type === 'route' && entry.data);
       routes.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
       return routes.map((entry) => entry.data);
+    },
+
+    // Reactive alias for "the device thinks it is offline right now".
+    // $offline exposes an `.online` boolean fed by navigator's
+    // online/offline events.
+    isOffline() {
+      return !!(this.$offline && !this.$offline.online);
+    },
+
+    // Show the "à compléter plus tard" helper (note + alternative
+    // save button) only when it's actually useful: we're creating a
+    // new outing, the device is offline, and no route has been
+    // associated yet. Once the user picks a route (from the offline
+    // list) the block hides — the normal save flow takes over.
+    showIncompleteDraftHelper() {
+      return this.mode === 'add' && this.isOffline && this.document.associations.routes.length === 0;
     },
   },
 
@@ -396,6 +462,66 @@ export default {
       if (distance > 0) this.document.length_total = distance;
       if (gain > 0) this.document.height_diff_up = gain;
       if (loss > 0) this.document.height_diff_down = loss;
+    },
+
+    // Terrain-fallback save path — the user filled the form offline
+    // without being able to associate a real itinéraire (no matching
+    // topo in "Mes topos", no network to search for one). Queue the
+    // outing with a free-text description of the itinéraire; the
+    // sync loop skips it until the user picks a real route from
+    // OfflineView. Bypasses the mixin's normal save() because that
+    // path would send the payload to the API right away (offline
+    // queue included) — and the API would reject it for lack of
+    // route association.
+    async saveAsIncompleteDraft() {
+      if (this.savingIncomplete) return;
+      const note = this.routeNote.trim();
+      if (!note) return;
+      // Bare-minimum client-side validation: activity + date are the
+      // only fields whose absence would trip a re-open of the form
+      // as unusable. Skip the "route required" check on purpose.
+      this.handleDates();
+      if (!this.document.activities || !this.document.activities.length) {
+        toast({
+          type: 'is-warning',
+          position: 'bottom-center',
+          message: this.$gettext('Sélectionnez au moins une activité avant d’enregistrer.'),
+        });
+        return;
+      }
+      if (!this.document.date_start) {
+        toast({
+          type: 'is-warning',
+          position: 'bottom-center',
+          message: this.$gettext('Renseignez la date avant d’enregistrer.'),
+        });
+        return;
+      }
+      this.savingIncomplete = true;
+      try {
+        await this.$offline.queueOuting(this.document, {
+          needsRouteAssoc: true,
+          routeNote: note,
+        });
+        this.modified = false;
+        toast({
+          type: 'is-success',
+          position: 'bottom-center',
+          duration: 5000,
+          message: this.$gettext(
+            'Sortie enregistrée localement. Complétez l’itinéraire depuis « Mes topos » une fois en ligne.'
+          ),
+        });
+        this.$router.push({ name: 'offline' });
+      } catch {
+        toast({
+          type: 'is-danger',
+          position: 'bottom-center',
+          message: this.$gettext('Impossible d’enregistrer localement. Réessayez.'),
+        });
+      } finally {
+        this.savingIncomplete = false;
+      }
     },
 
     updateBbox(bbox) {
@@ -575,6 +701,41 @@ export default {
   font-size: 0.85rem;
   margin-left: 0.25rem;
 }
+
+// "à compléter plus tard" notice — surfaces the terrain fallback
+// visually as a warning card so the user notices it right below the
+// normal itinéraire pickers. Same orange palette as offline-routes-*
+// so the two offline-mode helpers read as one coherent flow.
+.incomplete-draft-notice {
+  margin: 1rem 0 0;
+  padding: 0.85rem;
+  background: #fff5e6;
+  border: 1px solid rgba(255, 153, 51, 0.6);
+  border-left: 4px solid #ff9933;
+  border-radius: 6px;
+  color: #4a4a4a;
+}
+.incomplete-draft-title {
+  margin: 0 0 0.3rem;
+  font-weight: 700;
+  color: #b26f1e;
+  display: flex;
+  align-items: center;
+}
+.incomplete-draft-sub {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: #6b4a1e;
+}
+.incomplete-draft-note {
+  margin-bottom: 0.6rem;
+  min-height: 3.5rem;
+  font-family: inherit;
+}
+.incomplete-draft-save {
+  font-weight: 600;
+}
 </style>
 
 <style lang="scss">
@@ -595,6 +756,18 @@ html[data-theme='dark'] {
   }
   .offline-route-meta {
     color: #b5b5b5;
+  }
+  .incomplete-draft-notice {
+    background: #3a2f1a;
+    border-color: rgba(255, 153, 51, 0.5);
+    border-left-color: #ff9933;
+    color: #e5e5e5;
+  }
+  .incomplete-draft-title {
+    color: #ffb866;
+  }
+  .incomplete-draft-sub {
+    color: #d5c5a5;
   }
 }
 </style>

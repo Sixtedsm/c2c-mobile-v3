@@ -58,17 +58,40 @@
           v-for="item in $offline.pendingOutings"
           :key="item.id"
           class="pending-outing"
-          :class="{ 'is-conflict': item.conflict }"
+          :class="{ 'is-conflict': item.conflict, 'needs-route-assoc': item.needsRouteAssoc }"
         >
           <div class="pending-outing-info">
             <span class="pending-outing-title">{{ item.title || $gettext('Untitled outing') }}</span>
-            <span v-if="item.conflict" class="tag is-warning is-small pending-outing-badge">
+            <span v-if="item.needsRouteAssoc" class="tag is-warning is-small pending-outing-badge">
+              <fa-icon icon="triangle-exclamation" />
+              &nbsp;{{ $gettext('Itinéraire à renseigner') }}
+            </span>
+            <span v-else-if="item.conflict" class="tag is-warning is-small pending-outing-badge">
               <fa-icon icon="triangle-exclamation" />
               &nbsp;{{ $gettext('En conflit') }}
             </span>
             <span v-else-if="item.attempts > 0" class="tag is-light is-danger is-small pending-outing-badge">
               {{ $gettext('Attempts:') }} {{ item.attempts }}
             </span>
+          </div>
+
+          <!-- Free-text hint the user typed on the terrain when they
+               couldn't associate a real itinéraire. Displayed verbatim
+               so the user recognises which sortie they need to finish
+               even weeks later. -->
+          <p v-if="item.needsRouteAssoc && item.routeNote" class="pending-outing-note">
+            <fa-icon icon="pen-to-square" />
+            &nbsp;<em>{{ item.routeNote }}</em>
+          </p>
+          <div v-if="item.needsRouteAssoc" class="pending-outing-assoc-actions">
+            <button class="button is-small is-primary" @click="openAssocModal(item)">
+              <fa-icon icon="link" />
+              &nbsp;{{ $gettext('Renseigner l’itinéraire') }}
+            </button>
+            <button class="button is-small is-text" @click="discardPending(item.id)">
+              <fa-icon icon="trash" />
+              &nbsp;{{ $gettext('Abandonner') }}
+            </button>
           </div>
           <!-- Show the last API error verbatim so the user can screenshot
                a real diagnostic message rather than the generic "Échec
@@ -113,7 +136,7 @@
             </div>
           </div>
           <button
-            v-else
+            v-else-if="!item.needsRouteAssoc"
             class="button is-small is-text pending-outing-discard"
             :title="$gettext('Discard this pending outing')"
             @click="discardPending(item.id)"
@@ -239,11 +262,97 @@
         </div>
       </template>
     </modal-window>
+
+    <!-- "Renseigner l'itinéraire" modal — completes a pending outing
+         that was saved without a route via the terrain-fallback flow.
+         Two picker sources: (1) the routes the user has pre-saved in
+         "Mes topos", available even offline; (2) a live Camptocamp
+         search shown when the device is online. Once the user picks
+         one, $offline.attachRoutesToPendingOuting merges it into the
+         payload, clears the needsRouteAssoc flag, and kicks off the
+         sync. -->
+    <modal-window ref="assocModal">
+      <template #header>{{ $gettext('Renseigner l’itinéraire') }}</template>
+      <div v-if="assocItem">
+        <p v-if="assocItem.routeNote" class="assoc-modal-note">
+          <fa-icon icon="pen-to-square" />
+          &nbsp;<em>{{ assocItem.routeNote }}</em>
+        </p>
+
+        <div v-if="assocOfflineRoutes.length" class="assoc-modal-section">
+          <h4 class="assoc-modal-title">
+            <fa-icon icon="bookmark" />
+            &nbsp;{{ $gettext('Mes itinéraires hors-ligne') }}
+          </h4>
+          <ul class="assoc-modal-list">
+            <li v-for="route in assocOfflineRoutes" :key="'off-' + route.document_id">
+              <button
+                type="button"
+                class="assoc-modal-choice"
+                :disabled="assocSaving"
+                @click="chooseRouteForPending(route)"
+              >
+                <strong>{{ $documentUtils.getDocumentTitle(route) }}</strong>
+                <small v-if="route.elevation_max">{{ route.elevation_max }} m</small>
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="$offline.online" class="assoc-modal-section">
+          <h4 class="assoc-modal-title">
+            <fa-icon icon="magnifying-glass" />
+            &nbsp;{{ $gettext('Rechercher un itinéraire') }}
+          </h4>
+          <input
+            v-model="assocSearchQuery"
+            type="search"
+            class="input"
+            :placeholder="$gettext('Nom de l’itinéraire')"
+            @input="onAssocSearch"
+          />
+          <p v-if="assocSearching" class="assoc-modal-hint">
+            <fa-icon icon="spinner" spin />&nbsp;{{ $gettext('Recherche…') }}
+          </p>
+          <ul v-else-if="assocSearchResults.length" class="assoc-modal-list">
+            <li v-for="route in assocSearchResults" :key="'srch-' + route.document_id">
+              <button
+                type="button"
+                class="assoc-modal-choice"
+                :disabled="assocSaving"
+                @click="chooseRouteForPending(route)"
+              >
+                <strong>{{ $documentUtils.getDocumentTitle(route) }}</strong>
+                <small v-if="route.elevation_max">{{ route.elevation_max }} m</small>
+              </button>
+            </li>
+          </ul>
+          <p v-else-if="assocSearchQuery.trim() && !assocSearching" class="assoc-modal-hint">
+            {{ $gettext('Aucun itinéraire trouvé.') }}
+          </p>
+        </div>
+
+        <div v-else-if="!assocOfflineRoutes.length" class="assoc-modal-hint">
+          <fa-icon icon="triangle-exclamation" />
+          &nbsp;{{
+            $gettext(
+              'Aucun itinéraire disponible : reconnectez-vous à Internet pour rechercher un itinéraire sur Camptocamp, ou sauvegardez d’abord un itinéraire dans « Mes topos ».'
+            )
+          }}
+        </div>
+      </div>
+      <template #footer>
+        <div class="buttons is-right mt-4">
+          <button class="button" @click="closeAssocModal">{{ $gettext('Fermer') }}</button>
+        </div>
+      </template>
+    </modal-window>
   </div>
 </template>
 
 <script>
 import ModalWindow from '@/components/generics/modals/ModalWindow';
+import c2c from '@/js/apis/c2c';
 import pullRefreshMixin from '@/js/pull-refresh-mixin';
 import { ageLabel, freshnessOf } from '@/pwa/offline-freshness';
 
@@ -276,6 +385,14 @@ export default {
       // would make one entry read "il y a 6 jours" and its neighbor
       // "il y a 7 jours" mid-scroll.
       nowTick: Date.now(),
+      // "Renseigner l'itinéraire" modal — see assocModal in the
+      // template. `assocItem` is the pending outing currently being
+      // completed; search state is debounced through _assocSearchT.
+      assocItem: null,
+      assocSearchQuery: '',
+      assocSearchResults: [],
+      assocSearching: false,
+      assocSaving: false,
     };
   },
 
@@ -317,6 +434,16 @@ export default {
       const quota = this.storage?.quota;
       if (!usage || !quota) return null;
       return Math.min(100, Math.round((usage / quota) * 100));
+    },
+
+    // Offline-saved routes surfaced inside the "Renseigner l'itinéraire"
+    // modal. Same source as the picker in OutingEditionView so the
+    // user sees the exact same list they'd have on the terrain.
+    assocOfflineRoutes() {
+      const saved = this.$offline?.savedDocs || [];
+      const routes = saved.filter((entry) => entry.type === 'route' && entry.data);
+      routes.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+      return routes.map((entry) => entry.data);
     },
   },
 
@@ -452,6 +579,61 @@ export default {
 
     exportConflict(item) {
       this.$offline.exportPendingOutingAsJson(item);
+    },
+
+    // ── "Renseigner l'itinéraire" flow ─────────────────────────
+    // Opens the modal for a given pending outing (queued via the
+    // terrain fallback with just a text note). Resets the search
+    // state — a previous session's results would confuse the user.
+    openAssocModal(item) {
+      this.assocItem = item;
+      this.assocSearchQuery = '';
+      this.assocSearchResults = [];
+      this.assocSearching = false;
+      this.$refs.assocModal.show();
+    },
+    closeAssocModal() {
+      if (this.$refs.assocModal) this.$refs.assocModal.hide();
+      this.assocItem = null;
+      this.assocSearchQuery = '';
+      this.assocSearchResults = [];
+    },
+    // Debounced route search — 350 ms after the user stops typing.
+    // Only runs when the device thinks it's online (the modal hides
+    // the search block otherwise). Errors are swallowed silently —
+    // the offline picker is always available as a fallback.
+    onAssocSearch() {
+      window.clearTimeout(this._assocSearchT);
+      const q = this.assocSearchQuery.trim();
+      if (!q) {
+        this.assocSearchResults = [];
+        this.assocSearching = false;
+        return;
+      }
+      this.assocSearching = true;
+      this._assocSearchT = window.setTimeout(async () => {
+        try {
+          const res = await c2c.route.getAll({ q, limit: 10 }).promise_;
+          this.assocSearchResults = res?.data?.documents || [];
+        } catch {
+          this.assocSearchResults = [];
+        } finally {
+          this.assocSearching = false;
+        }
+      }, 350);
+    },
+    async chooseRouteForPending(route) {
+      if (this.assocSaving || !this.assocItem) return;
+      this.assocSaving = true;
+      try {
+        await this.$offline.attachRoutesToPendingOuting(this.assocItem.id, [route]);
+        // Success — the item flips to !needsRouteAssoc and sync fires
+        // if the device is online. Close the modal either way; the
+        // user will see the status change in the list.
+        this.closeAssocModal();
+      } finally {
+        this.assocSaving = false;
+      }
     },
 
     freshnessOf(entry) {
@@ -804,6 +986,144 @@ export default {
     border-radius: 2px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.72rem;
+  }
+}
+
+// Terrain-fallback pending items — the user's own note about which
+// itinéraire they were on, plus the "Renseigner l'itinéraire"
+// action row. Amber palette so it reads as an "à faire" step, not
+// an error.
+.pending-outing.needs-route-assoc {
+  background: hsl(38, 100%, 97%);
+  border-left: 3px solid #ff9933;
+}
+.pending-outing-note {
+  flex: 1 1 100%;
+  margin: 0.35rem 0 0;
+  padding: 0.4rem 0.55rem;
+  background: white;
+  border-left: 3px solid rgba(255, 153, 51, 0.5);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  color: #6b4a1e;
+  overflow-wrap: anywhere;
+}
+.pending-outing-assoc-actions {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+// "Renseigner l'itinéraire" modal — vertical list of pickers, each
+// section titled. The choice buttons are full-width taps so a fat
+// finger reliably picks a single route.
+.assoc-modal-note {
+  padding: 0.4rem 0.55rem;
+  background: hsl(38, 100%, 96%);
+  border-left: 3px solid #ff9933;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #4a4a4a;
+  margin-bottom: 0.75rem;
+}
+.assoc-modal-section {
+  margin-bottom: 1rem;
+}
+.assoc-modal-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b6b6b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.35rem;
+  display: flex;
+  align-items: center;
+}
+.assoc-modal-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.assoc-modal-choice {
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  color: #4a4a4a;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+
+  strong {
+    flex: 1;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  small {
+    color: #6b6b6b;
+    font-size: 0.75rem;
+    flex: 0 0 auto;
+  }
+
+  &:hover,
+  &:focus {
+    background: #fff5e6;
+    border-color: #ff9933;
+    outline: none;
+  }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+.assoc-modal-hint {
+  font-size: 0.8rem;
+  color: #6b6b6b;
+  margin: 0.4rem 0 0;
+}
+</style>
+
+<style lang="scss">
+html[data-theme='dark'] {
+  .pending-outing.needs-route-assoc {
+    background: #2f2618;
+    border-left-color: #ff9933;
+  }
+  .pending-outing-note {
+    background: #2a2a2a;
+    color: #ffb866;
+  }
+  .assoc-modal-note {
+    background: #3a2f1a;
+    color: #ffb866;
+  }
+  .assoc-modal-title {
+    color: #b5b5b5;
+  }
+  .assoc-modal-choice {
+    background: #2a2a2a;
+    color: #e5e5e5;
+    border-color: rgba(255, 255, 255, 0.1);
+    &:hover,
+    &:focus {
+      background: #3a2f1a;
+      border-color: #ff9933;
+    }
+  }
+  .assoc-modal-hint {
+    color: #b5b5b5;
   }
 }
 </style>

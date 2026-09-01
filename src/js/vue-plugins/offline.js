@@ -488,7 +488,7 @@ export default function install(Vue) {
         await this.refresh();
       },
 
-      async queueOuting(document, { photos = [] } = {}) {
+      async queueOuting(document, { photos = [], needsRouteAssoc = false, routeNote = '' } = {}) {
         // Photos are stored as raw File/Blob in IndexedDB (idb-keyval
         // handles Blobs natively — no base64 blow-up). They're uploaded
         // + associated to the outing at sync time; see syncPendingOutings.
@@ -507,9 +507,57 @@ export default function install(Vue) {
           payload: document,
           title: document?.locales?.[0]?.title || this.$gettext?.('Untitled') || 'Untitled',
           photos: photoList,
+          // Terrain-first flow (#Loïc feedback 2026-09): the user can
+          // save a sortie offline without picking a real itinéraire
+          // (the API refuses that). Those items stay in the queue and
+          // are skipped by syncPendingOutings until the user opens
+          // OfflineView and completes the association from there.
+          needsRouteAssoc: !!needsRouteAssoc,
+          routeNote: typeof routeNote === 'string' ? routeNote.trim() : '',
         });
         this.pendingOutings = await store.listPendingOutings();
         return entry;
+      },
+
+      // Called by OfflineView after the user picked a real itinéraire
+      // for a pending outing that had been queued with only a text
+      // note. Merges the chosen routes into the payload, clears the
+      // needsRouteAssoc flag, and triggers a sync run so the item
+      // publishes right away (assuming the device is back online).
+      async attachRoutesToPendingOuting(id, routes) {
+        const list = Array.isArray(routes) ? routes : [routes];
+        const routeStubs = list
+          .filter((r) => r && r.document_id != null)
+          .map((r) => ({ document_id: Number(r.document_id) }));
+        if (!routeStubs.length) return;
+        const queue = await store.listPendingOutings();
+        const next = queue.map((item) => {
+          if (item.id !== id) return item;
+          const existing = item.payload?.associations?.routes || [];
+          const seen = new Set(existing.map((r) => Number(r.document_id)));
+          const merged = [...existing, ...routeStubs.filter((r) => !seen.has(Number(r.document_id)))];
+          return {
+            ...item,
+            payload: {
+              ...item.payload,
+              associations: {
+                ...(item.payload?.associations || {}),
+                routes: merged,
+              },
+            },
+            needsRouteAssoc: false,
+            // Reset transient error/conflict state so the next sync
+            // attempt is treated as fresh — the item was intentionally
+            // held back, not rejected.
+            lastError: null,
+            conflict: false,
+          };
+        });
+        await store.replacePendingOutings(next);
+        this.pendingOutings = next;
+        if (this.online) {
+          this.syncPendingOutings();
+        }
       },
 
       async syncPendingOutings() {
@@ -531,6 +579,15 @@ export default function install(Vue) {
           // auto-retry storm from re-triggering the same 409 on every
           // reconnect.
           if (item.conflict) {
+            remaining.push(item);
+            continue;
+          }
+          // Items saved with the "à compléter plus tard" flow have no
+          // real itinéraire attached yet — the API would 400 on the
+          // routes association. Skip them; OfflineView exposes a
+          // "Renseigner l'itinéraire" action that clears the flag
+          // and re-triggers this loop.
+          if (item.needsRouteAssoc) {
             remaining.push(item);
             continue;
           }
