@@ -166,6 +166,8 @@ export default function install(Vue) {
         const url = `${config.urls.forum}/u/${encodeURIComponent(canonical)}.json`;
         this._avatarFetch = (async () => {
           try {
+            // eslint-disable-next-line no-console
+            console.info('[$user] fetching avatar from', url);
             const resp = await fetch(url, {
               method: 'GET',
               // Discourse's /u/:username.json is public, no cookies
@@ -174,9 +176,19 @@ export default function install(Vue) {
               credentials: 'omit',
               headers: { Accept: 'application/json' },
             });
+            const ct = resp.headers.get('content-type') || '';
             if (!resp.ok) {
               // eslint-disable-next-line no-console
               console.warn(`[$user] Discourse avatar fetch: HTTP ${resp.status} on ${url}`);
+              return null;
+            }
+            if (!ct.includes('application/json')) {
+              // Discourse can still serve HTML (redirect / auth wall / rate
+              // limit page) with a 200 status. Reading .json() then throws
+              // SyntaxError. Surface the actual content type so a
+              // maintainer instantly sees the mismatch.
+              // eslint-disable-next-line no-console
+              console.warn(`[$user] Discourse avatar fetch: unexpected content-type '${ct}' on ${url}`);
               return null;
             }
             const payload = await resp.json();
@@ -190,6 +202,13 @@ export default function install(Vue) {
               this.avatarTemplate = template;
               this.commitToLocaleStorage_();
             }
+            // eslint-disable-next-line no-console
+            console.info(
+              '[$user] avatar template set:',
+              template,
+              '→ resolved image URL for size 96:',
+              this.avatarUrl(96)
+            );
             return template;
           } catch (err) {
             // Network error, DNS, CORS. Kept warn-level so it shows

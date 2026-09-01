@@ -1030,4 +1030,21 @@ html[data-shell='desktop'] {
     font-size: 12px !important;
   }
 }
+
+// HomeView "Dashboard / Activity feed" toggle (V1 HomeView.vue) —
+// on narrow columns the flex container's `justify-content:
+// space-between` shrinks the toggle label enough that its two
+// spans wrap onto multiple lines and the pill breaks visually
+// (Sixte's report 2026-09-01). Force the toggle to never render
+// below its content width and keep the labels on one line. Kept
+// in the global App.vue instead of forking HomeView.vue so an
+// upstream c2c_ui merge doesn't drop the fix.
+.toggleContainer {
+  white-space: nowrap;
+  min-width: max-content;
+  flex-shrink: 0;
+}
+.toggleContainer > span {
+  white-space: nowrap;
+}
 </style>
