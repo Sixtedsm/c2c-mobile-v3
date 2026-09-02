@@ -84,8 +84,11 @@
         </div>
 
         <p v-if="needsForumLogin" class="fnt-signin-notice">
-          {{ $gettext("Vous n'êtes pas connecté au forum.") }}
-          <a :href="forumLoginUrl" target="_blank" rel="noopener">{{ $gettext('Se connecter au forum') }} →</a>
+          {{
+            $gettext(
+              'Créer un sujet nécessite une session sur forum.camptocamp.org qui n’est pas encore partagée avec l’application. Cette fonctionnalité arrive bientôt.'
+            )
+          }}
         </p>
       </form>
     </div>
@@ -108,7 +111,6 @@ import { toast } from 'bulma-toast';
 
 import ReplyEditor from '@/components/forum/ReplyEditor.vue';
 import forum from '@/js/apis/forum';
-import config from '@/js/config';
 
 export default {
   name: 'ForumNewTopicView',
@@ -140,9 +142,6 @@ export default {
     },
     canSubmit() {
       return !this.submitting && !!this.categoryId && this.title.trim().length >= 15 && this.raw.trim().length >= 20;
-    },
-    forumLoginUrl() {
-      return `${config.urls.forum}/login`;
     },
   },
 

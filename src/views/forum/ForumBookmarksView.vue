@@ -79,7 +79,6 @@
 import { toast } from 'bulma-toast';
 
 import forum from '@/js/apis/forum';
-import config from '@/js/config';
 
 export default {
   name: 'ForumBookmarksView',
@@ -93,12 +92,6 @@ export default {
       needsForumLogin: false,
       removingId: null,
     };
-  },
-
-  computed: {
-    forumLoginUrl() {
-      return `${config.urls.forum}/login`;
-    },
   },
 
   mounted() {

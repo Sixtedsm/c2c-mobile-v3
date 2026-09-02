@@ -214,8 +214,11 @@
               </button>
             </div>
             <p v-if="needsForumLogin" class="ft-reply-hint">
-              {{ $gettext("Vous n'êtes pas connecté au forum.") }}
-              <a :href="forumLoginUrl" target="_blank" rel="noopener"> {{ $gettext('Se connecter au forum') }} → </a>
+              {{
+                $gettext(
+                  'Publier une réponse nécessite une session sur forum.camptocamp.org qui n’est pas encore partagée avec l’application. Cette fonctionnalité arrive bientôt.'
+                )
+              }}
             </p>
           </div>
         </section>
@@ -275,10 +278,38 @@
             <span class="ft-topic-action-label">{{ $gettext('Partager') }}</span>
           </button>
 
-          <button v-if="$user.isLogged" type="button" class="ft-topic-action ft-topic-action-danger" @click="flagTopic">
-            <fa-icon icon="flag" />
-            <span class="ft-topic-action-label">{{ $gettext('Signaler') }}</span>
-          </button>
+          <div v-if="$user.isLogged" ref="flagWrap" class="ft-notif-wrap">
+            <button
+              type="button"
+              class="ft-topic-action ft-topic-action-danger"
+              :class="{ 'is-active': flagMenuOpen }"
+              :aria-expanded="flagMenuOpen ? 'true' : 'false'"
+              aria-haspopup="menu"
+              @click="toggleFlagMenu"
+            >
+              <fa-icon icon="flag" />
+              <span class="ft-topic-action-label">{{ $gettext('Signaler') }}</span>
+            </button>
+            <div v-if="flagMenuOpen" class="ft-notif-popover ft-flag-popover" role="menu">
+              <p class="ft-flag-intro">{{ $gettext('Pourquoi signalez-vous ce sujet ?') }}</p>
+              <button
+                v-for="opt in flagOptions"
+                :key="opt.value"
+                type="button"
+                class="ft-notif-option"
+                role="menuitem"
+                :disabled="flagging"
+                @click="pickFlagReason(opt)"
+              >
+                <fa-icon :icon="opt.icon" class="ft-notif-option-icon ft-flag-icon" />
+                <span class="ft-notif-option-body">
+                  <span class="ft-notif-option-label">{{ opt.label }}</span>
+                  <span class="ft-notif-option-hint">{{ opt.hint }}</span>
+                </span>
+                <fa-icon v-if="flagging === opt.value" icon="spinner" spin class="ft-notif-option-check" />
+              </button>
+            </div>
+          </div>
         </div>
       </template>
 
@@ -370,6 +401,11 @@ export default {
       // default; toggled by the bell button; a click-outside handler
       // in mounted() closes it too.
       notifMenuOpen: false,
+      // Flag popover — mirrors the four reasons the Discourse flag
+      // dialog offers. `flagging` holds the action-type id being sent
+      // so only the tapped row shows a spinner.
+      flagMenuOpen: false,
+      flagging: null,
       // Floating "N/N" progress pill — visible only while the user
       // is scrolling, hides itself 1.2 s after the last scroll event.
       // currentPostNumber tracks which hydrated post is currently
@@ -423,10 +459,6 @@ export default {
       const slug = this.topic?.slug || this.$route.params.slug || '';
       const id = this.$route.params.id;
       return `${config.urls.forum}/t/${slug ? slug + '/' : ''}${id}`;
-    },
-
-    forumLoginUrl() {
-      return `${config.urls.forum}/login?return_path=${encodeURIComponent('/t/' + this.$route.params.id)}`;
     },
 
     replyTargetLabel() {
@@ -554,6 +586,36 @@ export default {
           icon: 'bell-slash',
           label: this.$gettext('Muet'),
           hint: this.$gettext('Aucune notification.'),
+        },
+      ];
+    },
+    // The four reasons forum.camptocamp.org offers a regular member.
+    // Ids are Discourse post_action_type_id values.
+    flagOptions() {
+      return [
+        {
+          value: 3,
+          icon: 'arrow-right',
+          label: this.$gettext('Hors-sujet'),
+          hint: this.$gettext('Ce message ne concerne pas le sujet.'),
+        },
+        {
+          value: 4,
+          icon: 'triangle-exclamation',
+          label: this.$gettext('Inapproprié'),
+          hint: this.$gettext('Contenu offensant ou contraire aux règles.'),
+        },
+        {
+          value: 8,
+          icon: 'ban',
+          label: this.$gettext('Spam'),
+          hint: this.$gettext('Publicité ou message indésirable.'),
+        },
+        {
+          value: 7,
+          icon: 'envelope',
+          label: this.$gettext('Autre chose'),
+          hint: this.$gettext('Prévenir les modérateurs avec un message.'),
         },
       ];
     },
@@ -757,44 +819,56 @@ export default {
       }
     },
 
-    async flagTopic() {
-      if (!this.firstPost?.id) return;
-      const reason = window.prompt(
-        this.$gettext('Signaler ce sujet — décrivez brièvement le problème (spam, contenu inapproprié…) :'),
-        ''
-      );
-      if (reason === null) return;
+    toggleFlagMenu() {
+      this.flagMenuOpen = !this.flagMenuOpen;
+    },
+
+    // Send the flag through the API layer so it carries the CSRF
+    // token every other Discourse write sends. The previous version
+    // POSTed straight from here via forum.authAxios and skipped both
+    // the token and the .json suffix, so it could never succeed —
+    // and its failure toast blamed the session cookie, which sent
+    // the diagnosis down the wrong path.
+    async pickFlagReason(opt) {
+      if (this.flagging || !this.firstPost?.id) return;
+      let message = '';
+      if (opt.value === 7) {
+        // notify_moderators is the only reason Discourse requires a
+        // message for — same as the flag dialog on the site.
+        const typed = window.prompt(this.$gettext('Que voulez-vous signaler aux modérateurs ?'), '');
+        if (typed === null) return;
+        if (!typed.trim()) {
+          toast({
+            type: 'is-warning',
+            position: 'bottom-center',
+            message: this.$gettext('Merci de décrire le problème pour les modérateurs.'),
+          });
+          return;
+        }
+        message = typed.trim();
+      }
+      this.flagging = opt.value;
       try {
-        // Discourse post-action id 7 = notify_moderators; endpoint
-        // needs a session cookie on forum.camptocamp.org.
-        await forum.authAxios.post(
-          '/post_actions',
-          new URLSearchParams({
-            id: String(this.firstPost.id),
-            post_action_type_id: '7',
-            message: reason || this.$gettext('Signalement depuis l’app mobile.'),
-          }).toString(),
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'Discourse-Logged-In': 'true',
-            },
-          }
-        );
+        await forum.flagPost(this.firstPost.id, { actionTypeId: opt.value, message });
+        this.flagMenuOpen = false;
         toast({
           type: 'is-success',
           position: 'bottom-center',
-          message: this.$gettext('Signalement envoyé aux modérateurs.'),
+          message: this.$gettext('Signalement transmis aux modérateurs.'),
         });
-      } catch {
+      } catch (err) {
+        const status = err?.response?.status;
         toast({
           type: 'is-warning',
           position: 'bottom-center',
           duration: 5000,
-          message: this.$gettext(
-            'Signalement impossible depuis l’app (session forum non partagée). Utilisez forum.camptocamp.org.'
-          ),
+          message:
+            status === 401 || status === 403 || status === 419
+              ? this.$gettext('Connectez-vous sur forum.camptocamp.org pour signaler un message.')
+              : this.$gettext('Signalement impossible pour le moment. Réessayez plus tard.'),
         });
+      } finally {
+        this.flagging = null;
       }
     },
 
@@ -831,10 +905,13 @@ export default {
     },
 
     onDocumentClick(event) {
-      if (!this.notifMenuOpen) return;
-      const wrap = this.$refs.notifWrap;
-      if (wrap && !wrap.contains(event.target)) {
-        this.notifMenuOpen = false;
+      if (this.notifMenuOpen) {
+        const wrap = this.$refs.notifWrap;
+        if (wrap && !wrap.contains(event.target)) this.notifMenuOpen = false;
+      }
+      if (this.flagMenuOpen) {
+        const wrap = this.$refs.flagWrap;
+        if (wrap && !wrap.contains(event.target)) this.flagMenuOpen = false;
       }
     },
 
@@ -1588,6 +1665,28 @@ export default {
   line-height: 1.3;
   margin-top: 0.15rem;
 }
+// Flag popover reuses the notification popover shell; only the
+// accent colour and the intro line differ.
+.ft-flag-popover {
+  right: 0;
+  left: auto;
+}
+.ft-flag-intro {
+  margin: 0;
+  padding: 0.45rem 0.6rem 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b6b6b;
+}
+.ft-flag-icon {
+  color: #b91c1c;
+}
+.ft-notif-option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 .ft-notif-option-check {
   flex: 0 0 auto;
   color: #ff9933;
@@ -1761,6 +1860,12 @@ html[data-theme='dark'] {
     }
     .ft-notif-option-hint {
       color: #b5b5b5;
+    }
+    .ft-flag-intro {
+      color: #b5b5b5;
+    }
+    .ft-flag-icon {
+      color: #ff8f8f;
     }
     .ft-progress-floating {
       background: rgba(75, 194, 107, 0.94);

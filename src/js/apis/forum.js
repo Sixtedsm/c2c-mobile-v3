@@ -173,6 +173,33 @@ Forum.prototype.likePost = async function (postId) {
   });
 };
 
+// Flag a post for moderation. Discourse post_action_type_id values:
+//   3 = off_topic, 4 = inappropriate, 8 = spam — no message needed;
+//   7 = notify_moderators — free-text `message` is required.
+// These are the same four reasons the flag dialog offers on
+// forum.camptocamp.org, so a flag raised from the app lands in the
+// moderation queue identically to one raised from the site.
+Forum.prototype.flagPost = async function (postId, { actionTypeId = 7, message = '' } = {}) {
+  if (!postId) throw new Error('postId is required');
+  const csrf = await this._getCsrf();
+  if (!csrf) throw new Error('no-csrf');
+  const body = new URLSearchParams({
+    id: String(postId),
+    post_action_type_id: String(actionTypeId),
+    flag_topic: 'false',
+  });
+  // Only notify_moderators carries a message; sending one with the
+  // other types makes Discourse 400.
+  if (Number(actionTypeId) === 7 && message) body.set('message', message);
+  return this.authAxios.post('/post_actions.json', body.toString(), {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRF-Token': csrf,
+      'Discourse-Logged-In': 'true',
+    },
+  });
+};
+
 Forum.prototype.unlikePost = async function (postId) {
   const csrf = await this._getCsrf();
   if (!csrf) throw new Error('no-csrf');

@@ -88,7 +88,6 @@
 import { toast } from 'bulma-toast';
 
 import forum from '@/js/apis/forum';
-import config from '@/js/config';
 
 // Human-readable labels for Discourse notification_type ids. Full
 // enum: mentioned=1, replied=2, quoted=3, edited=4, liked=5, pm=6,
@@ -132,9 +131,6 @@ export default {
   },
 
   computed: {
-    forumLoginUrl() {
-      return `${config.urls.forum}/login`;
-    },
     hasUnread() {
       return this.notifications.some((n) => !n.read);
     },
