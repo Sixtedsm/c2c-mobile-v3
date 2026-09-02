@@ -672,15 +672,58 @@ export default function install(Vue) {
         }
       },
 
+      // Public entry point for the pending-outing queue. Claims the
+      // re-entrancy lock SYNCHRONOUSLY — before any await — then hands
+      // off to runPendingOutingsSync for the actual work.
       async syncPendingOutings() {
         if (this.syncing || !this.online) {
           return;
         }
+        // The lock used to be claimed *after* the first await, which
+        // left a window where two callers both passed the check above:
+        // the online event handler firing while the user also taps
+        // "Synchroniser" in OfflineView. Both then read the same queue
+        // and POSTed it, publishing every pending outing twice on the
+        // user's camptocamp.org account. Claiming it here closes that
+        // window — a second caller now returns on the guard.
+        this.syncing = true;
+        try {
+          await this.runPendingOutingsSync();
+        } catch {
+          // Reaching here means the pass itself blew up rather than an
+          // individual outing failing (those are caught per item inside
+          // the loop) — in practice an IndexedDB write that could not
+          // complete. Without this catch the rejection escaped to all
+          // four call sites, three of which are fire-and-forget and
+          // would have turned it into an unhandled rejection the user
+          // never sees. Surface it instead: the queue is intact on
+          // disk, so retrying later is the right move.
+          toast({
+            type: 'is-warning',
+            position: 'bottom-center',
+            duration: 5000,
+            message: `Synchronisation interrompue. Vos sorties sont conservées, réessayez depuis « Mes topos ».`,
+          });
+        } finally {
+          // Releasing in `finally` is what makes the queue survive a
+          // failed run. This used to be a bare statement after the
+          // loop, so an IndexedDB write failure (quota exceeded,
+          // private-mode Safari, store locked by another tab) escaped
+          // before reaching it and left `syncing` stuck true for the
+          // rest of the session: every later sync returned silently
+          // on the guard and the queue never published again, with no
+          // feedback to the user.
+          this.syncing = false;
+        }
+      },
+
+      // Actual sync pass. Never call directly — go through
+      // syncPendingOutings so the re-entrancy lock is honoured.
+      async runPendingOutingsSync() {
         const queue = await store.listPendingOutings();
         if (!queue.length) {
           return;
         }
-        this.syncing = true;
         const remaining = [];
         let published = 0;
         let newConflicts = 0;
@@ -781,7 +824,6 @@ export default function install(Vue) {
         }
         await store.replacePendingOutings(remaining);
         this.pendingOutings = remaining;
-        this.syncing = false;
 
         // Toast feedback (#21). Auto-sync runs silently in the background
         // — without a notification, users have no idea their outings made
