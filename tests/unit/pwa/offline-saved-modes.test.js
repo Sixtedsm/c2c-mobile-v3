@@ -176,6 +176,32 @@ describe('legacy entries stay trustworthy', () => {
   });
 });
 
+// The service worker answers document requests straight from IndexedDB,
+// so it never passes through getDocument(). Both readers ask isOfflineEntry
+// instead — these cases pin the shared rule, and the legacy one is the leak
+// that made "en ligne" topos still open with no network.
+describe('only a downloaded topo may be served without a network', () => {
+  it('accepts a downloaded entry', () => {
+    expect(store.isOfflineEntry({ mode: store.OFFLINE_MODE, data: cookedDoc })).toBe(true);
+  });
+
+  it('accepts a pre-mode entry, which was always fully downloaded', () => {
+    expect(store.isOfflineEntry({ data: cookedDoc })).toBe(true);
+  });
+
+  it('refuses a legacy light save even though it still carries a payload', () => {
+    // Saved before this lot: mode 'saved', document present. Serving it
+    // would make an "en ligne" topo readable offline, which is precisely
+    // what the two sections rule out.
+    expect(store.isOfflineEntry({ mode: 'saved', data: cookedDoc })).toBe(false);
+  });
+
+  it('refuses an online entry and a missing one', () => {
+    expect(store.isOfflineEntry({ mode: store.ONLINE_MODE, data: null })).toBe(false);
+    expect(store.isOfflineEntry(undefined)).toBe(false);
+  });
+});
+
 describe('the outing form only offers mountain-ready topos', () => {
   it('keeps online saves out of offlineDocs', async () => {
     const vm = mount();

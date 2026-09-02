@@ -24,11 +24,20 @@ export const ONLINE_MODE = 'online';
 export const OFFLINE_MODE = 'offline';
 const LEGACY_SAVED_MODE = 'saved';
 
-function normaliseMode(mode) {
+// Exported because the service worker answers document requests straight
+// from IndexedDB, without going through this module's readers. It has to
+// apply the very same rule, and a second copy of it would drift.
+export function normaliseMode(mode) {
   if (!mode) {
     return OFFLINE_MODE;
   }
   return mode === LEGACY_SAVED_MODE ? ONLINE_MODE : mode;
+}
+
+// The single answer to "may this entry be served with no network?".
+// Both readers ask it: getDocument() below, and the SW's document route.
+export function isOfflineEntry(entry) {
+  return Boolean(entry?.data) && normaliseMode(entry.mode) === OFFLINE_MODE;
 }
 
 export async function saveDocument({ type, id, lang, data, meta = null, folderId = null, mode = OFFLINE_MODE }) {
@@ -81,10 +90,7 @@ export async function getDocument(type, id, lang) {
   // An online entry promises nothing without a network. Refuse it here
   // rather than at each call site, so that a legacy row still carrying a
   // payload cannot make one topo behave differently from another.
-  if (normaliseMode(entry.mode) === ONLINE_MODE) {
-    return null;
-  }
-  return entry.data ?? null;
+  return isOfflineEntry(entry) ? entry.data : null;
 }
 
 export async function hasDocument(type, id, lang) {

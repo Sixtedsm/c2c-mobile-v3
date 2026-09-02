@@ -8,6 +8,12 @@ import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from
 import { NavigationRoute, registerRoute, setCatchHandler } from 'workbox-routing';
 import { CacheFirst } from 'workbox-strategies';
 
+/* The rule deciding whether an entry may be served without a network lives
+ * in the store, and is imported rather than restated: this route answers
+ * document requests straight from IDB, so a second copy of that rule would
+ * be a second chance to get it wrong. */
+import { isOfflineEntry } from '@/pwa/offline-store';
+
 // ---------- Precache the app shell ----------
 
 precacheAndRoute(self.__WB_MANIFEST || [], {
@@ -90,6 +96,12 @@ async function refreshDocFromNetwork(request, parsed) {
     }
     const data = await response.clone().json();
     const previous = (await get(docKey(parsed.type, parsed.id, parsed.lang))) ?? {};
+    // Refresh the payload of a downloaded topo, never create one. Writing
+    // data onto an online entry would hand it an offline copy it never
+    // asked for — the exact thing the section split rules out.
+    if (!isOfflineEntry(previous)) {
+      return;
+    }
     await set(docKey(parsed.type, parsed.id, parsed.lang), {
       ...previous,
       type: parsed.type,
@@ -114,7 +126,11 @@ async function handleDocRequest({ request }) {
 
   if (parsed) {
     const entry = await get(docKey(parsed.type, parsed.id, parsed.lang));
-    if (entry?.data) {
+    // Only a topo saved hors ligne is served without the network. A topo
+    // saved en ligne must behave exactly like one that was never saved —
+    // including the legacy rows that still carry a payload from back when
+    // saving meant a light download.
+    if (isOfflineEntry(entry)) {
       refreshDocFromNetwork(request, parsed);
       return buildDocResponse(entry.data);
     }
