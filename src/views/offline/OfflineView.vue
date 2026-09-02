@@ -190,11 +190,28 @@
                 <div class="offline-card-meta">
                   <span class="tag is-light">{{ $gettext(entry.type) }}</span>
                   <span class="tag is-light">{{ entry.lang.toUpperCase() }}</span>
-                  <!-- Freshness (Lot 5 §2.2): amber if 7-30 d, red past
-                       30 d. Visible on every entry so the user can spot
-                       obsolete packs at a glance before heading out. -->
+                  <!-- The single most important thing on this card: can
+                       I open it with no network? A light save cannot show
+                       images or the map, so saying so plainly here is what
+                       stops someone counting on it in the field. -->
+                  <span v-if="isOffline(entry)" class="tag is-small offline-badge-ready">
+                    <fa-icon icon="circle-check" />
+                    &nbsp;{{ $gettext('Hors-ligne') }}
+                  </span>
                   <span
-                    v-if="freshnessOf(entry) !== 'fresh' && freshnessOf(entry) !== 'unknown'"
+                    v-else
+                    class="tag is-small offline-badge-light"
+                    :title="
+                      $gettext('Texte seulement : ni photos ni carte. Téléchargez-le pour l’avoir sur le terrain.')
+                    "
+                  >
+                    {{ $gettext('Texte seul') }}
+                  </span>
+                  <!-- Freshness (Lot 5 §2.2): amber if 7-30 d, red past
+                       30 d. Only meaningful for a downloaded package —
+                       a light save has nothing to go stale. -->
+                  <span
+                    v-if="isOffline(entry) && freshnessOf(entry) !== 'fresh' && freshnessOf(entry) !== 'unknown'"
                     class="tag is-small"
                     :class="freshnessTagClass(entry)"
                     :title="$gettext('Vérifiez le contenu — la sauvegarde peut être obsolète.')"
@@ -202,13 +219,34 @@
                     <fa-icon icon="triangle-exclamation" />
                     &nbsp;{{ ageLabelOf(entry) }}
                   </span>
-                  <span v-else class="has-text-grey is-size-7">{{ ageLabelOf(entry) }}</span>
+                  <span v-else-if="isOffline(entry)" class="has-text-grey is-size-7">{{ ageLabelOf(entry) }}</span>
                 </div>
               </div>
             </router-link>
             <div class="offline-card-actions">
+              <!-- The deliberate second step: saving is light, taking a
+                   topo to the mountain is an explicit choice. This is the
+                   place for it — preparing a trip happens in Mes topos,
+                   not while browsing. -->
               <button
-                v-if="freshnessOf(entry) === 'stale' || freshnessOf(entry) === 'very-stale'"
+                v-if="!isOffline(entry)"
+                class="offline-card-download button is-small is-text"
+                :disabled="isDownloading(entry)"
+                :title="$gettext('Télécharger pour la montagne (photos et carte)')"
+                @click="download(entry)"
+              >
+                <fa-icon :icon="isDownloading(entry) ? 'spinner' : 'download'" :spin="isDownloading(entry)" />
+              </button>
+              <button
+                v-else
+                class="offline-card-undownload button is-small is-text"
+                :title="$gettext('Libérer l’espace : garder le topo dans Mes topos, sans photos ni carte')"
+                @click="undownload(entry)"
+              >
+                <fa-icon icon="plug" />
+              </button>
+              <button
+                v-if="isOffline(entry) && (freshnessOf(entry) === 'stale' || freshnessOf(entry) === 'very-stale')"
                 class="offline-card-refresh button is-small is-text"
                 :disabled="isRefreshing(entry)"
                 :title="$gettext('Rafraîchir depuis Camptocamp')"
@@ -351,6 +389,8 @@
 </template>
 
 <script>
+import { toast } from 'bulma-toast';
+
 import ModalWindow from '@/components/generics/modals/ModalWindow';
 import c2c from '@/js/apis/c2c';
 import pullRefreshMixin from '@/js/pull-refresh-mixin';
@@ -440,7 +480,9 @@ export default {
     // modal. Same source as the picker in OutingEditionView so the
     // user sees the exact same list they'd have on the terrain.
     assocOfflineRoutes() {
-      const saved = this.$offline?.savedDocs || [];
+      // offlineDocs, for the same reason as the picker in
+      // OutingEditionView: only genuinely downloaded routes belong here.
+      const saved = this.$offline?.offlineDocs || [];
       const routes = saved.filter((entry) => entry.type === 'route' && entry.data);
       routes.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
       return routes.map((entry) => entry.data);
@@ -564,6 +606,46 @@ export default {
       await this.$offline.moveDocumentToFolder(entry.type, entry.id, entry.lang, folderId || null);
     },
 
+    // Mode helpers. A missing mode means a pre-split entry, which was
+    // always fully downloaded — see offline-store.listDocuments().
+    isOffline(entry) {
+      return (entry.mode ?? 'offline') === 'offline';
+    },
+    isDownloading(entry) {
+      return this.$offline.isDownloading(entry.type, entry.id, entry.lang);
+    },
+
+    async download(entry) {
+      try {
+        await this.$offline.downloadForOffline(entry.type, entry.id, entry.lang);
+        toast({
+          type: 'is-success',
+          position: 'bottom-center',
+          message: this.$gettext('Topo téléchargé : photos et carte disponibles hors-ligne.'),
+        });
+      } catch {
+        toast({
+          type: 'is-warning',
+          position: 'bottom-center',
+          duration: 4500,
+          message: this.$gettext('Téléchargement impossible. Vérifiez votre connexion et réessayez.'),
+        });
+      }
+    },
+
+    async undownload(entry) {
+      if (
+        !window.confirm(
+          this.$gettext(
+            'Retirer les photos et la carte de ce topo ? Il restera dans Mes topos, lisible en texte, mais ne sera plus complet sans réseau.'
+          )
+        )
+      ) {
+        return;
+      }
+      await this.$offline.removeOfflineData(entry.type, entry.id, entry.lang);
+    },
+
     async remove(entry) {
       const message = this.$gettext('Remove this topo from offline storage?');
       if (!window.confirm(message)) {
@@ -656,14 +738,20 @@ export default {
     },
 
     // Re-download the doc through the same saveDocument path — it
-    // overwrites the IDB entry with a fresh `savedAt`, re-prefetches
-    // images + tiles + associated waypoints. Preserves the folder.
+    // overwrites the IDB entry, re-prefetches images + tiles +
+    // associated waypoints. Preserves the folder.
+    //
+    // It must also preserve the mode: saveDocument now defaults to a
+    // light save, so passing the entry's own mode is what stops a
+    // refresh from quietly stripping a downloaded topo of its images
+    // and map right before someone heads out.
     async refresh(entry) {
       await this.$offline.saveDocument({
         type: entry.type,
         id: entry.id,
         lang: entry.lang,
         folderId: entry.folderId || null,
+        mode: entry.mode ?? 'offline',
       });
     },
 
@@ -791,6 +879,24 @@ export default {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1rem;
+}
+
+// Green reads as "ready", neutral grey as "not yet" — the same pairing
+// used by the dot on the topo header button, so the two surfaces agree.
+.offline-badge-ready {
+  background: rgba(43, 143, 76, 0.12);
+  color: #2b8f4c;
+  font-weight: 600;
+}
+.offline-badge-light {
+  background: rgba(0, 0, 0, 0.06);
+  color: #6b6b6b;
+}
+.offline-card-download {
+  color: #2b8f4c;
+}
+.offline-card-undownload {
+  color: #6b6b6b;
 }
 
 .offline-card {

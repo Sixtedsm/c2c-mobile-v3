@@ -37,6 +37,19 @@
       :label="offlineLabel"
     />
 
+    <!-- Saving is light by default (text only). Taking a topo up a
+         mountain is a separate, explicit choice — a tool-box row can
+         carry a real label, which an icon in the header cannot. -->
+    <tool-box-button
+      v-if="canSaveOffline && isSavedOffline && !isOfflineReady"
+      @click="downloadOffline"
+      :icon="isDownloadingOffline ? 'circle-notch' : 'download'"
+      :icon-class="isDownloadingOffline ? 'fa-spin' : null"
+      :label="
+        isDownloadingOffline ? $gettext('Téléchargement…') : $gettext('Télécharger pour la montagne (photos, carte)')
+      "
+    />
+
     <!-- Pack "sortie du jour" (CDC §2.2): one-tap bundle of the route +
          its associated waypoints (hut, summit, access…) into a folder.
          Routes only — for other doc types the concept doesn't map. -->
@@ -404,6 +417,12 @@ export default {
       return this.$offline.isSaved(this.documentType, this.offlineDocId, this.offlineLang);
     },
 
+    // Saved AND fully downloaded. isSavedOffline alone is true for a
+    // light save, which has neither images nor map tiles.
+    isOfflineReady() {
+      return this.$offline.isOfflineReady(this.documentType, this.offlineDocId, this.offlineLang);
+    },
+
     isDownloadingOffline() {
       return this.$offline.isDownloading(this.documentType, this.offlineDocId, this.offlineLang);
     },
@@ -412,21 +431,28 @@ export default {
       if (this.isDownloadingOffline) {
         return 'circle-notch';
       }
-      return this.isSavedOffline ? 'check-circle' : 'download';
+      return this.isSavedOffline ? 'check-circle' : 'bookmark';
     },
 
     offlineIconClass() {
       if (this.isDownloadingOffline) {
         return 'fa-spin';
       }
-      return this.isSavedOffline ? 'has-text-success' : null;
+      // Green only once the topo really works without a network, so the
+      // colour never over-promises.
+      return this.isOfflineReady ? 'has-text-success' : null;
     },
 
     offlineLabel() {
       if (this.isDownloadingOffline) {
-        return this.$gettext('Saving for offline use…');
+        return this.$gettext('Enregistrement…');
       }
-      return this.isSavedOffline ? this.$gettext('Saved for offline use') : this.$gettext('Save for offline use');
+      if (this.isOfflineReady) {
+        return this.$gettext('Disponible hors-ligne');
+      }
+      return this.isSavedOffline
+        ? this.$gettext('Enregistré dans Mes topos (texte seul)')
+        : this.$gettext('Enregistrer dans Mes topos');
     },
 
     canSaveDayPack() {
@@ -492,7 +518,9 @@ export default {
           this.documentType,
           this.offlineDocId,
           this.offlineLang,
-          this.$gettext("Retirer ce topo des sauvegardes hors-ligne ? Vous ne pourrez plus l'ouvrir sans réseau.")
+          this.isOfflineReady
+            ? this.$gettext("Retirer ce topo de Mes topos ? Vous ne pourrez plus l'ouvrir sans réseau.")
+            : this.$gettext('Retirer ce topo de Mes topos ?')
         );
       } else {
         await this.$offline.saveDocument({
@@ -501,6 +529,11 @@ export default {
           lang: this.offlineLang,
         });
       }
+    },
+
+    async downloadOffline() {
+      if (this.isDownloadingOffline) return;
+      await this.$offline.downloadForOffline(this.documentType, this.offlineDocId, this.offlineLang);
     },
 
     async saveDayPack() {

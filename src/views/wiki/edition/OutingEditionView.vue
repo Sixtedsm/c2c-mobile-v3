@@ -360,12 +360,17 @@ export default {
       return null;
     },
 
-    // Routes the user has saved offline — surfaced as a pickable list
-    // in the form so the outing can be associated with a route without
-    // having to find it through the map / API search (which fails
-    // offline anyway). Sorted by most-recently-saved first.
+    // Routes the user has downloaded for offline use — surfaced as a
+    // pickable list in the form so the outing can be associated with a
+    // route without having to find it through the map / API search
+    // (which fails offline anyway). Sorted by most-recently-saved first.
+    //
+    // Reads offlineDocs, not savedDocs: a light save has no map tiles
+    // and no images, so it is not something you carry up a mountain.
+    // Keeping those out is also what stops this list from growing
+    // endless, which is why the two modes exist at all.
     offlineRoutes() {
-      const saved = this.$offline?.savedDocs || [];
+      const saved = this.$offline?.offlineDocs || [];
       const routes = saved.filter((entry) => entry.type === 'route' && entry.data);
       routes.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
       return routes.map((entry) => entry.data);

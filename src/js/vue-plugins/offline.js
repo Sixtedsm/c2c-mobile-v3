@@ -296,6 +296,22 @@ export default function install(Vue) {
       };
     },
 
+    computed: {
+      // Only the topos that are genuinely mountain-ready. This is what
+      // the offline-route picker on the outing form must show: a light
+      // save has no map tiles and no images, so offering it there would
+      // promise something the app cannot deliver in the field — and the
+      // endless list was the reason for splitting the two modes in the
+      // first place.
+      offlineDocs() {
+        return this.savedDocs.filter((e) => e.mode === store.OFFLINE_MODE);
+      },
+      // Everything saved but not downloaded — the trip-planning list.
+      savedOnlyDocs() {
+        return this.savedDocs.filter((e) => e.mode === store.SAVED_MODE);
+      },
+    },
+
     watch: {
       // Keep the PWA app badge in sync with the queue.
       'pendingOutings.length': {
@@ -421,11 +437,37 @@ export default function install(Vue) {
         );
       },
 
+      // True only when the full package is on the device. Callers that
+      // gate a "works without network" promise must use this, never
+      // isSaved() — which is true for a light save too.
+      isOfflineReady(type, id, lang) {
+        return this.savedDocs.some(
+          (entry) =>
+            entry.type === type &&
+            String(entry.id) === String(id) &&
+            entry.lang === lang &&
+            entry.mode === store.OFFLINE_MODE
+        );
+      },
+
       isDownloading(type, id, lang) {
         return this.downloading.has(`${type}/${id}/${lang}`);
       },
 
-      async saveDocument({ type, id, lang, folderId = null }) {
+      // Save a topo to "Mes topos".
+      //
+      // Default is a LIGHT save: the document JSON only. It reads
+      // offline as text and costs tens of KB. The heavy package —
+      // embedded images, gallery variants and ~250 surrounding map
+      // tiles, i.e. megabytes — is fetched only when the user asks for
+      // it explicitly, through downloadForOffline().
+      //
+      // This is deliberate (Sixte, 2026-09-02): saving everything by
+      // default filled up storage and made the offline-route picker on
+      // the outing form unusable. The trade-off is that a bookmark no
+      // longer means "ready for the mountain", so every surface showing
+      // a saved topo has to make the difference obvious.
+      async saveDocument({ type, id, lang, folderId = null, mode = store.SAVED_MODE }) {
         const key = `${type}/${id}/${lang}`;
         if (this.downloading.has(key)) {
           return;
@@ -437,59 +479,9 @@ export default function install(Vue) {
             throw new Error(`Unknown document type: ${type}`);
           }
           const { data } = await service.getCooked(id, lang);
-          await store.saveDocument({ type, id, lang, data, folderId });
-          // Strategy: cache the EXACT URLs the browser will request when
-          // rendering the topo offline.
-          //
-          // 1) Pull every src= URL out of the cooked HTML and fetch them as-is.
-          //    Whatever pattern the server-side cooker emits (proxy URL, media
-          //    direct, etc.) is what the browser will ask for later, so this
-          //    is the most reliable way to populate the SW image cache.
-          await prefetchSrcsFromCooked(data?.cooked);
-
-          // 2) Gallery images (associations.images): prefetch the size
-          //    variants the gallery template usually requests (MI for the
-          //    grid, SI for the thumbnail strip). These go through getImageUrl
-          //    which constructs the same URL the gallery will build.
-          const associatedImages = Array.isArray(data?.associations?.images) ? data.associations.images : [];
-          for (const image of associatedImages) {
-            try {
-              await prefetchImageVariants(image);
-            } catch {
-              /* ignore */
-            }
-          }
-
-          // 3) Pre-cache map tiles around the trace so the user has the
-          //    topographic base layer offline (OpenTopoMap by default, the C2C
-          //    fallback layer). Run in the background — the "saved" feedback
-          //    has already fired, no need to block on this.
-          prefetchTilesForDocument(data).catch(() => {
-            /* tile prefetch is best-effort */
-          });
-
-          // 4) Also persist the lightweight image metadata for images that are
-          //    embedded by id (so a later code path that calls c2c.image.get…
-          //    on them still resolves offline).
-          const embeddedIds = extractEmbeddedImageIds(data?.cooked).map(String);
-          const associatedIds = new Set(associatedImages.map((img) => String(img.document_id)));
-          for (const imageId of embeddedIds) {
-            if (associatedIds.has(imageId)) {
-              continue;
-            }
-            try {
-              const imgResponse = await c2c.image.getCooked(imageId, lang);
-              await store.saveDocument({
-                type: 'image',
-                id: imageId,
-                lang,
-                data: imgResponse.data,
-                folderId,
-              });
-              await prefetchImageVariants(imgResponse.data);
-            } catch {
-              /* ignore */
-            }
+          await store.saveDocument({ type, id, lang, data, folderId, mode });
+          if (mode === store.OFFLINE_MODE) {
+            await this.prefetchOfflineAssets(data, lang, folderId);
           }
           await this.refresh();
         } finally {
@@ -497,6 +489,88 @@ export default function install(Vue) {
           next.delete(key);
           this.downloading = next;
         }
+      },
+
+      // Everything that makes a topo usable without a network. Split out
+      // of saveDocument so a light save can skip it wholesale.
+      async prefetchOfflineAssets(data, lang, folderId) {
+        // Strategy: cache the EXACT URLs the browser will request when
+        // rendering the topo offline.
+        //
+        // 1) Pull every src= URL out of the cooked HTML and fetch them as-is.
+        //    Whatever pattern the server-side cooker emits (proxy URL, media
+        //    direct, etc.) is what the browser will ask for later, so this
+        //    is the most reliable way to populate the SW image cache.
+        await prefetchSrcsFromCooked(data?.cooked);
+
+        // 2) Gallery images (associations.images): prefetch the size
+        //    variants the gallery template usually requests (MI for the
+        //    grid, SI for the thumbnail strip). These go through getImageUrl
+        //    which constructs the same URL the gallery will build.
+        const associatedImages = Array.isArray(data?.associations?.images) ? data.associations.images : [];
+        for (const image of associatedImages) {
+          try {
+            await prefetchImageVariants(image);
+          } catch {
+            /* ignore */
+          }
+        }
+
+        // 3) Pre-cache map tiles around the trace so the user has the
+        //    topographic base layer offline (OpenTopoMap by default, the C2C
+        //    fallback layer). Run in the background — the "saved" feedback
+        //    has already fired, no need to block on this.
+        prefetchTilesForDocument(data).catch(() => {
+          /* tile prefetch is best-effort */
+        });
+
+        // 4) Also persist the lightweight image metadata for images that are
+        //    embedded by id (so a later code path that calls c2c.image.get…
+        //    on them still resolves offline). These sub-documents really are
+        //    downloaded, so they keep the offline mode.
+        const embeddedIds = extractEmbeddedImageIds(data?.cooked).map(String);
+        const associatedIds = new Set(associatedImages.map((img) => String(img.document_id)));
+        for (const imageId of embeddedIds) {
+          if (associatedIds.has(imageId)) {
+            continue;
+          }
+          try {
+            const imgResponse = await c2c.image.getCooked(imageId, lang);
+            await store.saveDocument({
+              type: 'image',
+              id: imageId,
+              lang,
+              data: imgResponse.data,
+              folderId,
+              mode: store.OFFLINE_MODE,
+            });
+            await prefetchImageVariants(imgResponse.data);
+          } catch {
+            /* ignore */
+          }
+        }
+      },
+
+      // Promote a saved topo to a full offline package. Re-fetches the
+      // document on the way, so a topo saved months ago also comes back
+      // up to date. Keeps whatever folder it was already filed under.
+      async downloadForOffline(type, id, lang) {
+        const entry = this.savedDocs.find((e) => e.type === type && String(e.id) === String(id) && e.lang === lang);
+        return this.saveDocument({ type, id, lang, folderId: entry?.folderId ?? null, mode: store.OFFLINE_MODE });
+      },
+
+      // Demote back to a light entry: the topo stays in "Mes topos" and
+      // stays readable as text, it just no longer claims to be ready for
+      // the mountain.
+      //
+      // Honest limitation: images already pulled into the service-worker
+      // cache are not evicted here. Cache Storage has no per-document
+      // index and one image can belong to several topos, so deleting by
+      // URL would risk breaking a sibling. That space is reclaimed by the
+      // SW cache policy, not by this call.
+      async removeOfflineData(type, id, lang) {
+        await store.setDocumentMode(type, id, lang, store.SAVED_MODE);
+        await this.refresh();
       },
 
       async removeDocument(type, id, lang) {
@@ -557,7 +631,9 @@ export default function install(Vue) {
           throw new Error(`Unknown document type: ${type}`);
         }
         const folderId = await this.createFolder(folderName || `Pack ${new Date().toLocaleDateString('fr-FR')}`);
-        await this.saveDocument({ type, id, lang, folderId });
+        // A day pack is explicitly "prepare this for the field", so every
+        // document in it is downloaded in full — never a light save.
+        await this.saveDocument({ type, id, lang, folderId, mode: store.OFFLINE_MODE });
 
         const mainDoc = await store.getDocument(type, id, lang);
         const associations = mainDoc?.associations ?? {};
@@ -567,7 +643,7 @@ export default function install(Vue) {
           if (!wpId) continue;
           if (this.isSaved('waypoint', wpId, lang)) continue;
           try {
-            await this.saveDocument({ type: 'waypoint', id: wpId, lang, folderId });
+            await this.saveDocument({ type: 'waypoint', id: wpId, lang, folderId, mode: store.OFFLINE_MODE });
           } catch {
             /* one missing waypoint should not tank the pack */
           }

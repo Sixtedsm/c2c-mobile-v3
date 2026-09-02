@@ -6,15 +6,45 @@ const folderKey = (folderId) => `folder:${folderId}`;
 const isDocKey = (key) => typeof key === 'string' && key.startsWith('doc:');
 const isFolderKey = (key) => typeof key === 'string' && key.startsWith('folder:');
 
-export async function saveDocument({ type, id, lang, data, folderId = null }) {
+// Two kinds of saved entry:
+//   'saved'   — the document JSON only. Light (tens of KB), readable
+//               offline as text, but no images and no map tiles.
+//   'offline' — the full package: JSON + embedded images + gallery
+//               variants + surrounding map tiles. Megabytes, and what
+//               you actually want in your pocket on the mountain.
+// Entries written before this distinction existed carry no `mode` and
+// were always fully downloaded, so listDocuments() reads them as
+// 'offline'. Never default a missing mode to 'saved': that would tell
+// a user their topo is text-only when it is in fact complete.
+export const SAVED_MODE = 'saved';
+export const OFFLINE_MODE = 'offline';
+
+export async function saveDocument({ type, id, lang, data, folderId = null, mode = OFFLINE_MODE }) {
+  const previous = await get(docKey(type, id, lang));
   await set(docKey(type, id, lang), {
     type,
     id,
     lang,
     data,
     folderId,
-    savedAt: Date.now(),
+    mode,
+    savedAt: previous?.savedAt ?? Date.now(),
+    // Only a full download refreshes this. It is what the freshness
+    // badge reads, and a light save must not make a stale package
+    // look freshly downloaded.
+    downloadedAt: mode === OFFLINE_MODE ? Date.now() : previous?.downloadedAt ?? null,
   });
+}
+
+// Flip an entry between the two modes without touching its payload or
+// its folder. Returns false when the document is not saved at all.
+export async function setDocumentMode(type, id, lang, mode) {
+  const entry = await get(docKey(type, id, lang));
+  if (!entry) return false;
+  entry.mode = mode;
+  if (mode === OFFLINE_MODE) entry.downloadedAt = Date.now();
+  await set(docKey(type, id, lang), entry);
+  return true;
 }
 
 export async function getDocument(type, id, lang) {
@@ -33,7 +63,9 @@ export async function deleteDocument(type, id, lang) {
 export async function listDocuments() {
   const allKeys = await keys();
   const docKeys = allKeys.filter(isDocKey);
-  return Promise.all(docKeys.map((k) => get(k)));
+  const entries = await Promise.all(docKeys.map((k) => get(k)));
+  // Normalise legacy entries in one place so no consumer has to guess.
+  return entries.filter(Boolean).map((e) => (e.mode ? e : { ...e, mode: OFFLINE_MODE }));
 }
 
 export async function setDocumentFolder(type, id, lang, folderId) {

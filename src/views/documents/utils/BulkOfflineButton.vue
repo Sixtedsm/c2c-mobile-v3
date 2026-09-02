@@ -24,9 +24,16 @@
 
     <div v-if="showPicker" class="bulk-offline-modal" role="dialog">
       <div class="bulk-offline-card">
-        <h3 class="bulk-offline-title">{{ $gettext('Sauvegarder cette page hors-ligne') }}</h3>
+        <h3 class="bulk-offline-title">{{ $gettext('Enregistrer cette page dans Mes topos') }}</h3>
         <p class="bulk-offline-subtitle">
-          {{ documents.length }} {{ $gettext('document(s) on this page — choose a folder:') }}
+          {{ documents.length }} {{ $gettext('document(s) sur cette page — choisissez un dossier :') }}
+        </p>
+        <p class="bulk-offline-note">
+          {{
+            $gettext(
+              'Enregistrement léger : le texte seulement. Téléchargez ensuite depuis Mes topos ceux que vous emportez, pour avoir photos et carte.'
+            )
+          }}
         </p>
         <select v-model="selectedFolder" class="bulk-offline-select">
           <option value="">{{ $gettext('Sans dossier') }}</option>
@@ -173,6 +180,13 @@ export default {
   max-width: 360px;
   width: 100%;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.bulk-offline-note {
+  font-size: 0.8rem;
+  color: #6b6b6b;
+  margin: 0 0 0.75rem;
+  line-height: 1.35;
 }
 
 .bulk-offline-title {

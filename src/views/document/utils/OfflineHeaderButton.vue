@@ -9,10 +9,15 @@
            clean in the common case. Long-press exposes the refresh
            option via the ToolBox — the header stays icon-only. -->
       <span
-        v-if="isSaved && freshness !== 'fresh' && freshness !== 'unknown'"
+        v-if="isOfflineReady && freshness !== 'fresh' && freshness !== 'unknown'"
         class="freshness-dot"
         :class="'freshness-dot--' + freshness"
       />
+      <!-- A saved topo is light by default: text only, no images, no map
+           tiles. This dot is the one signal that says "this one really
+           works without a network", so it must not be subtle — someone
+           reads it before walking out of coverage. -->
+      <span v-else-if="isOfflineReady" class="offline-ready-dot" />
     </a>
   </span>
 </template>
@@ -51,6 +56,12 @@ export default {
       if (!this.docId) return false;
       return this.$offline.isSaved(this.documentType, this.docId, this.lang);
     },
+    // Saved AND fully downloaded — the only state that promises the
+    // topo works in the field. isSaved() alone is true for a light save.
+    isOfflineReady() {
+      if (!this.docId) return false;
+      return this.$offline.isOfflineReady(this.documentType, this.docId, this.lang);
+    },
     isBusy() {
       if (!this.docId) return false;
       return this.$offline.isDownloading(this.documentType, this.docId, this.lang);
@@ -59,17 +70,24 @@ export default {
       return freshnessOf(this.savedAt, this.nowTick);
     },
     label() {
-      if (this.isBusy) return this.$gettext('Téléchargement en cours…');
-      if (this.isSaved) {
+      if (this.isBusy) return this.$gettext('Enregistrement en cours…');
+      if (this.isOfflineReady) {
         if (this.freshness === 'very-stale') {
-          return this.$gettext('Sauvegarde hors-ligne très ancienne — envisagez de rafraîchir');
+          return this.$gettext('Disponible hors-ligne, copie très ancienne — pensez à la rafraîchir');
         }
         if (this.freshness === 'stale') {
-          return this.$gettext('Sauvegarde hors-ligne datée — envisagez de rafraîchir');
+          return this.$gettext('Disponible hors-ligne, copie datée — pensez à la rafraîchir');
         }
-        return this.$gettext('Enregistré hors-ligne — toucher pour retirer');
+        return this.$gettext('Disponible hors-ligne — toucher pour retirer de Mes topos');
       }
-      return this.$gettext('Enregistrer pour usage hors-ligne');
+      if (this.isSaved) {
+        // Deliberately explicit: the user must not assume a bookmark is
+        // enough to open this topo on the mountain.
+        return this.$gettext(
+          'Enregistré dans Mes topos (texte seul) — téléchargez-le depuis Mes topos pour l’avoir sur le terrain'
+        );
+      }
+      return this.$gettext('Enregistrer dans Mes topos');
     },
   },
 
@@ -99,12 +117,16 @@ export default {
         this.savedAt = null;
         return;
       }
-      // $offline.savedDocs is the reactive source — pull savedAt from
-      // there rather than reaching into the store directly.
+      // $offline.savedDocs is the reactive source — pull the timestamp
+      // from there rather than reaching into the store directly.
+      //
+      // Freshness is about the downloaded package, so it reads
+      // downloadedAt and falls back to savedAt for entries written
+      // before the two were distinguished.
       const entry = this.$offline.savedDocs.find(
         (d) => d.type === this.documentType && String(d.id) === String(this.docId) && d.lang === this.lang
       );
-      this.savedAt = entry?.savedAt ?? null;
+      this.savedAt = entry?.downloadedAt ?? entry?.savedAt ?? null;
     },
 
     async toggle() {
@@ -117,7 +139,9 @@ export default {
           this.documentType,
           this.docId,
           this.lang,
-          this.$gettext("Retirer ce topo des sauvegardes hors-ligne ? Vous ne pourrez plus l'ouvrir sans réseau.")
+          this.isOfflineReady
+            ? this.$gettext("Retirer ce topo de Mes topos ? Vous ne pourrez plus l'ouvrir sans réseau.")
+            : this.$gettext('Retirer ce topo de Mes topos ?')
         );
       } else {
         await this.$offline.saveDocument({
@@ -150,6 +174,19 @@ export default {
   }
 }
 
+// Distinct from the freshness dot on purpose: this one answers "will
+// this open without a network?", not "how old is the copy?".
+.offline-ready-dot {
+  position: absolute;
+  top: -1px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2b8f4c;
+  box-shadow: 0 0 0 1.5px white;
+}
+
 .freshness-dot {
   position: absolute;
   top: -1px;
@@ -170,8 +207,12 @@ export default {
 
 <style lang="scss">
 html[data-theme='dark'] {
-  .freshness-dot {
+  .freshness-dot,
+  .offline-ready-dot {
     box-shadow: 0 0 0 1.5px #232323;
+  }
+  .offline-ready-dot {
+    background: #4bc26b;
   }
 }
 </style>
