@@ -194,8 +194,9 @@
               </button>
             </p>
             <reply-editor
+              ref="replyEditor"
               v-model="replyText"
-              :placeholder="$gettext('Votre réponse… (Markdown supporté, images acceptées)')"
+              :placeholder="$gettext('Votre réponse…')"
               :disabled="sending"
               rows="5"
             />
@@ -1123,7 +1124,7 @@ export default {
       this.needsForumLogin = false;
       this.replyToPostNumber = null;
       this.replyToUsername = null;
-      this.$nextTick(() => this.$refs.replyTextarea?.focus?.());
+      this.$nextTick(() => this.$refs.replyEditor?.focusEnd?.());
     },
 
     startReplyTo(post) {
@@ -1138,14 +1139,11 @@ export default {
       const topicId = this.topic?.id;
       const quote = `[quote="${post.username}, post:${post.post_number}, topic:${topicId}"]\n${excerpt}\n[/quote]\n\n`;
       this.replyText = quote + this.replyText;
-      this.$nextTick(() => {
-        const ta = this.$refs.replyTextarea;
-        if (ta) {
-          ta.focus();
-          // Move caret to the end so typing starts after the quote.
-          ta.selectionStart = ta.selectionEnd = ta.value.length;
-        }
-      });
+      // Caret after the quote block so the user types their reply
+      // straight away. The ref used to point at a textarea that stopped
+      // existing when the editor grew a toolbar, so this silently did
+      // nothing.
+      this.$nextTick(() => this.$refs.replyEditor?.focusEnd?.());
     },
 
     clearReplyTarget() {
