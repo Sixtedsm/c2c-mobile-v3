@@ -13,6 +13,7 @@
 // runs as a plain Vue 2 plugin on the V3 shell.
 
 import { haversine } from '@/pwa/haversine';
+import { splitOnGaps } from '@/pwa/trace-segments';
 
 const STORAGE_KEY = 'v3.outingSession';
 const DEFAULT_TRACK_INTERVAL_MS = 5000; // fallback if $appSettings hasn't loaded yet
@@ -66,6 +67,13 @@ function persist(state) {
         gpsTracking: false,
         topoRef: state.topoRef,
         startedAt: state.startedAt,
+        // A pause has to survive a reload: the phone in a pocket during
+        // a long break is exactly when the tab gets killed, and coming
+        // back to a session that forgot it was paused would resume
+        // charging that break to the outing.
+        paused: state.paused,
+        pausedAt: state.pausedAt,
+        pausedMs: state.pausedMs,
         positions: state.positions,
       })
     );
@@ -88,6 +96,14 @@ export default function install(Vue) {
         gpsTracking: false,
         topoRef: snap?.topoRef || null,
         startedAt: snap?.startedAt || null,
+        // Explicit pause (CDC §2.4), distinct from "GPS happens to be
+        // off": starting a session without tracking is not a pause, so
+        // only pause()/resume() move these.
+        paused: !!snap?.paused,
+        // Start of the pause currently running, null when not paused.
+        pausedAt: snap?.pausedAt || null,
+        // Total of the pauses already closed.
+        pausedMs: snap?.pausedMs || 0,
         currentPosition: null,
         positions: snap?.positions || [],
         watchId: null,
@@ -118,9 +134,18 @@ export default function install(Vue) {
         return Date.now() - this.lastFixAt;
       },
       // Distance covered by the recorded trace (meters).
+      //
+      // A point flagged `gap` is the first one recorded after a pause,
+      // so the step leading to it did not happen on foot — it is the
+      // drive home, the chairlift, or simply the distance between where
+      // the user stopped and where they picked the outing back up.
+      // Counting it inflates length_total, which is published to
+      // camptocamp.org; these three loops are the reason the pause is
+      // a data-quality fix and not an ergonomics one.
       tracedDistanceMeters() {
         let d = 0;
         for (let i = 1; i < this.positions.length; i += 1) {
+          if (this.positions[i].gap) continue;
           d += haversine(this.positions[i - 1], this.positions[i]);
         }
         return d;
@@ -129,6 +154,7 @@ export default function install(Vue) {
       elevationGainMeters() {
         let g = 0;
         for (let i = 1; i < this.positions.length; i += 1) {
+          if (this.positions[i].gap) continue;
           const da = (this.positions[i].alt || 0) - (this.positions[i - 1].alt || 0);
           if (da > 0) g += da;
         }
@@ -137,6 +163,7 @@ export default function install(Vue) {
       elevationLossMeters() {
         let l = 0;
         for (let i = 1; i < this.positions.length; i += 1) {
+          if (this.positions[i].gap) continue;
           const da = (this.positions[i].alt || 0) - (this.positions[i - 1].alt || 0);
           if (da < 0) l += -da;
         }
@@ -146,12 +173,25 @@ export default function install(Vue) {
 
     watch: {
       sessionActive: 'snapshot',
+      paused: 'snapshot',
       gpsTracking(active) {
         if (active) {
           // Fresh run: forget the previous throttle cursor, otherwise a
           // restart within one sample interval drops the first fix.
           this._lastSampleTime = 0;
           this.lastFixAt = null;
+          // Recording resuming over an existing trace means a hole: the
+          // user was somewhere between the last point and the next, and
+          // that step was not walked with the app watching. Flagged here
+          // rather than in resume() because switching the GPS checkbox
+          // off and on opens the very same hole without any pause.
+          //
+          // A watchdog rebuild deliberately does NOT come through here:
+          // fixes dried up while the user kept walking, so that distance
+          // is real and dropping it would under-report the outing.
+          if (this.positions.length > 0) {
+            this._gapPending = true;
+          }
           this.startGpsWatch();
         } else {
           this.stopGpsWatch();
@@ -233,7 +273,38 @@ export default function install(Vue) {
         this.topoRef = { type, id, lang };
         this.startedAt = Date.now();
         this.positions = [];
+        this.paused = false;
+        this.pausedAt = null;
+        this.pausedMs = 0;
+        this._gapPending = false;
         this.gpsTracking = !!track;
+      },
+
+      // Suspend an outing in progress (CDC §2.4). The session, the topo
+      // and the trace all stay; only the recording stops, and the break
+      // is charged to pausedMs instead of to the outing.
+      //
+      // Idempotent: a second call must not restart the clock on a pause
+      // already running, or a double tap would forgive the whole break.
+      pause() {
+        if (!this.sessionActive || this.paused) return;
+        this.paused = true;
+        this.pausedAt = Date.now();
+        this.gpsTracking = false;
+      },
+
+      // Pick the outing back up. The next recorded point is flagged so
+      // distance and elevation skip the step across the break — see
+      // tracedDistanceMeters.
+      resume() {
+        if (!this.sessionActive) return;
+        if (this.paused) {
+          this.pausedMs += Math.max(0, Date.now() - (this.pausedAt ?? Date.now()));
+          this.pausedAt = null;
+          this.paused = false;
+        }
+        // The gpsTracking watcher flags the trace discontinuity.
+        this.gpsTracking = true;
       },
 
       // Stop the outing entirely — clears tracking and forgets the topo.
@@ -246,6 +317,10 @@ export default function install(Vue) {
         this.sessionActive = false;
         this.topoRef = null;
         this.startedAt = null;
+        this.paused = false;
+        this.pausedAt = null;
+        this.pausedMs = 0;
+        this._gapPending = false;
       },
 
       requestCurrentPosition() {
@@ -367,6 +442,14 @@ export default function install(Vue) {
             this.currentPosition = sample;
             const last = this.positions[this.positions.length - 1];
             if (!last || haversine(last, sample) >= MIN_DISTANCE_M) {
+              // The flag lands on the first point actually recorded after
+              // the break, not merely the first fix: standing still on
+              // resume keeps it pending until the user moves, which is
+              // where the discontinuity really is.
+              if (this._gapPending && last) {
+                sample.gap = true;
+              }
+              this._gapPending = false;
               // push, not [...positions, sample]: the spread reallocated
               // the whole array on every fix, which is O(n²) over a long
               // outing (~6.5M element copies on a 5 h trace). Vue 2
@@ -404,13 +487,21 @@ export default function install(Vue) {
       // Build a GPX 1.1 document from the recorded trace. Standard
       // format compatible with Garmin / Strava / Komoot / etc.
       exportGpx({ name = 'Sortie Camptocamp', description = '' } = {}) {
-        const trkpts = this.positions
-          .map((p) => {
-            const ele = Number.isFinite(p.alt) ? `      <ele>${p.alt.toFixed(1)}</ele>\n` : '';
-            const time = p.t ? `      <time>${new Date(p.t).toISOString()}</time>\n` : '';
-            return `    <trkpt lat="${p.lat}" lon="${p.lon}">\n${ele}${time}    </trkpt>`;
-          })
-          .join('\n');
+        // One <trkseg> per continuous stretch. A pause is a real break
+        // in the track and GPX says so with a segment boundary; without
+        // it every reader would draw a straight line across the gap and
+        // recompute the very distance we just stopped counting.
+        const trkpts = splitOnGaps(this.positions)
+          .map((segment) =>
+            segment
+              .map((p) => {
+                const ele = Number.isFinite(p.alt) ? `        <ele>${p.alt.toFixed(1)}</ele>\n` : '';
+                const time = p.t ? `        <time>${new Date(p.t).toISOString()}</time>\n` : '';
+                return `      <trkpt lat="${p.lat}" lon="${p.lon}">\n${ele}${time}      </trkpt>`;
+              })
+              .join('\n')
+          )
+          .join('\n    </trkseg>\n    <trkseg>\n');
         return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Camptocamp mobile" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>

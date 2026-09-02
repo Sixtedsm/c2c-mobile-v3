@@ -26,6 +26,10 @@
       >
         <span class="start-outing-dot" :class="{ 'is-recording': $outingSession.gpsTracking }"></span>
         <span class="start-outing-elapsed">{{ elapsedLabel }}</span>
+        <span v-if="$outingSession.paused" class="start-outing-paused-tag">
+          <fa-icon icon="pause" />
+          &nbsp;{{ $gettext('En pause') }}
+        </span>
       </button>
 
       <div v-if="showMenu" class="start-outing-menu" @click.stop>
@@ -55,6 +59,18 @@
         </div>
 
         <hr />
+
+        <!-- The command that was missing: a paused outing could only be
+             picked back up by re-ticking the GPS checkbox above, which
+             reads as starting something new rather than resuming. -->
+        <button v-if="$outingSession.paused" type="button" class="start-outing-link is-resume" @click="resumeOuting">
+          <fa-icon icon="play" />
+          <span>{{ $gettext('Reprendre la sortie') }}</span>
+        </button>
+        <button v-else type="button" class="start-outing-link" @click="pauseOuting">
+          <fa-icon icon="pause" />
+          <span>{{ $gettext('Mettre en pause') }}</span>
+        </button>
 
         <button v-if="$outingSession.positions.length > 0" type="button" class="start-outing-link" @click="exportGpx">
           <fa-icon icon="download" />
@@ -134,19 +150,19 @@
               </small>
             </span>
           </button>
-          <!-- "Reprendre plus tard": stops the battery-heavy GPS
-               watch but keeps the session (trace + topo) alive so the
-               user can come back and hit "Créer la sortie" later,
-               even offline. Session state survives reloads via
-               localStorage. Typical use: finished a route on the
-               field, want to stop tracking without filling the form
-               right now (driving, tired, phone battery low). -->
+          <!-- The real pause (CDC §2.4). This used to be "Reprendre plus
+               tard", which stopped the GPS and kept the session alive —
+               a pause in everything but the two things that matter: it
+               offered no way back, and the break kept counting as
+               outing time and as distance walked. It is now the pause,
+               under the name it always deserved, rather than a second
+               mechanism sitting next to one. -->
           <button type="button" class="start-outing-stop-btn" @click="pauseForLater">
             <fa-icon icon="pause" />
             <span>
-              <strong>{{ $gettext('Reprendre plus tard') }}</strong>
+              <strong>{{ $gettext('Mettre en pause') }}</strong>
               <small>{{
-                $gettext('Coupe le GPS mais garde la trace. La sortie reste ouverte, à remplir plus tard.')
+                $gettext('Coupe le GPS et suspend le décompte. La sortie reste ouverte, à reprendre quand tu veux.')
               }}</small>
             </span>
           </button>
@@ -225,7 +241,12 @@ export default {
       );
     },
     elapsedLabel() {
-      return formatElapsed(this.$outingSession.startedAt, this.now);
+      return formatElapsed(
+        this.$outingSession.startedAt,
+        this.now,
+        this.$outingSession.pausedMs,
+        this.$outingSession.pausedAt
+      );
     },
     hasTrace() {
       return this.$outingSession.positions.length > 0;
@@ -268,8 +289,38 @@ export default {
       this.showStartModal = false;
     },
 
+    // The checkbox is a battery choice, not the pause: turning the GPS
+    // off mid-outing does not stop the clock. It must still close an
+    // open pause when ticked, though — otherwise resuming this way
+    // would leave the break accumulating for the rest of the outing.
     toggleTracking(e) {
-      this.$outingSession.gpsTracking = e.target.checked;
+      if (e.target.checked) {
+        this.$outingSession.resume();
+      } else {
+        this.$outingSession.gpsTracking = false;
+      }
+    },
+
+    pauseOuting() {
+      this.$outingSession.pause();
+      this.showMenu = false;
+      toast({
+        type: 'is-info',
+        position: 'bottom-center',
+        duration: 4500,
+        message: this.$gettext('Sortie en pause. Le temps et la distance ne comptent plus jusqu’à la reprise.'),
+      });
+    },
+
+    resumeOuting() {
+      this.$outingSession.resume();
+      this.showMenu = false;
+      toast({
+        type: 'is-success',
+        position: 'bottom-center',
+        duration: 3500,
+        message: this.$gettext('Sortie reprise. Enregistrement de la trace relancé.'),
+      });
     },
 
     openStopModal() {
@@ -332,7 +383,7 @@ export default {
     // or the persistent bottom banner. Works fully offline: the state
     // is snapshotted to localStorage by the outing-session plugin.
     pauseForLater() {
-      this.$outingSession.gpsTracking = false;
+      this.$outingSession.pause();
       this.showStopModal = false;
       this.showMenu = false;
       toast({
@@ -340,7 +391,7 @@ export default {
         position: 'bottom-center',
         duration: 4500,
         message: this.$gettext(
-          'Sortie mise en pause. GPS coupé, trace conservée. Reprends-la depuis le topo ou la bannière quand tu veux.'
+          'Sortie en pause. Le temps et la distance ne comptent plus. Reprends-la depuis le topo ou la bannière.'
         ),
       });
     },
@@ -436,6 +487,25 @@ export default {
     transform: scale(1.4);
     opacity: 0.6;
   }
+}
+
+.start-outing-paused-tag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.35rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: #ff9933;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+// The way back into a paused outing. Coloured so it reads as the
+// action to take, not as one more entry in a list of links.
+.start-outing-link.is-resume {
+  color: #ff9933;
+  font-weight: 600;
 }
 
 .start-outing-menu {

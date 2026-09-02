@@ -308,6 +308,7 @@ import documentEditionViewMixin from './utils/document-edition-view-mixin';
 
 import c2c from '@/js/apis/c2c';
 import ol from '@/js/libs/ol';
+import { splitOnGaps } from '@/pwa/trace-segments';
 
 export default {
   components: { CotometerWindow },
@@ -455,12 +456,33 @@ export default {
 
       if (!session.positions.length) return;
 
-      // GPS trace as a LineString in EPSG:3857 (C2C's storage projection).
-      const coords3857 = session.positions.map((p) => ol.proj.fromLonLat([p.lon, p.lat]));
-      if (coords3857.length > 1) {
+      // GPS trace in EPSG:3857 (C2C's storage projection), split at the
+      // recording breaks: a point flagged `gap` opens a new segment.
+      //
+      // A single LineString across a pause draws a straight line from
+      // where the user stopped to where they resumed — down the valley
+      // and back up — on the outing published to camptocamp.org. The
+      // published figures already skip that step (see the session's
+      // tracedDistanceMeters); the drawn trace has to agree with them.
+      //
+      // MultiLineString is not a guess here: V1's own track importer
+      // emits one for any multi-segment file (src/js/tcx/TCX.js), so the
+      // API has been storing this shape for years.
+      const segments3857 = splitOnGaps(session.positions).map((seg) =>
+        seg.map((point) => ol.proj.fromLonLat([point.lon, point.lat]))
+      );
+      // A one-point segment is not a line; drop it rather than emit a
+      // degenerate geometry the API would have to reject.
+      const drawable = segments3857.filter((seg) => seg.length > 1);
+      if (drawable.length === 1) {
         this.document.geometry.geom_detail = JSON.stringify({
           type: 'LineString',
-          coordinates: coords3857,
+          coordinates: drawable[0],
+        });
+      } else if (drawable.length > 1) {
+        this.document.geometry.geom_detail = JSON.stringify({
+          type: 'MultiLineString',
+          coordinates: drawable,
         });
       }
 

@@ -33,3 +33,34 @@ describe('formatElapsed', () => {
     expect(formatElapsed(NOW - 90 * 1000, NOW)).toBe('1 min');
   });
 });
+
+// Paused time is not outing time (CDC §2.4). A three-hour lunch at the
+// refuge used to read as three hours of outing, because elapsed ran
+// straight from startedAt.
+describe('paused time is discounted', () => {
+  const start = 1_700_000_000_000;
+
+  it('subtracts a finished pause', () => {
+    // Out for 2 h, one of them paused.
+    expect(formatElapsed(start, start + 7_200_000, 3_600_000)).toBe('1h00');
+  });
+
+  it('subtracts a pause still running', () => {
+    // Paused 30 min ago and still stopped: the clock froze there.
+    const now = start + 7_200_000;
+    expect(formatElapsed(start, now, 0, now - 1_800_000)).toBe('1h30');
+  });
+
+  it('counts both a finished and an open pause', () => {
+    const now = start + 7_200_000;
+    expect(formatElapsed(start, now, 1_800_000, now - 1_800_000)).toBe('1h00');
+  });
+
+  it('never goes negative on a clock skew', () => {
+    expect(formatElapsed(start, start + 60_000, 3_600_000)).toBe('0 min');
+  });
+
+  it('is unchanged when nothing was paused', () => {
+    expect(formatElapsed(start, start + 7_200_000)).toBe('2h00');
+  });
+});

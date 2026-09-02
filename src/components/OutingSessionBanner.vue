@@ -1,12 +1,22 @@
 <template>
   <div v-if="visible" class="outing-session-banner no-print" role="status">
     <button type="button" class="outing-session-banner-btn" @click="goToTopo">
-      <span class="outing-session-banner-dot" :class="{ 'is-recording': $outingSession.gpsTracking }"></span>
+      <span
+        class="outing-session-banner-dot"
+        :class="{ 'is-recording': $outingSession.gpsTracking, 'is-paused': $outingSession.paused }"
+      ></span>
       <span class="outing-session-banner-text">
-        <strong>{{ $gettext('Sortie en cours') }}</strong>
+        <strong>{{ $outingSession.paused ? $gettext('Sortie en pause') : $gettext('Sortie en cours') }}</strong>
         <small>{{ elapsedLabel }}{{ metricsLabel }}</small>
       </span>
       <fa-icon icon="chevron-right" />
+    </button>
+    <!-- The banner is the surface a paused outing is most likely to be
+         seen from — the user has wandered off the topo page — so the way
+         back belongs here and not only in the topo header menu. -->
+    <button v-if="$outingSession.paused" type="button" class="outing-session-banner-resume" @click="resumeOuting">
+      <fa-icon icon="play" />
+      &nbsp;{{ $gettext('Reprendre') }}
     </button>
   </div>
 </template>
@@ -55,7 +65,12 @@ export default {
       return this.active && !this.onOwnTopo;
     },
     elapsedLabel() {
-      return formatElapsed(this.$outingSession.startedAt, this.now);
+      return formatElapsed(
+        this.$outingSession.startedAt,
+        this.now,
+        this.$outingSession.pausedMs,
+        this.$outingSession.pausedAt
+      );
     },
     metricsLabel() {
       const km = this.$outingSession.tracedDistanceMeters / 1000;
@@ -82,6 +97,10 @@ export default {
   },
 
   methods: {
+    resumeOuting() {
+      this.$outingSession.resume();
+    },
+
     startTick() {
       if (this.tickHandle) return;
       this.now = Date.now();
@@ -156,6 +175,13 @@ export default {
     background: #e54545;
     animation: bannerPulse 1.5s ease-in-out infinite;
   }
+
+  // Amber and deliberately still. A paused outing must not borrow the
+  // live pulse — that pulse is the promise that fixes are arriving.
+  &.is-paused {
+    background: #ff9933;
+    animation: none;
+  }
 }
 
 @keyframes bannerPulse {
@@ -168,6 +194,21 @@ export default {
     transform: scale(1.4);
     opacity: 0.6;
   }
+}
+
+.outing-session-banner-resume {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.4rem;
+  padding: 0.5rem 0.8rem;
+  border: 0;
+  border-radius: 999px;
+  background: #ff9933;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .outing-session-banner-text {
