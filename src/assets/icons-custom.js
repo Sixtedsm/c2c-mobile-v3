@@ -134,4 +134,20 @@ export default {
     '<path d="M32 30 Q23 30 23 39 Q23 47 32 58 Q41 47 41 39 Q41 30 32 30 Z"/>' +
     '<circle cx="32" cy="38" r="2.5"/>' +
     '</svg>',
+
+  // Itinévert = public-transport-to-mountain trip planner. Bus body
+  // with two windows + two wheels — the same shape the desktop
+  // IconItinevert.vue draws, restyled to the V3 orange-stroke set.
+  'bus-transport':
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none" stroke="#FF9933" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="10" y="14" width="44" height="30" rx="4"/>' +
+    '<line x1="10" y1="26" x2="54" y2="26"/>' +
+    '<rect x="14" y="16" width="14" height="8"/>' +
+    '<rect x="36" y="16" width="14" height="8"/>' +
+    '<line x1="18" y1="44" x2="18" y2="50"/>' +
+    '<line x1="46" y1="44" x2="46" y2="50"/>' +
+    '<circle cx="18" cy="52" r="4"/>' +
+    '<circle cx="46" cy="52" r="4"/>' +
+    '<line x1="24" y1="34" x2="40" y2="34"/>' +
+    '</svg>',
 };

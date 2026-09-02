@@ -53,12 +53,19 @@ export default {
       // Curated set — anything that's already exposed in the BottomNav
       // (Recherche / Récent / Mes topos / Moi) is not duplicated here.
       return [
+        // Landing pages, not raw doc lists. Sixte 2026-09-02: "je ne
+        // retrouve pas la page de garde que je trouve sur la version
+        // ordinateur" — the mobile MoreView used to jump straight to
+        // /routes (DocumentsView list) and /xreports (idem) which lose
+        // the hero + latest + curated sections V1 shows at /topoguide
+        // and /serac. Point at the landing routes so the mobile shell
+        // renders the same "page de garde" as V1 desktop.
         {
-          key: 'routes',
+          key: 'topoguide',
           label: this.$gettext('Itinéraires'),
           desc: this.$gettext('Voies, courses, parcours'),
           icon: 'mountain-trail',
-          to: { name: 'routes' },
+          to: { name: 'topoguide' },
         },
         {
           key: 'articles',
@@ -68,11 +75,11 @@ export default {
           to: { name: 'articles' },
         },
         {
-          key: 'xreports',
+          key: 'serac',
           label: this.$gettext('Sérac'),
           desc: this.$gettext('Incidents et accidents'),
           icon: 'serac-warning',
-          to: { name: 'xreports' },
+          to: { name: 'serac' },
         },
         {
           key: 'yeti',
@@ -80,6 +87,18 @@ export default {
           desc: this.$gettext('Préparation de course ski/alpi'),
           icon: 'snowflake-compass',
           to: { name: 'yeti' },
+        },
+        // Itinévert = trip-planner-to-mountain via public transport,
+        // funded by the association, built by external contributors,
+        // already routed at /itinevert (ItinevertView). Sixte
+        // explicitly asked for it to be reachable from the mobile
+        // shell — same underlying V1 code, mobile-friendly entry.
+        {
+          key: 'itinevert',
+          label: this.$gettext('Itinévert'),
+          desc: this.$gettext('Aller en montagne en transports'),
+          icon: 'bus-transport',
+          to: { name: 'itinevert' },
         },
         {
           key: 'forum',
