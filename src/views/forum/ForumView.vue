@@ -112,7 +112,7 @@
         <section class="forum-block">
           <h2 class="forum-block-title">
             <fa-icon icon="clock-rotate-left" />
-            &nbsp;{{ feedTab === 'latest' ? $gettext('Discussions récentes') : $gettext('Discussions populaires') }}
+            &nbsp;{{ feedTitle }}
           </h2>
 
           <div class="forum-tabs" role="tablist">
@@ -136,6 +136,32 @@
             >
               {{ $gettext('Populaires') }}
             </button>
+            <!-- Personal feeds. Both filters are enabled on
+                 forum.camptocamp.org; they are per-user, so they need the
+                 Discourse session cookie and only make sense once signed
+                 in. -->
+            <button
+              v-if="$user.isLogged"
+              type="button"
+              class="forum-tab"
+              :class="{ 'is-active': feedTab === 'unread' }"
+              role="tab"
+              :aria-selected="feedTab === 'unread' ? 'true' : 'false'"
+              @click="switchFeed('unread')"
+            >
+              {{ $gettext('Non lus') }}
+            </button>
+            <button
+              v-if="$user.isLogged"
+              type="button"
+              class="forum-tab"
+              :class="{ 'is-active': feedTab === 'new' }"
+              role="tab"
+              :aria-selected="feedTab === 'new' ? 'true' : 'false'"
+              @click="switchFeed('new')"
+            >
+              {{ $gettext('Nouveaux') }}
+            </button>
           </div>
 
           <div v-if="feedTab === 'top'" class="forum-period">
@@ -153,6 +179,13 @@
           <div v-if="loadingFeed" class="forum-loading">
             <fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}
           </div>
+          <div v-else-if="feedNeedsLogin" class="forum-notice">
+            {{
+              $gettext(
+                'Vos sujets non lus et nouveaux sont suivis par le forum Discourse et requièrent une session sur forum.camptocamp.org qui n’est pas encore partagée avec l’application. Cette fonctionnalité arrive bientôt.'
+              )
+            }}
+          </div>
           <div v-else-if="feedError" class="forum-error">
             {{ $gettext('Impossible de joindre le forum.') }}
           </div>
@@ -162,11 +195,7 @@
             </li>
           </ul>
           <p v-else class="forum-empty">
-            {{
-              feedTab === 'top'
-                ? $gettext('Aucune discussion populaire sur cette période.')
-                : $gettext('Aucune discussion récente.')
-            }}
+            {{ emptyFeedLabel }}
           </p>
         </section>
 
@@ -227,6 +256,11 @@ export default {
       categories: [],
       latest: [],
       top: [],
+      personal: [], // topics for the unread / new tabs
+      personalLoadedFor: null,
+      loadingPersonal: false,
+      personalError: false,
+      personalNeedsLogin: false,
       topLoadedFor: null, // remember last period fetched, avoid refetch
       myTopics: [],
       loadingLatest: true,
@@ -269,15 +303,52 @@ export default {
     },
     // Feed data source depending on the active tab. For Top, we also
     // skip pinned since the Épinglés block already shows them.
+    isPersonalFeed() {
+      return this.feedTab === 'unread' || this.feedTab === 'new';
+    },
     feedTopics() {
-      const src = this.feedTab === 'top' ? this.top : this.latest;
+      let src = this.latest;
+      if (this.feedTab === 'top') src = this.top;
+      else if (this.isPersonalFeed) src = this.personal;
+      // Pinned topics already have their own block above, except on the
+      // personal feeds where "unread" genuinely means unread.
+      if (this.isPersonalFeed) return src;
       return src.filter((t) => !t.pinned && !t.pinned_globally);
     },
     loadingFeed() {
+      if (this.isPersonalFeed) return this.loadingPersonal;
       return this.feedTab === 'top' ? this.loadingTop : this.loadingLatest;
     },
     feedError() {
+      if (this.isPersonalFeed) return this.personalError;
       return this.feedTab === 'top' ? this.topError : this.latestError;
+    },
+    feedNeedsLogin() {
+      return this.isPersonalFeed && this.personalNeedsLogin;
+    },
+    feedTitle() {
+      switch (this.feedTab) {
+        case 'top':
+          return this.$gettext('Discussions populaires');
+        case 'unread':
+          return this.$gettext('Sujets non lus');
+        case 'new':
+          return this.$gettext('Nouveaux sujets');
+        default:
+          return this.$gettext('Discussions récentes');
+      }
+    },
+    emptyFeedLabel() {
+      switch (this.feedTab) {
+        case 'top':
+          return this.$gettext('Aucune discussion populaire sur cette période.');
+        case 'unread':
+          return this.$gettext('Aucun sujet non lu. Vous êtes à jour.');
+        case 'new':
+          return this.$gettext('Aucun nouveau sujet depuis votre dernière visite.');
+        default:
+          return this.$gettext('Aucune discussion récente.');
+      }
     },
     periods() {
       return [
@@ -347,6 +418,37 @@ export default {
     switchFeed(tab) {
       this.feedTab = tab;
       if (tab === 'top' && this.topLoadedFor !== this.topPeriod) this.loadTop();
+      if ((tab === 'unread' || tab === 'new') && this.personalLoadedFor !== tab) this.loadPersonal(tab);
+    },
+
+    // Unread / new. Per-user endpoints, so they need the session cookie
+    // and fail the same way bookmarks and notifications do until
+    // forum.camptocamp.org and this origin share one.
+    async loadPersonal(tab) {
+      this.loadingPersonal = true;
+      this.personalError = false;
+      this.personalNeedsLogin = false;
+      try {
+        const res = tab === 'unread' ? await forum.getUnreadTopics() : await forum.getNewTopics();
+        this.personal = res?.data?.topic_list?.topics || [];
+        this.personalLoadedFor = tab;
+      } catch (err) {
+        // Same broadened detection as the bookmarks and notifications
+        // views: a missing cross-origin cookie shows up as a 401/403, as
+        // an HTML login page that fails JSON.parse, or as a blocked
+        // request with no status at all.
+        const status = err?.response?.status;
+        const rawBody = err?.response?.data;
+        const looksHtml = typeof rawBody === 'string' && rawBody.trim().startsWith('<');
+        const jsonParseFail = /JSON|Unexpected token/i.test(String(err?.message || ''));
+        if (status === 401 || status === 403 || status === 419 || looksHtml || jsonParseFail || !status) {
+          this.personalNeedsLogin = true;
+        } else {
+          this.personalError = true;
+        }
+      } finally {
+        this.loadingPersonal = false;
+      }
     },
 
     async loadTop() {
@@ -568,6 +670,16 @@ export default {
   color: #b91c1c;
 }
 
+.forum-notice {
+  padding: 0.75rem;
+  background: #fff5e6;
+  border-left: 3px solid #ff9933;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #6b4a1e;
+  line-height: 1.4;
+}
+
 // Latest/Top feed tabs — segmented control style, tap-friendly on
 // mobile. Matches the visual weight of category pills below.
 .forum-tabs {
@@ -721,6 +833,10 @@ html[data-theme='dark'] {
     }
     .forum-block-more a {
       color: #6db4ff;
+    }
+    .forum-notice {
+      background: #3a2f1a;
+      color: #ffb866;
     }
     .forum-tabs {
       background: rgba(255, 255, 255, 0.06);

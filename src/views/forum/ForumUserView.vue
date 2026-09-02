@@ -35,6 +35,15 @@
           </div>
         </header>
 
+        <!-- Someone else's profile: the one action that makes sense is
+             writing to them. Discourse calls this a private message. -->
+        <section v-if="!isMyProfile && $user.isLogged" class="fu-my-actions">
+          <router-link :to="{ name: 'forum-messages', query: { to: username } }" class="fu-my-action-btn">
+            <fa-icon icon="envelope" />
+            &nbsp;{{ $gettext('Envoyer un message') }}
+          </router-link>
+        </section>
+
         <!-- Own-profile actions row — one-tap access to Bookmarks
              and Notifications. Hidden on someone else's profile, so
              a visitor doesn't see personal shortcuts. -->
@@ -46,6 +55,10 @@
           <router-link :to="{ name: 'forum-notifications' }" class="fu-my-action-btn">
             <fa-icon icon="bell" />
             &nbsp;{{ $gettext('Notifications') }}
+          </router-link>
+          <router-link :to="{ name: 'forum-messages' }" class="fu-my-action-btn">
+            <fa-icon icon="envelope" />
+            &nbsp;{{ $gettext('Messages') }}
           </router-link>
           <router-link :to="{ name: 'forum-new-topic' }" class="fu-my-action-btn">
             <fa-icon icon="pen-to-square" />

@@ -24,12 +24,6 @@
 
       <div class="ft-header-row">
         <h1 v-if="title" class="ft-title">
-          <fa-icon
-            v-if="hasSolution"
-            icon="circle-check"
-            class="ft-solved-icon"
-            :title="$gettext('Résolu — une solution a été acceptée')"
-          />
           {{ title }}
         </h1>
         <button
@@ -65,12 +59,8 @@
           v-for="post in visiblePosts"
           :key="post.id"
           class="ft-post"
-          :class="{ 'is-op': post.post_number === 1, 'is-solution': isSolutionPost(post) }"
+          :class="{ 'is-op': post.post_number === 1 }"
         >
-          <div v-if="isSolutionPost(post)" class="ft-solution-banner">
-            <fa-icon icon="circle-check" />
-            &nbsp;{{ $gettext('Solution acceptée') }}
-          </div>
           <header class="ft-post-header">
             <user-avatar :user="postUser(post)" :size="48" />
             <div class="ft-post-meta">
@@ -492,24 +482,6 @@ export default {
     // when the plugin is off or the topic has none.
     topicTags() {
       return Array.isArray(this.topic?.tags) ? this.topic.tags : [];
-    },
-
-    // Discourse "Solved" plugin surfaces the accepted answer in
-    // several shapes depending on payload version. Try each in turn.
-    hasSolution() {
-      if (!this.topic) return false;
-      if (this.topic.has_accepted_answer) return true;
-      if (this.topic.accepted_answer) return true;
-      return this.hydratedPosts.some((p) => p.accepted_answer);
-    },
-    solutionPostId() {
-      if (!this.topic) return null;
-      // Preferred shape: topic.accepted_answer.post_number (topic
-      // payload). Fallback: scan hydrated posts for accepted_answer.
-      const acc = this.topic.accepted_answer;
-      if (acc?.post_id) return acc.post_id;
-      const p = this.hydratedPosts.find((pp) => pp.accepted_answer);
-      return p?.id || null;
     },
 
     // Posts progress — number of posts we currently render vs the
@@ -964,12 +936,6 @@ export default {
       return String(post.username).toLowerCase() === this.myLoweredForumUsername;
     },
 
-    isSolutionPost(post) {
-      if (!post) return false;
-      if (post.accepted_answer) return true;
-      return this.solutionPostId && post.id === this.solutionPostId;
-    },
-
     async startEdit(post) {
       this.editingPostId = post.id;
       this.editRaw = '';
@@ -1294,13 +1260,6 @@ export default {
   margin: 0 0 0.5rem;
 }
 
-.ft-solved-icon {
-  color: #2b8f4c;
-  font-size: 0.95rem;
-  margin-right: 0.15rem;
-  vertical-align: -1px;
-}
-
 .ft-cat-line {
   margin-bottom: 0.9rem;
   display: flex;
@@ -1327,22 +1286,6 @@ export default {
   }
 }
 
-.ft-solution-banner {
-  margin: -0.85rem -0.85rem 0.7rem;
-  padding: 0.35rem 0.85rem;
-  background: linear-gradient(90deg, rgba(43, 143, 76, 0.14), rgba(43, 143, 76, 0.04));
-  color: #2b8f4c;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-bottom: 1px solid rgba(43, 143, 76, 0.25);
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
-  display: flex;
-  align-items: center;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
 .ft-post {
   background: white;
   border: 1px solid rgba(0, 0, 0, 0.1);
@@ -1352,10 +1295,6 @@ export default {
 
   &.is-op {
     border-color: rgba(255, 153, 51, 0.35);
-  }
-  &.is-solution {
-    border-color: rgba(43, 143, 76, 0.5);
-    background: linear-gradient(180deg, rgba(43, 143, 76, 0.04) 0%, transparent 100%);
   }
 }
 
@@ -1837,18 +1776,6 @@ html[data-theme='dark'] {
         background: rgba(109, 180, 255, 0.24);
         color: #a3ccff;
       }
-    }
-    .ft-solved-icon {
-      color: #4bc26b;
-    }
-    .ft-post.is-solution {
-      border-color: rgba(75, 194, 107, 0.5);
-      background: linear-gradient(180deg, rgba(75, 194, 107, 0.06) 0%, transparent 100%);
-    }
-    .ft-solution-banner {
-      color: #4bc26b;
-      background: linear-gradient(90deg, rgba(75, 194, 107, 0.15), rgba(75, 194, 107, 0.03));
-      border-bottom-color: rgba(75, 194, 107, 0.25);
     }
     .ft-topic-action {
       background: #2a2a2a;

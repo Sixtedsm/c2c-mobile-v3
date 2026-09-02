@@ -208,6 +208,15 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    // Private-message inbox. ?to=<username> opens the composer with the
+    // recipient pre-filled, which is what a "write to this member" link
+    // from a profile needs.
+    path: '/forum/messages',
+    name: 'forum-messages',
+    component: lazy(() => import(/* webpackChunkName: "forum" */ '@/views/forum/ForumMessagesView')),
+    meta: { requiresAuth: true },
+  },
+  {
     // Topics carrying a given Discourse tag. Landing route for the
     // "Étiquettes populaires" pills on ForumView and the tag pills on
     // TopicRow. Tag name lives in the URL segment (no id — Discourse

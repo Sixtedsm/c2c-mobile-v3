@@ -61,6 +61,49 @@ Forum.prototype.getTop = function (period = 'monthly') {
   return result;
 };
 
+// Personal feeds. Unlike /latest and /top these are per-user, so they
+// go through authAxios and need the Discourse session cookie. Both
+// filters are confirmed enabled on forum.camptocamp.org (site.json
+// lists: latest, unread, new, read, posted, bookmarks).
+//
+// They return the same topic_list shape as /latest, so TopicRow renders
+// them unchanged.
+Forum.prototype.getUnreadTopics = async function () {
+  return this.authAxios.get('/unread.json');
+};
+
+Forum.prototype.getNewTopics = async function () {
+  return this.authAxios.get('/new.json');
+};
+
+// Private messages for a user — the Discourse inbox. Same topic_list
+// shape again. Session cookie required.
+Forum.prototype.getPrivateMessages = async function (username) {
+  return this.authAxios.get(`/topics/private-messages/${canonicalUsername(username)}.json`);
+};
+
+// Start a private message. Discourse models a PM as a topic with
+// archetype 'private_message' and a recipient list, created through the
+// same /posts.json endpoint as a normal reply.
+Forum.prototype.sendPrivateMessage = async function ({ recipients, title, raw } = {}) {
+  if (!recipients || !title || !raw) throw new Error('recipients, title and raw are required');
+  const csrf = await this._getCsrf();
+  if (!csrf) throw new Error('no-csrf');
+  const body = new URLSearchParams({
+    title,
+    raw,
+    target_recipients: Array.isArray(recipients) ? recipients.join(',') : String(recipients),
+    archetype: 'private_message',
+  });
+  return this.authAxios.post('/posts.json', body.toString(), {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRF-Token': csrf,
+      'Discourse-Logged-In': 'true',
+    },
+  });
+};
+
 // All tags known to Discourse (grouped or ungrouped). Public.
 Forum.prototype.getTags = function () {
   return this.get('/tags.json');

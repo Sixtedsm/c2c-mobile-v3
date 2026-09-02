@@ -4,12 +4,6 @@
     <div class="fr-body">
       <div class="fr-title-line">
         <fa-icon v-if="isPinned" icon="thumbtack" class="fr-pinned-icon" :title="$gettext('Épinglé')" />
-        <fa-icon
-          v-if="hasSolution"
-          icon="circle-check"
-          class="fr-solved-icon"
-          :title="$gettext('Résolu — une solution a été acceptée')"
-        />
         <span class="fr-title">{{ topic.fancy_title || topic.title }}</span>
       </div>
       <div v-if="tags.length" class="fr-tags">
@@ -96,12 +90,6 @@ export default {
     tags() {
       const list = Array.isArray(this.topic.tags) ? this.topic.tags : [];
       return list.slice(0, 4);
-    },
-    // Discourse "Solved" plugin flag. Present when the topic has a
-    // post marked as the accepted answer. Older payloads use
-    // `accepted_answer` — accept both shapes.
-    hasSolution() {
-      return !!(this.topic.has_accepted_answer || this.topic.accepted_answer);
     },
     unreadCount() {
       // Discourse's own `unread` + `new_posts` counters (present on
@@ -199,11 +187,6 @@ export default {
 .fr-pinned-icon {
   color: #cc7a29;
   font-size: 0.72rem;
-  flex: 0 0 auto;
-}
-.fr-solved-icon {
-  color: #2b8f4c;
-  font-size: 0.85rem;
   flex: 0 0 auto;
 }
 .fr-tags {
@@ -325,9 +308,6 @@ html[data-theme='dark'] {
       background: rgba(109, 180, 255, 0.24);
       color: #a3ccff;
     }
-  }
-  .fr-solved-icon {
-    color: #4bc26b;
   }
 }
 </style>
