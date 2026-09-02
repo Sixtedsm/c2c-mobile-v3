@@ -229,6 +229,19 @@
                 <div class="offline-card-meta">
                   <span class="tag is-light">{{ $gettext(entry.type) }}</span>
                   <span class="tag is-light">{{ entry.lang.toUpperCase() }}</span>
+                  <!-- CDC §2.2 asks that an incomplete download be visible.
+                       Distinct from freshness, and they are not the same
+                       question: a package downloaded five minutes ago in a
+                       tunnel is fresh AND incomplete. Freshness answers "is
+                       this copy old", this answers "did it all arrive". -->
+                  <span
+                    v-if="isIncomplete(entry)"
+                    class="tag is-small offline-badge-partial"
+                    :title="incompleteTitle(entry)"
+                  >
+                    <fa-icon icon="triangle-exclamation" />
+                    &nbsp;{{ $gettext('Incomplet') }}
+                  </span>
                   <!-- Freshness (Lot 5 §2.2): amber if 7-30 d, red past
                        30 d. Only meaningful for a downloaded package —
                        a light save has nothing to go stale. -->
@@ -266,6 +279,20 @@
                 @click="undownload(entry)"
               >
                 <fa-icon icon="plug" />
+              </button>
+              <!-- Finish an interrupted download. Same path as the initial
+                   one, which re-fetches everything: partial state is not
+                   tracked per asset, and re-running is cheap next to the
+                   cost of a topo that turns out to be half-there in the
+                   field. -->
+              <button
+                v-if="isIncomplete(entry)"
+                class="offline-card-retry button is-small is-text"
+                :disabled="isDownloading(entry)"
+                :title="$gettext('Terminer le téléchargement')"
+                @click="download(entry)"
+              >
+                <fa-icon :icon="isDownloading(entry) ? 'spinner' : 'rotate-right'" :spin="isDownloading(entry)" />
               </button>
               <button
                 v-if="isOffline(entry) && (freshnessOf(entry) === 'stale' || freshnessOf(entry) === 'very-stale')"
@@ -417,7 +444,7 @@ import ModalWindow from '@/components/generics/modals/ModalWindow';
 import c2c from '@/js/apis/c2c';
 import pullRefreshMixin from '@/js/pull-refresh-mixin';
 import { ageLabel, freshnessOf } from '@/pwa/offline-freshness';
-import { OFFLINE_MODE, ONLINE_MODE } from '@/pwa/offline-store';
+import { isDownloadComplete, OFFLINE_MODE, ONLINE_MODE } from '@/pwa/offline-store';
 
 const TYPE_ICONS = {
   route: 'route',
@@ -678,6 +705,20 @@ export default {
     isOffline(entry) {
       return (entry.mode ?? OFFLINE_MODE) === OFFLINE_MODE;
     },
+    // Only a topo that claims to be offline can be incomplete. An online
+    // entry never downloaded anything, so there is nothing to be missing.
+    isIncomplete(entry) {
+      return this.isOffline(entry) && !isDownloadComplete(entry);
+    },
+
+    incompleteTitle(entry) {
+      const failed = entry.assets?.failed ?? 0;
+      if (entry.assets && entry.assets.done !== true) {
+        return this.$gettext('Téléchargement interrompu — touchez pour le terminer.');
+      }
+      return this.$gettext('{n} élément(s) n’ont pas été téléchargés — touchez pour réessayer.').replace('{n}', failed);
+    },
+
     isDownloading(entry) {
       return this.$offline.isDownloading(entry.type, entry.id, entry.lang);
     },
@@ -993,6 +1034,11 @@ export default {
   color: #2b8f4c;
   font-weight: 600;
 }
+.offline-badge-partial {
+  background: #ff9933;
+  color: #fff;
+}
+
 .offline-badge-light {
   background: rgba(0, 0, 0, 0.06);
   color: #6b6b6b;

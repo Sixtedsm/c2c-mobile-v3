@@ -109,6 +109,30 @@ export async function listDocuments() {
   return entries.filter(Boolean).map((e) => ({ ...e, mode: normaliseMode(e.mode) }));
 }
 
+// How the last full download went, for CDC §2.2 ("si le téléchargement est
+// incomplet"). Written twice: once with done:false the moment the download
+// starts, once with the result when it finishes. An entry still carrying
+// done:false was interrupted — killed tab, tunnel, closed lid — and must be
+// shown as incomplete rather than passing for a complete package.
+//
+// Absent entirely on topos saved before this existed: unknown, not broken,
+// so nothing is claimed about them.
+export async function setDocumentAssets(type, id, lang, assets) {
+  const entry = await get(docKey(type, id, lang));
+  if (!entry) return;
+  entry.assets = assets;
+  await set(docKey(type, id, lang), entry);
+}
+
+// Was the package fully fetched? Undefined means a legacy entry we cannot
+// judge, and callers treat that as complete on purpose — alarming someone
+// about a topo that is probably fine is its own failure.
+export function isDownloadComplete(entry) {
+  const assets = entry?.assets;
+  if (!assets) return true;
+  return assets.done === true && (assets.failed ?? 0) === 0;
+}
+
 export async function setDocumentFolder(type, id, lang, folderId) {
   const entry = await get(docKey(type, id, lang));
   if (!entry) {

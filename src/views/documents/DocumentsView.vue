@@ -39,6 +39,22 @@
             :document-type="documentType"
             class="header-item"
           />
+          <!-- V3, CDC §2.1 "disponibilité offline" among the first-lot
+               filters. Necessarily local: what is on this device is not
+               something the API can be asked about, so this narrows the
+               page in hand rather than the search. The hint below says so
+               — see offlineOnlyHint. -->
+          <button
+            v-if="canFilterOffline"
+            type="button"
+            class="header-item button is-small offline-only-toggle"
+            :class="{ 'is-active': offlineOnly }"
+            :title="$gettext('N’afficher que les topos enregistrés hors ligne')"
+            @click="offlineOnly = !offlineOnly"
+          >
+            <fa-icon :icon="offlineOnly ? 'circle-check' : 'plug'" />
+            <span class="is-hidden-mobile">&nbsp;{{ $gettext('Hors ligne') }}</span>
+          </button>
           <load-user-preferences-button class="is-hidden-mobile" />
 
           <span @click="toggleProperty('listMode')" class="header-item is-size-3 has-cursor-pointer is-hidden-mobile">
@@ -83,14 +99,25 @@
       >
         <loading-notification :promise="promise" />
 
-        <image-cards v-if="documents && !listMode && documentType === 'image'" :documents="documents" />
+        <!-- Saying out loud what this filter can and cannot do. The list is
+             paginated server-side, so it can only narrow the page already
+             fetched: someone with forty saved topos would otherwise read
+             "3 results" and conclude they had lost the rest. "Mes topos"
+             is the complete, unpaginated answer. -->
+        <p v-if="offlineOnly" class="offline-only-hint">
+          <fa-icon icon="circle-info" />
+          &nbsp;{{ offlineOnlyHint }}
+          <router-link :to="{ name: 'offline' }">{{ $gettext('Voir Mes topos') }}</router-link>
+        </p>
+
+        <image-cards v-if="documents && !listMode && documentType === 'image'" :documents="visibleDocuments" />
 
         <div
           v-if="documents && !listMode && documentType !== 'image'"
           class="columns is-multiline is-variable is-1 cards-list"
         >
           <div
-            v-for="(document, index) in documents.documents"
+            v-for="(document, index) in visibleDocuments.documents"
             :key="index"
             :class="{
               'is-full-mobile is-half-tablet is-half-desktop is-half-widescreen is-half-fullhd': showMap,
@@ -111,7 +138,11 @@
              silently broken. -->
         <div
           v-if="
-            documents && !listMode && documentType !== 'image' && documents.documents && !documents.documents.length
+            documents &&
+            !listMode &&
+            documentType !== 'image' &&
+            visibleDocuments.documents &&
+            !visibleDocuments.documents.length
           "
           class="empty-state has-text-centered"
         >
@@ -121,7 +152,7 @@
 
         <documents-table
           v-if="listMode"
-          :documents="documents ? documents : {}"
+          :documents="visibleDocuments ? visibleDocuments : {}"
           :document-type="documentType"
           :highlighted-document="highlightedDocument"
           @highlight-document="highlightedDocument = arguments[0]"
@@ -203,6 +234,11 @@ export default {
       filteredWaypoints: [],
 
       queryHasTags: false,
+
+      // V3: narrow the current page to topos already downloaded on this
+      // device. Not persisted to the URL — it describes this device, not
+      // the search, so a shared link must not carry it.
+      offlineOnly: false,
     };
   },
 
@@ -238,7 +274,40 @@ export default {
       return result;
     },
     documentsShownOnMap() {
-      return this.filteredWaypoints.concat(this.documents ? this.documents.documents : []);
+      return this.filteredWaypoints.concat(this.visibleDocuments.documents ?? []);
+    },
+
+    // V3. Only offered where a topo can actually be saved offline —
+    // profiles and images cannot, so the toggle would filter to nothing.
+    canFilterOffline() {
+      return (
+        !!this.$offline && ['route', 'waypoint', 'outing', 'article', 'book', 'xreport'].includes(this.documentType)
+      );
+    },
+
+    // V3. The set the renderers draw from. Identical to `documents` unless
+    // the offline toggle is on, so the normal path is untouched.
+    visibleDocuments() {
+      const source = this.documents ?? {};
+      if (!this.offlineOnly || !Array.isArray(source.documents)) {
+        return source;
+      }
+      const lang = this.$route.params.lang || this.$language?.current || 'fr';
+      // "Available offline" means the full package is on the device, not
+      // merely saved: an online entry needs the network exactly like an
+      // unsaved one, so listing it here would defeat the filter.
+      const documents = source.documents.filter((doc) =>
+        this.$offline.isOfflineReady(this.documentType, doc.document_id, lang)
+      );
+      return { ...source, documents };
+    },
+
+    offlineOnlyHint() {
+      const shown = this.visibleDocuments?.documents?.length ?? 0;
+      const total = this.documents?.documents?.length ?? 0;
+      return this.$gettext('{shown} sur les {total} résultats de cette page sont enregistrés hors ligne.')
+        .replace('{shown}', shown)
+        .replace('{total}', total);
     },
   },
 
@@ -341,6 +410,24 @@ $cards-gap: 0.25rem;
 @media screen and (max-width: $tablet) {
   $mobile-section-padding: 0.5rem;
   $mobile-header-height: 56px;
+  // V3: the local "offline only" narrowing, and the line that keeps it
+  // honest about only covering the page in hand.
+  .offline-only-toggle.is-active {
+    background: #ff9933;
+    color: #fff;
+    border-color: #ff9933;
+  }
+
+  .offline-only-hint {
+    margin: 0.25rem 0 0.75rem;
+    font-size: 0.85rem;
+    color: #7a7a7a;
+
+    a {
+      text-decoration: underline;
+    }
+  }
+
   $mobile-filters-height: 25px;
 
   // V3 shell already handles fixed top bar + scroll inside .page-content.

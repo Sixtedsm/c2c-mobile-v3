@@ -52,6 +52,13 @@ async function uploadPhotosAndCreateImages(files) {
 
 const IMAGE_SIZES_TO_PREFETCH = ['MI', 'SI'];
 
+// Returns true when the asset made it into the cache.
+//
+// Honest limit of no-cors: the response is opaque, so a 404 resolves just
+// like a 200 and is counted as a success. What this does catch is the case
+// that matters — the network dying mid-download — because that throws. A
+// topo whose images 404 individually is a server-side problem; a topo
+// downloaded in a tunnel is the one the user needs warning about.
 async function prefetchUrl(url) {
   try {
     // no-cors: browser-issued <img> requests are also no-cors, so the cached
@@ -60,30 +67,53 @@ async function prefetchUrl(url) {
     // Access-Control-Allow-Origin (which is most of them) and would leave us
     // with zero cached images.
     await fetch(url, { cache: 'reload', mode: 'no-cors' });
+    return true;
   } catch {
-    // ignore individual failures — the image just won't be available offline
+    // One failure does not abort the save — the topo is still worth having,
+    // it is just not complete, and the caller records that.
+    return false;
   }
 }
 
+// Running total of a download: how many assets were attempted and how many
+// did not make it. `done` flips once nothing is left in flight.
+function emptyTally() {
+  return { attempted: 0, failed: 0 };
+}
+
+function addToTally(tally, ok) {
+  tally.attempted += 1;
+  if (!ok) tally.failed += 1;
+  return tally;
+}
+
+function mergeTallies(a, b) {
+  return { attempted: a.attempted + b.attempted, failed: a.failed + b.failed };
+}
+
 async function prefetchImageVariants(imageDoc) {
+  const tally = emptyTally();
   if (!imageDoc) {
-    return;
+    return tally;
   }
   for (const size of IMAGE_SIZES_TO_PREFETCH) {
     const url = getImageUrl(imageDoc, size);
     if (url) {
-      await prefetchUrl(url);
+      addToTally(tally, await prefetchUrl(url));
     }
   }
+  return tally;
 }
 
 async function prefetchSrcsFromCooked(cooked) {
+  const tally = emptyTally();
   for (const url of extractImageUrlsFromCooked(cooked, config.urls.api)) {
     // We pull both real src= URLs and reconstructed c2c:url-proxy URLs so the
     // service worker caches exactly the URLs the browser will request when
     // rendering the topo offline (including avif/webp <picture> variants).
-    await prefetchUrl(url);
+    addToTally(tally, await prefetchUrl(url));
   }
+  return tally;
 }
 
 // ---------- Pre-cache map tiles around the trace ----------
@@ -196,10 +226,12 @@ function buildOpenTopoMapTileUrls(bbox) {
 }
 
 async function prefetchTilesForDocument(data) {
+  const tally = emptyTally();
   const geom = data?.geometry?.geom_detail || data?.geometry?.geom;
   const bbox = getLonLatBboxFromC2cGeom(geom);
   if (!bbox) {
-    return;
+    // No geometry, so no tiles were ever owed. Not a partial download.
+    return tally;
   }
   const urls = buildOpenTopoMapTileUrls(bbox);
   // We fire requests in small parallel batches so the tile servers do not
@@ -207,8 +239,10 @@ async function prefetchTilesForDocument(data) {
   const BATCH = 6;
   for (let i = 0; i < urls.length; i += BATCH) {
     const slice = urls.slice(i, i + BATCH);
-    await Promise.all(slice.map((url) => prefetchUrl(url)));
+    const results = await Promise.all(slice.map((url) => prefetchUrl(url)));
+    for (const ok of results) addToTally(tally, ok);
   }
+  return tally;
 }
 
 // PWA app badge (#18): mirrors the offline-outing queue length on the
@@ -499,7 +533,16 @@ export default function install(Vue) {
           // online later must not turn into an "Untitled" row.
           await store.saveDocument({ type, id, lang, data, meta: buildMeta(data, lang), folderId, mode });
           if (mode === store.OFFLINE_MODE) {
-            await this.prefetchOfflineAssets(data, lang, folderId);
+            // Mark the download open before fetching a single asset. If the
+            // app dies here — tunnel, killed tab, closed lid — the entry
+            // stays open and "Mes topos" says so, which is exactly what
+            // CDC §2.2 asks to make visible.
+            await store.setDocumentAssets(type, id, lang, { done: false, startedAt: Date.now() });
+            const tally = await this.prefetchOfflineAssets(data, lang, folderId);
+            // Tiles keep going after this returns: 250 of them would make
+            // the button spin far too long. The entry stays open until they
+            // land, then closes itself.
+            this.prefetchTilesInBackground(type, id, lang, data, tally);
           }
           await this.refresh();
         } finally {
@@ -509,9 +552,14 @@ export default function install(Vue) {
         }
       },
 
-      // Everything that makes a topo usable without a network. Split out
-      // of saveDocument so a light save can skip it wholesale.
+      // Everything that makes a topo usable without a network, minus the
+      // map tiles (see prefetchTilesInBackground). Split out of saveDocument
+      // so an online save can skip it wholesale.
+      //
+      // Returns { attempted, failed } so the caller can tell the user
+      // whether the topo they are about to carry is actually complete.
       async prefetchOfflineAssets(data, lang, folderId) {
+        let tally = emptyTally();
         // Strategy: cache the EXACT URLs the browser will request when
         // rendering the topo offline.
         //
@@ -519,7 +567,7 @@ export default function install(Vue) {
         //    Whatever pattern the server-side cooker emits (proxy URL, media
         //    direct, etc.) is what the browser will ask for later, so this
         //    is the most reliable way to populate the SW image cache.
-        await prefetchSrcsFromCooked(data?.cooked);
+        tally = mergeTallies(tally, await prefetchSrcsFromCooked(data?.cooked));
 
         // 2) Gallery images (associations.images): prefetch the size
         //    variants the gallery template usually requests (MI for the
@@ -528,19 +576,15 @@ export default function install(Vue) {
         const associatedImages = Array.isArray(data?.associations?.images) ? data.associations.images : [];
         for (const image of associatedImages) {
           try {
-            await prefetchImageVariants(image);
+            tally = mergeTallies(tally, await prefetchImageVariants(image));
           } catch {
-            /* ignore */
+            // An unexpected throw is still one asset that did not make it.
+            addToTally(tally, false);
           }
         }
 
-        // 3) Pre-cache map tiles around the trace so the user has the
-        //    topographic base layer offline (OpenTopoMap by default, the C2C
-        //    fallback layer). Run in the background — the "saved" feedback
-        //    has already fired, no need to block on this.
-        prefetchTilesForDocument(data).catch(() => {
-          /* tile prefetch is best-effort */
-        });
+        // 3) Map tiles are handled by the caller, after this returns — see
+        //    prefetchTilesInBackground.
 
         // 4) Also persist the lightweight image metadata for images that are
         //    embedded by id (so a later code path that calls c2c.image.get…
@@ -562,11 +606,33 @@ export default function install(Vue) {
               folderId,
               mode: store.OFFLINE_MODE,
             });
-            await prefetchImageVariants(imgResponse.data);
+            tally = mergeTallies(tally, await prefetchImageVariants(imgResponse.data));
           } catch {
-            /* ignore */
+            addToTally(tally, false);
           }
         }
+        return tally;
+      },
+
+      // The topographic base layer around the trace (OpenTopoMap, the C2C
+      // fallback). Deliberately not awaited by the caller: ~250 tiles take
+      // long enough that blocking the save would read as a hang.
+      //
+      // It closes the download instead — merging its own result into the
+      // tally and writing the final one. Until that happens the entry
+      // stays marked open, so a save interrupted halfway through the tiles
+      // is shown as incomplete rather than silently passing for complete.
+      prefetchTilesInBackground(type, id, lang, data, baseTally) {
+        return prefetchTilesForDocument(data)
+          .catch(() => emptyTally())
+          .then(async (tileTally) => {
+            const total = mergeTallies(baseTally, tileTally);
+            await store.setDocumentAssets(type, id, lang, { ...total, done: true, at: Date.now() });
+            await this.refresh();
+          })
+          .catch(() => {
+            /* the entry simply stays marked incomplete */
+          });
       },
 
       // Tell the user, at the moment of the gesture, that saving a topo

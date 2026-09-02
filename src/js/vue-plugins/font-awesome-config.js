@@ -112,6 +112,7 @@ import { faQuoteRight } from '@fortawesome/free-solid-svg-icons/faQuoteRight';
 import { faRedoAlt } from '@fortawesome/free-solid-svg-icons/faRedoAlt';
 import { faRobot } from '@fortawesome/free-solid-svg-icons/faRobot';
 import { faRotate } from '@fortawesome/free-solid-svg-icons/faRotate';
+import { faRotateRight } from '@fortawesome/free-solid-svg-icons/faRotateRight';
 import { faRoute } from '@fortawesome/free-solid-svg-icons/faRoute';
 import { faRuler } from '@fortawesome/free-solid-svg-icons/faRuler';
 import { faScissors } from '@fortawesome/free-solid-svg-icons/faScissors';
@@ -404,6 +405,7 @@ export default function install(Vue) {
     faRedoAlt,
     faRobot,
     faRotate,
+    faRotateRight,
     faRoute,
     faRuler,
     faScissors,
