@@ -160,10 +160,30 @@ that remembers the pick in localStorage. It's the single link to share.
 
 ## CI
 
-`.github/workflows/ci.yml` runs `npm run lint:no-fix` + `npm run
-build:v3` on every PR + push to main. There's no automated test suite
-yet — see [docs/HANDOVER-C2C.md](docs/HANDOVER-C2C.md) for the recommended
-next steps.
+`.github/workflows/ci.yml` runs, on every PR and push to main:
+
+1. `npm run lint:no-fix` — prettier + stylelint + eslint
+2. `npm test` — the Vitest suite
+3. `npm run build:v3` — the production bundle
+
+A red step blocks the merge.
+
+## Tests
+
+`npm test` (`vitest run`), `npm run test:watch` while developing.
+The suite lives in `tests/unit/pwa/` and covers the V3-specific logic —
+the upstream V1 code is not re-tested here.
+
+What is covered, and why those files: they are the ones where a silent
+failure costs real data. The offline store and its two save modes, the
+sync queue locking, GPS tracking across a screen lock, pausing an outing
+and the trace segmentation that feeds the published distance and
+elevation. Each of those has a regression behind it.
+
+Pure helpers (`haversine`, `geo-bbox`, `elapsed-label`,
+`cooked-html-parser`, `markdown-selection`, `trace-segments`) are tested
+directly; the stateful plugins are mounted on a local Vue instance with
+geolocation and IndexedDB stubbed (`fake-indexeddb`, `happy-dom`).
 
 ## What's V3-only vs. what's upstream
 

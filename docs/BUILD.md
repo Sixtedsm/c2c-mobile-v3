@@ -10,6 +10,17 @@ npm run serve               # dev server at http://localhost:8080
 The dev server uses `BUILD_ENV=local` — same code paths as prod, no
 minification, hot reload.
 
+## Tests
+
+```bash
+npm test                    # vitest run — what CI runs
+npm run test:watch          # re-runs on save while developing
+```
+
+The suite is in `tests/unit/pwa/` and covers the V3-specific logic.
+See the "Tests" section of [ARCHITECTURE.md](../ARCHITECTURE.md) for
+what is covered and why.
+
 ## Prod build (V3 target for GitHub Pages)
 
 ```bash
@@ -36,10 +47,10 @@ which tells `vue.config.js` to:
 
 Two GitHub Actions workflows:
 
-| File                           | Trigger           | What it does                                |
-| ------------------------------ | ----------------- | ------------------------------------------- |
-| `.github/workflows/ci.yml`     | PR + push to main | `npm run lint:no-fix` + `npm run build:v3`  |
-| `.github/workflows/deploy.yml` | push to main      | `npm run build:v3` + upload to GitHub Pages |
+| File                           | Trigger           | What it does                                            |
+| ------------------------------ | ----------------- | ------------------------------------------------------- |
+| `.github/workflows/ci.yml`     | PR + push to main | `npm run lint:no-fix` + `npm test` + `npm run build:v3` |
+| `.github/workflows/deploy.yml` | push to main      | `npm run build:v3` + upload to GitHub Pages             |
 
 CI must pass before a merge; deploy runs after every merge to `main`.
 
