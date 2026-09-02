@@ -41,6 +41,12 @@
               <template v-if="$outingSession.elevationGainMeters > 0">
                 · +{{ Math.round($outingSession.elevationGainMeters) }} m
               </template>
+              <!-- Recording holds a screen Wake Lock: without it the
+                   phone locks, the page freezes and nothing is
+                   recorded. Say so, because it costs battery. -->
+              <span v-if="$outingSession.wakeLockActive" class="start-outing-wakelock">
+                <br />{{ $gettext('Écran maintenu allumé pendant l’enregistrement.') }}
+              </span>
             </template>
             <template v-else>
               {{ $gettext('La trace ne sera pas enregistrée (économise la batterie).') }}
@@ -483,6 +489,10 @@ export default {
   input {
     margin: 0;
   }
+}
+
+.start-outing-wakelock {
+  opacity: 0.75;
 }
 
 .start-outing-toggle-hint {

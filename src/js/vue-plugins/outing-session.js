@@ -18,6 +18,12 @@ const STORAGE_KEY = 'v3.outingSession';
 const DEFAULT_TRACK_INTERVAL_MS = 5000; // fallback if $appSettings hasn't loaded yet
 const MIN_DISTANCE_M = 3; // ignore jitter under 3m (urban canyon GPS noise)
 const MAX_STALE_MS = 48 * 3600 * 1000; // drop sessions older than 48h
+// A live watch on a phone in a pocket still delivers a fix every few
+// seconds. Going a full minute without one means the watch is dead —
+// suspended by the OS, killed by a driver hiccup, or wedged after a
+// TIMEOUT — so the watchdog rebuilds it.
+const STALE_FIX_MS = 60 * 1000;
+const WATCHDOG_INTERVAL_MS = 30 * 1000;
 // Debounce persist() on `positions` — a long trace (thousands of
 // points) shouldn't JSON.stringify the whole state on every fix. 2 s
 // balances battery / CPU vs. the risk of losing the last few points
@@ -86,16 +92,31 @@ export default function install(Vue) {
         positions: snap?.positions || [],
         watchId: null,
         geoError: null,
-        // Battery guard (Lot 5): when the tab is hidden (backgrounded
-        // browser, phone lock, another app) we pause the GPS watch to
-        // stop burning battery. On resume we re-arm if tracking was on.
-        // `wasTrackingBeforeHide` remembers the user intent through
-        // hide/show cycles.
-        wasTrackingBeforeHide: false,
+        // Timestamp of the last fix the browser delivered. Drives the
+        // watchdog and lets the UI prove tracking is actually alive —
+        // the original failure was invisible precisely because nothing
+        // recorded whether fixes were still arriving.
+        lastFixAt: null,
+        // Screen Wake Lock sentinel held while recording. Without it
+        // the phone locks after ~30 s and the page is frozen, which is
+        // what turned a 1 h run into 3 recorded points.
+        wakeLockActive: false,
+        // NOTE: there used to be a `wasTrackingBeforeHide` flag here,
+        // backing a "battery guard" that stopped the watch whenever the
+        // tab went hidden. That guard was the bug: a locked screen
+        // silently ended every recording. See the visibility handler.
       };
     },
 
     computed: {
+      // How long since the browser last handed us a position. Infinity
+      // when tracking has never produced a fix. The watchdog and the
+      // visibility handler both read this, and the UI can surface it so
+      // a stalled recording is visible instead of silent.
+      fixAgeMs() {
+        if (!this.lastFixAt) return Infinity;
+        return Date.now() - this.lastFixAt;
+      },
       // Distance covered by the recorded trace (meters).
       tracedDistanceMeters() {
         let d = 0;
@@ -126,8 +147,17 @@ export default function install(Vue) {
     watch: {
       sessionActive: 'snapshot',
       gpsTracking(active) {
-        if (active) this.startGpsWatch();
-        else this.stopGpsWatch();
+        if (active) {
+          // Fresh run: forget the previous throttle cursor, otherwise a
+          // restart within one sample interval drops the first fix.
+          this._lastSampleTime = 0;
+          this.lastFixAt = null;
+          this.startGpsWatch();
+        } else {
+          this.stopGpsWatch();
+          this.stopWatchdog();
+          this.releaseWakeLock();
+        }
         this.snapshot();
       },
       // Positions accrue at ~5 s intervals — debouncing writes to
@@ -145,24 +175,33 @@ export default function install(Vue) {
       }
       this._onVisibility = () => {
         if (document.hidden) {
-          // Tab going away → flip tracking off through the reactive
-          // path so the UI toggle stays truthful and the watcher's
-          // stopGpsWatch() call takes effect. Remember the user intent
-          // so we can re-arm on resume.
-          if (this.gpsTracking) {
-            this.wasTrackingBeforeHide = true;
-            this.gpsTracking = false;
-          }
-        } else if (this.wasTrackingBeforeHide && this.sessionActive) {
-          this.wasTrackingBeforeHide = false;
-          this.gpsTracking = true;
+          // Deliberately do NOT stop the watch here.
+          //
+          // The previous version flipped gpsTracking off on every
+          // hide, which meant a phone locking its screen 30 s into a
+          // run silently ended the recording. Sixte's 1 h run on
+          // 2026-09-02 produced 3 points — one for each time he woke
+          // the screen and the watch briefly re-armed.
+          //
+          // watchPosition keeps delivering in the background on iOS
+          // PWA and Android Chrome. Where the OS does suspend it, the
+          // watchdog notices the fix drought and rebuilds the watch.
+          return;
         }
+        if (!this.gpsTracking) return;
+        // Back in the foreground. Browsers release the wake lock while
+        // hidden, so re-take it; and if fixes stopped arriving while we
+        // were away, rebuild the watch rather than trusting a dead one.
+        this.acquireWakeLock();
+        if (this.fixAgeMs > STALE_FIX_MS) this.restartGpsWatch();
       };
       document.addEventListener('visibilitychange', this._onVisibility);
     },
 
     beforeDestroy() {
       this.stopGpsWatch();
+      this.stopWatchdog();
+      this.releaseWakeLock();
       if (this._persistTimer) {
         clearTimeout(this._persistTimer);
         // Flush pending trace on unmount to avoid losing points that
@@ -201,6 +240,8 @@ export default function install(Vue) {
       // Trace kept in memory until export/discard so the user can attach
       // it to a draft outing right after.
       stop() {
+        // Setting gpsTracking to false runs the watcher above, which
+        // clears the watch, the watchdog and the wake lock.
         this.gpsTracking = false;
         this.sessionActive = false;
         this.topoRef = null;
@@ -234,18 +275,88 @@ export default function install(Vue) {
         });
       },
 
+      // Keep the screen awake while recording. Without this the phone
+      // locks after ~30 s, the page is frozen by the OS and no fixes
+      // arrive — the root cause of the 3-points-in-an-hour report.
+      // Best-effort: unsupported or denied just means the screen may
+      // sleep, and the watchdog then does the recovery work.
+      async acquireWakeLock() {
+        if (this.wakeLockActive || typeof navigator === 'undefined' || !navigator.wakeLock) return;
+        try {
+          this._wakeLock = await navigator.wakeLock.request('screen');
+          this.wakeLockActive = true;
+          // The browser drops the lock on hide; mirror that in state so
+          // the visibility handler knows to re-take it.
+          this._wakeLock.addEventListener?.('release', () => {
+            this.wakeLockActive = false;
+            this._wakeLock = null;
+          });
+        } catch {
+          this.wakeLockActive = false;
+          this._wakeLock = null;
+        }
+      },
+
+      releaseWakeLock() {
+        try {
+          this._wakeLock?.release?.();
+        } catch {
+          // already released by the browser
+        }
+        this._wakeLock = null;
+        this.wakeLockActive = false;
+      },
+
+      // Tear down and rebuild the watch. Used by the watchdog and on
+      // returning to the foreground — a watch that stopped delivering
+      // never recovers on its own, and because watchId stayed set the
+      // old code could never restart it.
+      restartGpsWatch() {
+        this.stopGpsWatch();
+        // Give the fresh watch a full staleness window to produce its
+        // first fix. Without this the age stays stale and the watchdog
+        // would tear the watch down again every 30 s for as long as
+        // there is no signal — a tunnel or a deep couloir would cause
+        // continuous churn instead of a patient retry.
+        this.lastFixAt = Date.now();
+        this.startGpsWatch();
+      },
+
+      // Rebuild the watch whenever fixes dry up. This is what catches
+      // the silent failures: an OS-suspended watch delivers neither a
+      // position nor an error, so only the absence of fixes reveals it.
+      startWatchdog() {
+        this.stopWatchdog();
+        this._watchdog = window.setInterval(() => {
+          if (!this.gpsTracking) return;
+          if (this.fixAgeMs > STALE_FIX_MS) this.restartGpsWatch();
+        }, WATCHDOG_INTERVAL_MS);
+      },
+
+      stopWatchdog() {
+        if (this._watchdog) {
+          window.clearInterval(this._watchdog);
+          this._watchdog = null;
+        }
+      },
+
       startGpsWatch() {
         if (!navigator.geolocation || this.watchId !== null) return;
         // Sample rate is user-controlled via AppSettings (CDC §2.9).
         // Snapshot at watch start — a mid-watch change is honored by
         // stop+start, not by mutating the closure.
         const intervalMs = this.$appSettings?.gpsIntervalMs ?? DEFAULT_TRACK_INTERVAL_MS;
-        let lastSampleTime = 0;
+        this.acquireWakeLock();
+        this.startWatchdog();
         this.watchId = navigator.geolocation.watchPosition(
           (pos) => {
             const now = pos.timestamp || Date.now();
+            // Record liveness before any throttling, so a stationary
+            // user does not look like a dead watch to the watchdog.
+            this.lastFixAt = now;
+            this.geoError = null;
             // Browser may fire much more often than we need; throttle.
-            if (now - lastSampleTime < intervalMs - 500) return;
+            if (now - this._lastSampleTime < intervalMs - 500) return;
             const sample = {
               lat: pos.coords.latitude,
               lon: pos.coords.longitude,
@@ -256,14 +367,25 @@ export default function install(Vue) {
             this.currentPosition = sample;
             const last = this.positions[this.positions.length - 1];
             if (!last || haversine(last, sample) >= MIN_DISTANCE_M) {
-              this.positions = [...this.positions, sample];
-              lastSampleTime = now;
+              // push, not [...positions, sample]: the spread reallocated
+              // the whole array on every fix, which is O(n²) over a long
+              // outing (~6.5M element copies on a 5 h trace). Vue 2
+              // intercepts push, so reactivity still fires.
+              this.positions.push(sample);
+              this._lastSampleTime = now;
             }
           },
           (err) => {
             this.geoError = err;
+            // PERMISSION_DENIED is terminal — retrying just re-prompts
+            // and burns battery. Everything else (TIMEOUT,
+            // POSITION_UNAVAILABLE) is transient, and the watchdog
+            // rebuilds the watch if fixes do not resume.
+            if (err && err.code === 1) {
+              this.gpsTracking = false;
+            }
           },
-          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+          { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
         );
       },
 

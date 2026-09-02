@@ -249,15 +249,23 @@ async function pingReachable() {
       const url = base.replace(/\/+$/, '') + '/?_ping=' + Date.now();
       const ctl = new AbortController();
       const timer = window.setTimeout(() => ctl.abort(), 4000);
-      await fetch(url, {
-        method: 'GET',
-        mode: 'no-cors',
-        cache: 'no-store',
-        credentials: 'omit',
-        signal: ctl.signal,
-      });
-      window.clearTimeout(timer);
-      return true;
+      try {
+        await fetch(url, {
+          method: 'GET',
+          mode: 'no-cors',
+          cache: 'no-store',
+          credentials: 'omit',
+          signal: ctl.signal,
+        });
+        return true;
+      } finally {
+        // Must be a finally: the fetch rejects precisely when we are
+        // offline — the common case — and the old code cleared the
+        // timer only on the success path. Every failed probe left a
+        // 4 s timer behind, and the offline re-check loop fires one
+        // every 15 s.
+        window.clearTimeout(timer);
+      }
     } catch {
       // try the next target
     }

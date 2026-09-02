@@ -629,6 +629,11 @@ export default {
     '$route.params.id'() {
       this.load();
     },
+    // Load more / a fresh topic changes how many .ft-post nodes exist,
+    // so the cached NodeList the scroll handler reads must be dropped.
+    'visiblePosts.length'() {
+      this.invalidateScrollCache();
+    },
   },
 
   mounted() {
@@ -643,6 +648,10 @@ export default {
     this._scrollTarget.addEventListener('scroll', this._scrollHandler, { passive: true });
     this._clickHandler = this.onDocumentClick.bind(this);
     document.addEventListener('click', this._clickHandler, true);
+    // A resize (rotation, keyboard opening) changes the reading-area
+    // height the anchor is derived from.
+    this._resizeHandler = this.invalidateScrollCache.bind(this);
+    window.addEventListener('resize', this._resizeHandler, { passive: true });
   },
 
   beforeDestroy() {
@@ -651,6 +660,9 @@ export default {
     }
     if (this._clickHandler) {
       document.removeEventListener('click', this._clickHandler, true);
+    }
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
     }
     if (this._progressHideT) window.clearTimeout(this._progressHideT);
   },
@@ -877,33 +889,61 @@ export default {
     // Recompute which hydrated post is currently under the "reading
     // line" (a bit below the top of the scroll surface). Called from
     // the scroll listener; kept O(visible posts) — cheap.
+    // Cache the post nodes and the reading-area height so a scroll
+    // frame does not re-query the DOM. Invalidated when the number of
+    // rendered posts changes (Load more) and on resize.
+    invalidateScrollCache() {
+      this._postNodes = null;
+      this._surfaceHeight = 0;
+    },
+
+    // Which hydrated post sits under the reading line (top third of
+    // the scroll surface). Called at most once per animation frame.
+    //
+    // getBoundingClientRect forces a synchronous layout, so the cost
+    // here is one reflow per post examined. The loop breaks at the
+    // first post below the line, which keeps it proportional to the
+    // reading position rather than to the length of the thread.
     updateCurrentPost() {
-      const posts = document.querySelectorAll('.forum-topic-view .ft-post');
-      if (!posts.length) return;
-      const surface = document.querySelector('.page-content');
-      const surfaceHeight = surface?.clientHeight ?? window.innerHeight;
-      // Anchor at the top third of the reading area — matches what
-      // the eye actually sees as "the current post".
-      const anchor = surfaceHeight / 3;
+      if (!this._postNodes || !this._postNodes.length) {
+        this._postNodes = this.$el ? this.$el.querySelectorAll('.ft-post') : null;
+        if (!this._postNodes || !this._postNodes.length) return;
+      }
+      if (!this._surfaceHeight) {
+        const surface = this._scrollTarget && this._scrollTarget.clientHeight ? this._scrollTarget : null;
+        this._surfaceHeight = surface ? surface.clientHeight : window.innerHeight;
+      }
+      const anchor = this._surfaceHeight / 3;
+      const nodes = this._postNodes;
       let idx = 0;
-      for (let i = 0; i < posts.length; i++) {
-        const top = posts[i].getBoundingClientRect().top;
-        if (top <= anchor) idx = i;
+      for (let i = 0; i < nodes.length; i++) {
+        if (nodes[i].getBoundingClientRect().top <= anchor) idx = i;
         else break;
       }
       const post = this.visiblePosts[idx];
-      this.currentPostNumber = post?.post_number || idx + 1;
+      const next = post?.post_number || idx + 1;
+      // Guard the assignment: scrolling within one post would otherwise
+      // re-trigger the watcher chain 60 times a second for no change.
+      if (next !== this.currentPostNumber) this.currentPostNumber = next;
     },
 
+    // Scroll fires 60-120 times a second on mobile. Coalesce to one
+    // measurement per frame — without this the handler forced a layout
+    // per post per event and visibly janked the thread.
     onTopicScroll() {
-      this.updateCurrentPost();
       this.progressVisible = true;
+      if (!this._rafPending) {
+        this._rafPending = true;
+        window.requestAnimationFrame(() => {
+          this._rafPending = false;
+          this.updateCurrentPost();
+        });
+      }
       if (this._progressHideT) window.clearTimeout(this._progressHideT);
       this._progressHideT = window.setTimeout(() => {
         this.progressVisible = false;
       }, 1200);
     },
-
     onDocumentClick(event) {
       if (this.notifMenuOpen) {
         const wrap = this.$refs.notifWrap;
@@ -1541,17 +1581,6 @@ export default {
   }
 }
 
-.ft-external {
-  margin-top: 1rem;
-  text-align: center;
-  font-size: 0.8rem;
-
-  a {
-    color: #337ab7;
-    text-decoration: none;
-  }
-}
-
 // Compact topic-actions row — Discourse-mobile style. Each action is
 // a small icon+label chip so the row is dense but tap-friendly.
 .ft-topic-actions {
@@ -1799,7 +1828,6 @@ html[data-theme='dark'] {
     }
     .ft-breadcrumb a,
     .ft-reply-hint a,
-    .ft-external a,
     .ft-load-more {
       color: #6db4ff;
     }
