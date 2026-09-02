@@ -182,8 +182,8 @@
             class="button is-primary is-small ft-reply-toggle"
             @click="startReply"
           >
-            <fa-icon icon="pen-to-square" />
-            &nbsp;{{ $gettext("Répondre dans l'app") }}
+            <fa-icon icon="reply" />
+            &nbsp;{{ $gettext('Répondre') }}
           </button>
 
           <div v-else class="ft-reply-editor">
@@ -220,44 +220,86 @@
           </div>
         </section>
 
-        <!-- Discourse "N sur N" progress + topic actions. The progress
-             mirrors the green pill camptocamp.org shows at the bottom
-             of a thread; the actions block hosts Watch/Track/Mute
-             toggles (session-cookie required — the picker asks the
-             user to connect on forum.camptocamp.org when there's no
-             session, in line with bookmarks/notifs behaviour). -->
-        <footer v-if="topic" class="ft-footer">
-          <div v-if="totalPostsCount" class="ft-progress" :title="postsProgressLabel">
-            <span class="ft-progress-bar">
-              <span class="ft-progress-fill" :style="{ width: postsProgressPercent + '%' }"></span>
-            </span>
-            <span class="ft-progress-label">
-              {{ postsProgressLabel }}
-            </span>
+        <!-- Compact icon-row of topic actions, Discourse-mobile style.
+             Notifications is a bell that opens a small popover with
+             the 4 Discourse levels (Watching / Tracking / Normal /
+             Muted). Share uses the platform Web Share API and falls
+             back to a link-copy. Flag opens a small confirm — the
+             actual POST needs a session cookie on forum.camptocamp.
+             org, so if that isn't shared yet the toast tells the user
+             what to do. Every write here mirrors what the desktop
+             forum toolbar would trigger on the same account. -->
+        <div v-if="topic" class="ft-topic-actions">
+          <div v-if="$user.isLogged" ref="notifWrap" class="ft-notif-wrap">
+            <button
+              type="button"
+              class="ft-topic-action"
+              :class="{ 'is-active': notifMenuOpen, 'is-watching': notificationLevel === 3 }"
+              :aria-expanded="notifMenuOpen ? 'true' : 'false'"
+              aria-haspopup="menu"
+              :title="notificationLevelLabel"
+              @click="toggleNotifMenu"
+            >
+              <fa-icon :icon="notifIconFor(notificationLevel)" />
+              <span class="ft-topic-action-label">{{ notificationLevelShortLabel }}</span>
+              <fa-icon icon="chevron-down" class="ft-topic-action-caret" />
+            </button>
+            <div v-if="notifMenuOpen" class="ft-notif-popover" role="menu">
+              <button
+                v-for="opt in notifOptions"
+                :key="opt.value"
+                type="button"
+                class="ft-notif-option"
+                :class="{ 'is-active': notificationLevel === opt.value }"
+                role="menuitemradio"
+                :aria-checked="notificationLevel === opt.value ? 'true' : 'false'"
+                @click="pickNotifLevel(opt.value)"
+              >
+                <fa-icon :icon="opt.icon" class="ft-notif-option-icon" />
+                <span class="ft-notif-option-body">
+                  <span class="ft-notif-option-label">{{ opt.label }}</span>
+                  <span class="ft-notif-option-hint">{{ opt.hint }}</span>
+                </span>
+                <fa-icon
+                  v-if="notificationLevel === opt.value"
+                  :icon="settingNotifLevel ? 'spinner' : 'check'"
+                  :spin="settingNotifLevel"
+                  class="ft-notif-option-check"
+                />
+              </button>
+            </div>
           </div>
 
-          <div v-if="$user.isLogged" class="ft-actions">
-            <label class="ft-actions-label" for="ft-notif-level">{{ $gettext('Actions sur le sujet') }}</label>
-            <div class="ft-actions-picker">
-              <select
-                id="ft-notif-level"
-                v-model.number="notificationLevel"
-                :disabled="settingNotifLevel"
-                @change="onNotifLevelChange"
-              >
-                <option :value="1">{{ $gettext('Normal') }}</option>
-                <option :value="2">{{ $gettext('Suivi (Tracking)') }}</option>
-                <option :value="3">{{ $gettext('Surveillé (Watching)') }}</option>
-                <option :value="0">{{ $gettext('Muet (Muted)') }}</option>
-              </select>
-              <fa-icon v-if="settingNotifLevel" icon="spinner" spin class="ft-actions-spinner" />
-            </div>
-            <p class="ft-actions-hint">
-              {{ notificationLevelLabel }}
-            </p>
-          </div>
-        </footer>
+          <button type="button" class="ft-topic-action" @click="shareTopic">
+            <fa-icon icon="share-alt" />
+            <span class="ft-topic-action-label">{{ $gettext('Partager') }}</span>
+          </button>
+
+          <button v-if="$user.isLogged" type="button" class="ft-topic-action ft-topic-action-danger" @click="flagTopic">
+            <fa-icon icon="flag" />
+            <span class="ft-topic-action-label">{{ $gettext('Signaler') }}</span>
+          </button>
+        </div>
       </template>
+
+      <!-- Floating "N sur N" scroll indicator. Fades in the first
+           time the user scrolls the topic and hides itself 1.2 s
+           after the last scroll event, matching how the desktop
+           Discourse timeline shows/hides on scroll. Only mounted
+           when we actually have a topic and multiple posts —
+           useless on a 1-post thread. -->
+      <transition name="ft-progress-fade">
+        <div
+          v-if="progressVisible && totalPostsCount > 1"
+          class="ft-progress-floating"
+          :aria-hidden="progressVisible ? 'false' : 'true'"
+        >
+          <span class="ft-progress-count">{{ currentPostNumber }} / {{ totalPostsCount }}</span>
+          <span class="ft-progress-bar">
+            <span class="ft-progress-fill" :style="{ width: currentProgressPercent + '%' }"></span>
+          </span>
+        </div>
+      </transition>
     </div>
   </section>
 </template>
@@ -324,6 +366,16 @@ export default {
       // sixtedsm.github.io share cookies.
       notificationLevel: 1,
       settingNotifLevel: false,
+      // Compact popover for the notification level (bell). Closed by
+      // default; toggled by the bell button; a click-outside handler
+      // in mounted() closes it too.
+      notifMenuOpen: false,
+      // Floating "N/N" progress pill — visible only while the user
+      // is scrolling, hides itself 1.2 s after the last scroll event.
+      // currentPostNumber tracks which hydrated post is currently
+      // near the top of the reading area (viewport / 3 anchor line).
+      progressVisible: false,
+      currentPostNumber: 1,
     };
   },
 
@@ -460,6 +512,55 @@ export default {
           return this.$gettext('Vous serez notifié·e uniquement pour les mentions et les réponses directes.');
       }
     },
+    // Short label for the compact bell button. Uses the same names as
+    // Discourse's mobile toolbar so a user coming from the desktop
+    // site instantly recognises the state.
+    notificationLevelShortLabel() {
+      switch (Number(this.notificationLevel)) {
+        case 3:
+          return this.$gettext('Surveillé');
+        case 2:
+          return this.$gettext('Suivi');
+        case 0:
+          return this.$gettext('Muet');
+        default:
+          return this.$gettext('Normal');
+      }
+    },
+    // Four options for the popover; mirrors what Discourse shows in
+    // its own bell dropdown (label + one-line hint + icon).
+    notifOptions() {
+      return [
+        {
+          value: 3,
+          icon: 'exclamation-circle',
+          label: this.$gettext('Surveillé'),
+          hint: this.$gettext('Notification à chaque nouveau message.'),
+        },
+        {
+          value: 2,
+          icon: 'eye',
+          label: this.$gettext('Suivi'),
+          hint: this.$gettext('Décompte des non-lus et nouveautés.'),
+        },
+        {
+          value: 1,
+          icon: 'bell',
+          label: this.$gettext('Normal'),
+          hint: this.$gettext('Notification pour mentions et réponses directes.'),
+        },
+        {
+          value: 0,
+          icon: 'bell-slash',
+          label: this.$gettext('Muet'),
+          hint: this.$gettext('Aucune notification.'),
+        },
+      ];
+    },
+    currentProgressPercent() {
+      if (!this.totalPostsCount) return 0;
+      return Math.min(100, Math.round((this.currentPostNumber / this.totalPostsCount) * 100));
+    },
   },
 
   watch: {
@@ -470,6 +571,26 @@ export default {
 
   mounted() {
     this.load();
+    // Attach scroll + click-outside listeners for the floating "N/N"
+    // progress pill and the notification-level popover. The scroll
+    // surface in the mobile shell is `.page-content` (see App.vue);
+    // in the desktop shell falls back to window. Passive: true so we
+    // never delay scrolling.
+    this._scrollTarget = document.querySelector('.page-content') || window;
+    this._scrollHandler = this.onTopicScroll.bind(this);
+    this._scrollTarget.addEventListener('scroll', this._scrollHandler, { passive: true });
+    this._clickHandler = this.onDocumentClick.bind(this);
+    document.addEventListener('click', this._clickHandler, true);
+  },
+
+  beforeDestroy() {
+    if (this._scrollTarget && this._scrollHandler) {
+      this._scrollTarget.removeEventListener('scroll', this._scrollHandler);
+    }
+    if (this._clickHandler) {
+      document.removeEventListener('click', this._clickHandler, true);
+    }
+    if (this._progressHideT) window.clearTimeout(this._progressHideT);
   },
 
   methods: {
@@ -551,6 +672,32 @@ export default {
 
     // ---- Notification level (Watch / Track / Mute) ---------------
 
+    notifIconFor(level) {
+      switch (Number(level)) {
+        case 3:
+          return 'exclamation-circle';
+        case 2:
+          return 'eye';
+        case 0:
+          return 'bell-slash';
+        default:
+          return 'bell';
+      }
+    },
+
+    toggleNotifMenu() {
+      this.notifMenuOpen = !this.notifMenuOpen;
+    },
+
+    async pickNotifLevel(level) {
+      if (this.settingNotifLevel) return;
+      // Optimistic swap so the check moves right away; onNotifLevelChange
+      // rolls back on error (same path the old select used to).
+      this.notificationLevel = Number(level);
+      this.notifMenuOpen = false;
+      await this.onNotifLevelChange();
+    },
+
     async onNotifLevelChange() {
       if (!this.topic?.id || this.settingNotifLevel) return;
       const target = Number(this.notificationLevel);
@@ -579,6 +726,115 @@ export default {
         });
       } finally {
         this.settingNotifLevel = false;
+      }
+    },
+
+    // ---- Share / Flag --------------------------------------------
+
+    async shareTopic() {
+      const url = this.topicExternalUrl;
+      const title = this.title || this.$gettext('Forum Camptocamp');
+      // Web Share API where the platform supports it (iOS Safari,
+      // Android Chrome, most PWAs). Otherwise fall back to a clipboard
+      // copy so the user still has a way to hand the link to someone.
+      if (navigator.share) {
+        try {
+          await navigator.share({ title, url });
+          return;
+        } catch {
+          // user cancelled or share failed; fall through to clipboard
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        toast({
+          type: 'is-success',
+          position: 'bottom-center',
+          message: this.$gettext('Lien copié dans le presse-papier.'),
+        });
+      } catch {
+        window.prompt(this.$gettext('Copiez le lien :'), url);
+      }
+    },
+
+    async flagTopic() {
+      if (!this.firstPost?.id) return;
+      const reason = window.prompt(
+        this.$gettext('Signaler ce sujet — décrivez brièvement le problème (spam, contenu inapproprié…) :'),
+        ''
+      );
+      if (reason === null) return;
+      try {
+        // Discourse post-action id 7 = notify_moderators; endpoint
+        // needs a session cookie on forum.camptocamp.org.
+        await forum.authAxios.post(
+          '/post_actions',
+          new URLSearchParams({
+            id: String(this.firstPost.id),
+            post_action_type_id: '7',
+            message: reason || this.$gettext('Signalement depuis l’app mobile.'),
+          }).toString(),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Discourse-Logged-In': 'true',
+            },
+          }
+        );
+        toast({
+          type: 'is-success',
+          position: 'bottom-center',
+          message: this.$gettext('Signalement envoyé aux modérateurs.'),
+        });
+      } catch {
+        toast({
+          type: 'is-warning',
+          position: 'bottom-center',
+          duration: 5000,
+          message: this.$gettext(
+            'Signalement impossible depuis l’app (session forum non partagée). Utilisez forum.camptocamp.org.'
+          ),
+        });
+      }
+    },
+
+    // ---- Floating progress pill ---------------------------------
+
+    // Recompute which hydrated post is currently under the "reading
+    // line" (a bit below the top of the scroll surface). Called from
+    // the scroll listener; kept O(visible posts) — cheap.
+    updateCurrentPost() {
+      const posts = document.querySelectorAll('.forum-topic-view .ft-post');
+      if (!posts.length) return;
+      const surface = document.querySelector('.page-content');
+      const surfaceHeight = surface?.clientHeight ?? window.innerHeight;
+      // Anchor at the top third of the reading area — matches what
+      // the eye actually sees as "the current post".
+      const anchor = surfaceHeight / 3;
+      let idx = 0;
+      for (let i = 0; i < posts.length; i++) {
+        const top = posts[i].getBoundingClientRect().top;
+        if (top <= anchor) idx = i;
+        else break;
+      }
+      const post = this.visiblePosts[idx];
+      this.currentPostNumber = post?.post_number || idx + 1;
+    },
+
+    onTopicScroll() {
+      this.updateCurrentPost();
+      this.progressVisible = true;
+      if (this._progressHideT) window.clearTimeout(this._progressHideT);
+      this._progressHideT = window.setTimeout(() => {
+        this.progressVisible = false;
+      }, 1200);
+    },
+
+    onDocumentClick(event) {
+      if (!this.notifMenuOpen) return;
+      const wrap = this.$refs.notifWrap;
+      if (wrap && !wrap.contains(event.target)) {
+        this.notifMenuOpen = false;
       }
     },
 
@@ -1219,95 +1475,173 @@ export default {
   }
 }
 
-// Bottom-of-topic footer — progress pill + notification-level picker.
-// Matches the green "N sur N" indicator + "Actions sur le sujet"
-// dropdown that camptocamp.org shows in the same spot on desktop.
-.ft-footer {
-  margin: 1rem 0 0;
+// Compact topic-actions row — Discourse-mobile style. Each action is
+// a small icon+label chip so the row is dense but tap-friendly.
+.ft-topic-actions {
+  margin: 0.9rem 0 0;
   display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-}
-.ft-progress {
-  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.7rem;
-  background: rgba(43, 143, 76, 0.1);
-  border: 1px solid rgba(43, 143, 76, 0.3);
-  border-radius: 6px;
-  font-size: 0.8rem;
-  color: #2b8f4c;
+  gap: 0.3rem;
+}
+.ft-topic-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: #4a4a4a;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &:focus:not(:disabled) {
+    background: #fafafa;
+    color: #4a4a4a;
+    outline: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+  &.is-active {
+    background: #fff5e6;
+    border-color: rgba(255, 153, 51, 0.5);
+    color: #b26f1e;
+  }
+  &.is-watching {
+    color: #b26f1e;
+  }
+  &.ft-topic-action-danger {
+    color: #b91c1c;
+  }
+}
+.ft-topic-action-label {
   font-weight: 600;
 }
-.ft-progress-bar {
+.ft-topic-action-caret {
+  color: #9ca3af;
+  font-size: 0.7rem;
+}
+
+// Notification-level popover — anchored under the bell button, with
+// four Discourse levels. Click-outside handler in mounted() closes it.
+.ft-notif-wrap {
+  position: relative;
+}
+.ft-notif-popover {
+  position: absolute;
+  bottom: calc(100% + 0.35rem);
+  left: 0;
+  min-width: 260px;
+  max-width: min(90vw, 320px);
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  padding: 0.3rem;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.ft-notif-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.5rem 0.6rem;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  color: #4a4a4a;
+  width: 100%;
+
+  &:hover,
+  &:focus {
+    background: rgba(0, 0, 0, 0.04);
+    outline: none;
+  }
+  &.is-active {
+    background: rgba(255, 153, 51, 0.12);
+    color: #b26f1e;
+  }
+}
+.ft-notif-option-icon {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+  color: #ff9933;
+}
+.ft-notif-option-body {
   flex: 1;
-  height: 6px;
-  background: rgba(43, 143, 76, 0.2);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ft-notif-option-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.ft-notif-option-hint {
+  font-size: 0.72rem;
+  color: #6b6b6b;
+  line-height: 1.3;
+  margin-top: 0.15rem;
+}
+.ft-notif-option-check {
+  flex: 0 0 auto;
+  color: #ff9933;
+  margin-top: 0.25rem;
+}
+
+// Floating "N / N" progress pill — position:fixed, bottom-right,
+// above the mobile bottom nav. Only rendered when the user is
+// actively scrolling.
+.ft-progress-floating {
+  position: fixed;
+  right: 0.75rem;
+  bottom: calc(76px + env(safe-area-inset-bottom) + 12px);
+  z-index: 28;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+  padding: 0.35rem 0.6rem;
+  background: rgba(43, 143, 76, 0.94);
+  color: white;
+  border-radius: 999px;
+  min-width: 92px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.ft-progress-count {
+  line-height: 1.1;
+}
+.ft-progress-bar {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.35);
   border-radius: 999px;
   overflow: hidden;
-  min-width: 60px;
 }
 .ft-progress-fill {
   display: block;
   height: 100%;
-  background: #2b8f4c;
-  border-radius: 999px;
-  transition: width 0.25s ease;
-}
-.ft-progress-label {
-  flex: 0 0 auto;
-  font-variant-numeric: tabular-nums;
-}
-.ft-actions {
-  padding: 0.6rem 0.75rem;
   background: white;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+  border-radius: 999px;
+  transition: width 0.18s ease;
 }
-.ft-actions-label {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: #6b6b6b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.ft-progress-fade-enter-active,
+.ft-progress-fade-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
-.ft-actions-picker {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-
-  select {
-    flex: 1;
-    padding: 0.4rem 0.6rem;
-    background: white;
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    border-radius: 4px;
-    font-size: 0.9rem;
-    color: #4a4a4a;
-
-    &:focus {
-      outline: none;
-      border-color: #ff9933;
-      box-shadow: 0 0 0 0.125em rgba(255, 153, 51, 0.2);
-    }
-    &:disabled {
-      opacity: 0.6;
-    }
-  }
-}
-.ft-actions-spinner {
-  color: #ff9933;
-}
-.ft-actions-hint {
-  margin: 0;
-  font-size: 0.75rem;
-  color: #6b6b6b;
-  line-height: 1.35;
+.ft-progress-fade-enter,
+.ft-progress-fade-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 .ft-loading,
@@ -1391,29 +1725,45 @@ html[data-theme='dark'] {
       background: linear-gradient(90deg, rgba(75, 194, 107, 0.15), rgba(75, 194, 107, 0.03));
       border-bottom-color: rgba(75, 194, 107, 0.25);
     }
-    .ft-progress {
-      background: rgba(75, 194, 107, 0.15);
-      border-color: rgba(75, 194, 107, 0.35);
-      color: #4bc26b;
+    .ft-topic-action {
+      background: #2a2a2a;
+      border-color: rgba(255, 255, 255, 0.1);
+      color: #e5e5e5;
+      &:hover:not(:disabled),
+      &:focus:not(:disabled) {
+        background: #333333;
+        color: #f5f5f5;
+      }
+      &.is-active {
+        background: #3a2f1a;
+        border-color: rgba(255, 153, 51, 0.5);
+        color: #ffb866;
+      }
+      &.ft-topic-action-danger {
+        color: #ff8f8f;
+      }
     }
-    .ft-progress-bar {
-      background: rgba(75, 194, 107, 0.25);
-    }
-    .ft-progress-fill {
-      background: #4bc26b;
-    }
-    .ft-actions {
+    .ft-notif-popover {
       background: #2a2a2a;
       border-color: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
     }
-    .ft-actions-label,
-    .ft-actions-hint {
+    .ft-notif-option {
+      color: #e5e5e5;
+      &:hover,
+      &:focus {
+        background: rgba(255, 255, 255, 0.05);
+      }
+      &.is-active {
+        background: rgba(255, 153, 51, 0.18);
+        color: #ffb866;
+      }
+    }
+    .ft-notif-option-hint {
       color: #b5b5b5;
     }
-    .ft-actions-picker select {
-      background: #1f1f1f;
-      color: #e5e5e5;
-      border-color: rgba(255, 255, 255, 0.15);
+    .ft-progress-floating {
+      background: rgba(75, 194, 107, 0.94);
     }
   }
 }
