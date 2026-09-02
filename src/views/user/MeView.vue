@@ -221,7 +221,7 @@ export default {
         // les types).
         {
           key: 'offline',
-          label: this.$gettext('Mes topos hors-ligne'),
+          label: this.$gettext('Mes topos'),
           desc: this.$gettext('Sauvegardes pour usage terrain'),
           icon: 'bookmark-download',
           to: { name: 'offline' },

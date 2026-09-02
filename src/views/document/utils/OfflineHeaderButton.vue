@@ -73,19 +73,17 @@ export default {
       if (this.isBusy) return this.$gettext('Enregistrement en cours…');
       if (this.isOfflineReady) {
         if (this.freshness === 'very-stale') {
-          return this.$gettext('Disponible hors-ligne, copie très ancienne — pensez à la rafraîchir');
+          return this.$gettext('Enregistré hors ligne, copie très ancienne — pensez à la rafraîchir');
         }
         if (this.freshness === 'stale') {
-          return this.$gettext('Disponible hors-ligne, copie datée — pensez à la rafraîchir');
+          return this.$gettext('Enregistré hors ligne, copie datée — pensez à la rafraîchir');
         }
-        return this.$gettext('Disponible hors-ligne — toucher pour retirer de Mes topos');
+        return this.$gettext('Enregistré hors ligne — toucher pour retirer de Mes topos');
       }
       if (this.isSaved) {
         // Deliberately explicit: the user must not assume a bookmark is
         // enough to open this topo on the mountain.
-        return this.$gettext(
-          'Enregistré dans Mes topos (texte seul) — téléchargez-le depuis Mes topos pour l’avoir sur le terrain'
-        );
+        return this.$gettext('Enregistré en ligne — ce topo n’est pas accessible hors ligne');
       }
       return this.$gettext('Enregistrer dans Mes topos');
     },
@@ -140,7 +138,7 @@ export default {
           this.docId,
           this.lang,
           this.isOfflineReady
-            ? this.$gettext("Retirer ce topo de Mes topos ? Vous ne pourrez plus l'ouvrir sans réseau.")
+            ? this.$gettext('Retirer ce topo de Mes topos ? Vous ne pourrez plus l’ouvrir hors ligne.')
             : this.$gettext('Retirer ce topo de Mes topos ?')
         );
       } else {
@@ -151,7 +149,7 @@ export default {
         });
         // Saving is light by default now, so say it here rather than let
         // the user discover it with no signal on a ridge.
-        this.$offline.notifyLightSave(this.documentType, this.docId, this.lang);
+        this.$offline.notifyOnlineOnly(this.documentType, this.docId, this.lang);
       }
     },
   },

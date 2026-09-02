@@ -3,7 +3,7 @@
     <header class="offline-header">
       <h1 class="title is-3">
         <fa-icon icon="download" class="has-text-primary" />
-        {{ $gettext('My offline topos') | uppercaseFirstLetter }}
+        {{ $gettext('Mes topos') | uppercaseFirstLetter }}
       </h1>
       <div class="offline-status">
         <span :class="$offline.online ? 'tag is-success is-light' : 'tag is-warning'">
@@ -11,17 +11,6 @@
           &nbsp;{{ $offline.online ? $gettext('Online') : $gettext('Offline') }}
         </span>
         <span v-if="storageLabel" class="storage-info is-size-7 has-text-grey">{{ storageLabel }}</span>
-        <button class="button is-small is-primary" @click="openCreateFolderModal">
-          <fa-icon icon="plus" />&nbsp;{{ $gettext('New folder') }}
-        </button>
-        <button
-          v-if="entries.length"
-          class="button is-small purge-btn"
-          :title="$gettext('Supprimer tous les topos hors-ligne (les brouillons de sortie sont conservés)')"
-          @click="purgeAll"
-        >
-          <fa-icon icon="trash" />&nbsp;<span class="is-hidden-mobile">{{ $gettext('Tout vider') }}</span>
-        </button>
       </div>
       <!-- Storage progress bar (Lot 5): the raw byte count is helpful
            but a percentage-of-quota bar tells the user at a glance
@@ -147,13 +136,63 @@
       </ul>
     </section>
 
-    <div v-if="!entries.length && !$offline.pendingOutings.length" class="empty-state has-text-centered">
+    <!-- "Mes topos" is two independent lists (Sixte, 2026-09-02). The
+         tab you are on is the answer to the only question that matters —
+         does this topo work without a network — so the cards below carry
+         no per-item badge repeating it. Each side has its own folders. -->
+    <div class="offline-tabs tabs is-boxed is-fullwidth">
+      <ul>
+        <li :class="{ 'is-active': activeSection === 'online' }">
+          <a @click="activeSection = 'online'">
+            <fa-icon icon="cloud" />
+            &nbsp;{{ $gettext('En ligne') }}
+            <span class="tag is-light ml-2">{{ onlineEntries.length }}</span>
+          </a>
+        </li>
+        <li :class="{ 'is-active': activeSection === 'offline' }">
+          <a @click="activeSection = 'offline'">
+            <fa-icon icon="circle-check" />
+            &nbsp;{{ $gettext('Hors ligne') }}
+            <span class="tag is-light ml-2">{{ offlineEntries.length }}</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <p class="offline-section-hint has-text-grey is-size-7">
+      {{
+        activeSection === 'offline'
+          ? $gettext('Ces topos sont enregistrés sur cet appareil. Ils s’ouvrent sans réseau.')
+          : $gettext('Ces topos sont enregistrés dans votre compte. Ils ne sont pas accessibles hors ligne.')
+      }}
+    </p>
+
+    <div class="offline-section-toolbar">
+      <button class="button is-small is-primary" @click="openCreateFolderModal">
+        <fa-icon icon="plus" />&nbsp;{{ $gettext('Nouveau dossier') }}
+      </button>
+      <button v-if="sectionEntries.length" class="button is-small purge-btn" :title="purgeTitle" @click="purgeAll">
+        <fa-icon icon="trash" />&nbsp;<span class="is-hidden-mobile">{{ $gettext('Tout vider') }}</span>
+      </button>
+    </div>
+
+    <div v-if="!sectionEntries.length && !$offline.pendingOutings.length" class="empty-state has-text-centered">
       <fa-icon icon="download" size="4x" class="has-text-grey-lighter" />
       <p class="title is-5 mt-4">
-        {{ $gettext('No topos saved for offline use yet.') | uppercaseFirstLetter }}
+        {{
+          (activeSection === 'offline'
+            ? $gettext('Aucun topo enregistré hors ligne.')
+            : $gettext('Aucun topo enregistré en ligne.')) | uppercaseFirstLetter
+        }}
       </p>
       <p class="subtitle is-6 has-text-grey">
-        {{ $gettext('Open a route, waypoint or outing, and tap "Save for offline use" to keep it on this device.') }}
+        {{
+          activeSection === 'offline'
+            ? $gettext(
+                'Depuis un topo enregistré en ligne, touchez « Enregistrer hors ligne » pour l’emporter sur le terrain.'
+              )
+            : $gettext('Ouvrez un itinéraire, un point de passage ou une sortie, puis touchez « Enregistrer ».')
+        }}
       </p>
       <router-link :to="{ name: 'routes' }" class="button is-primary mt-2">
         {{ $gettext('Browse the topoguide') | uppercaseFirstLetter }}
@@ -161,10 +200,10 @@
     </div>
 
     <template v-else>
-      <section v-for="group in groups" :key="group.id || 'unfiled'" class="offline-section">
+      <section v-for="group in groups" :key="activeSection + ':' + (group.id || 'unfiled')" class="offline-section">
         <header class="offline-section-header">
-          <button class="offline-section-toggle" @click="toggleCollapse(group.id || 'unfiled')">
-            <fa-icon :icon="isCollapsed(group.id || 'unfiled') ? 'chevron-right' : 'chevron-down'" fixed-width />
+          <button class="offline-section-toggle" @click="toggleCollapse(collapseKey(group))">
+            <fa-icon :icon="isCollapsed(collapseKey(group)) ? 'chevron-right' : 'chevron-down'" fixed-width />
             <fa-icon :icon="group.id ? 'folder' : 'list'" class="has-text-primary" />
             <span class="offline-section-title">{{ group.name }}</span>
             <span class="tag is-light">{{ group.entries.length }}</span>
@@ -179,7 +218,7 @@
           </div>
         </header>
 
-        <div v-if="!isCollapsed(group.id || 'unfiled')" class="offline-grid">
+        <div v-if="!isCollapsed(collapseKey(group))" class="offline-grid">
           <article v-for="entry in group.entries" :key="entryKey(entry)" class="offline-card">
             <router-link :to="linkTo(entry)" class="offline-card-body">
               <div class="offline-card-icon">
@@ -190,23 +229,6 @@
                 <div class="offline-card-meta">
                   <span class="tag is-light">{{ $gettext(entry.type) }}</span>
                   <span class="tag is-light">{{ entry.lang.toUpperCase() }}</span>
-                  <!-- The single most important thing on this card: can
-                       I open it with no network? A light save cannot show
-                       images or the map, so saying so plainly here is what
-                       stops someone counting on it in the field. -->
-                  <span v-if="isOffline(entry)" class="tag is-small offline-badge-ready">
-                    <fa-icon icon="circle-check" />
-                    &nbsp;{{ $gettext('Hors-ligne') }}
-                  </span>
-                  <span
-                    v-else
-                    class="tag is-small offline-badge-light"
-                    :title="
-                      $gettext('Texte seulement : ni photos ni carte. Téléchargez-le pour l’avoir sur le terrain.')
-                    "
-                  >
-                    {{ $gettext('Texte seul') }}
-                  </span>
                   <!-- Freshness (Lot 5 §2.2): amber if 7-30 d, red past
                        30 d. Only meaningful for a downloaded package —
                        a light save has nothing to go stale. -->
@@ -232,7 +254,7 @@
                 v-if="!isOffline(entry)"
                 class="offline-card-download button is-small is-text"
                 :disabled="isDownloading(entry)"
-                :title="$gettext('Télécharger pour la montagne (photos et carte)')"
+                :title="$gettext('Enregistrer hors ligne')"
                 @click="download(entry)"
               >
                 <fa-icon :icon="isDownloading(entry) ? 'spinner' : 'download'" :spin="isDownloading(entry)" />
@@ -240,7 +262,7 @@
               <button
                 v-else
                 class="offline-card-undownload button is-small is-text"
-                :title="$gettext('Libérer l’espace : garder le topo dans Mes topos, sans photos ni carte')"
+                :title="$gettext('Repasser en ligne : libère l’espace, le topo ne sera plus accessible hors ligne')"
                 @click="undownload(entry)"
               >
                 <fa-icon icon="plug" />
@@ -263,12 +285,12 @@
                 :title="$gettext('Move to folder')"
                 @change="moveToFolder(entry, $event.target.value)"
               >
-                <option value="">{{ $gettext('No folder') }}</option>
-                <option v-for="f in $offline.folders" :key="f.id" :value="f.id">{{ f.name }}</option>
+                <option value="">{{ $gettext('Sans dossier') }}</option>
+                <option v-for="f in sectionFolders" :key="f.id" :value="f.id">{{ f.name }}</option>
               </select>
               <button
                 class="offline-card-remove button is-small is-text"
-                :title="$gettext('Remove from offline use')"
+                :title="$gettext('Retirer de Mes topos')"
                 @click="remove(entry)"
               >
                 <fa-icon icon="trash" />
@@ -320,7 +342,7 @@
         <div v-if="assocOfflineRoutes.length" class="assoc-modal-section">
           <h4 class="assoc-modal-title">
             <fa-icon icon="bookmark" />
-            &nbsp;{{ $gettext('Mes itinéraires hors-ligne') }}
+            &nbsp;{{ $gettext('Mes itinéraires hors ligne') }}
           </h4>
           <ul class="assoc-modal-list">
             <li v-for="route in assocOfflineRoutes" :key="'off-' + route.document_id">
@@ -395,6 +417,7 @@ import ModalWindow from '@/components/generics/modals/ModalWindow';
 import c2c from '@/js/apis/c2c';
 import pullRefreshMixin from '@/js/pull-refresh-mixin';
 import { ageLabel, freshnessOf } from '@/pwa/offline-freshness';
+import { OFFLINE_MODE, ONLINE_MODE } from '@/pwa/offline-store';
 
 const TYPE_ICONS = {
   route: 'route',
@@ -416,6 +439,10 @@ export default {
   data() {
     return {
       storage: null,
+      // Which half of "Mes topos" is showing. Defaults to the online
+      // side: that is where a topo lands when saved, so it is where the
+      // user looks after saving one.
+      activeSection: ONLINE_MODE,
       collapsed: {},
       folderModalMode: 'create',
       folderInputValue: '',
@@ -441,17 +468,45 @@ export default {
       return [...this.$offline.savedDocs].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
     },
 
+    onlineEntries() {
+      return this.entries.filter((entry) => !this.isOffline(entry));
+    },
+
+    offlineEntries() {
+      return this.entries.filter((entry) => this.isOffline(entry));
+    },
+
+    sectionEntries() {
+      return this.activeSection === OFFLINE_MODE ? this.offlineEntries : this.onlineEntries;
+    },
+
+    sectionFolders() {
+      return this.$offline.foldersInSection(this.activeSection);
+    },
+
     groups() {
       const result = [];
-      for (const folder of this.$offline.folders) {
-        const folderEntries = this.entries.filter((entry) => entry.folderId === folder.id);
+      const known = new Set();
+      for (const folder of this.sectionFolders) {
+        known.add(folder.id);
+        const folderEntries = this.sectionEntries.filter((entry) => entry.folderId === folder.id);
         result.push({ id: folder.id, name: folder.name, entries: folderEntries });
       }
-      const unfiled = this.entries.filter((entry) => !entry.folderId);
+      // A folderId pointing outside this section counts as unfiled rather
+      // than hiding the topo. That is what carries pre-section entries
+      // across: their folders all migrated to the offline side, so the
+      // online ones would otherwise reference a folder nothing displays.
+      const unfiled = this.sectionEntries.filter((entry) => !entry.folderId || !known.has(entry.folderId));
       if (unfiled.length || !result.length) {
-        result.push({ id: null, name: this.$gettext('Unfiled'), entries: unfiled });
+        result.push({ id: null, name: this.$gettext('Sans dossier'), entries: unfiled });
       }
       return result;
+    },
+
+    purgeTitle() {
+      return this.activeSection === OFFLINE_MODE
+        ? this.$gettext('Supprimer tous les topos enregistrés hors ligne (les brouillons de sortie sont conservés)')
+        : this.$gettext('Supprimer tous les topos enregistrés en ligne (les brouillons de sortie sont conservés)');
     },
 
     storageLabel() {
@@ -516,9 +571,13 @@ export default {
     },
 
     titleOf(entry) {
+      // An online entry stores no document, only this descriptor.
+      if (entry.meta?.title) {
+        return entry.meta.title;
+      }
       const data = entry.data;
       if (!data) {
-        return this.$gettext('Untitled');
+        return this.$gettext('Sans titre');
       }
       if (data.cooked?.title) {
         return data.cooked.title;
@@ -529,7 +588,7 @@ export default {
           return localeMatch.title;
         }
       }
-      return this.$gettext('Untitled');
+      return this.$gettext('Sans titre');
     },
 
     formatDate(ts) {
@@ -555,6 +614,12 @@ export default {
         unit += 1;
       }
       return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
+    },
+
+    // Section-scoped: the two halves each have an "unfiled" group, and
+    // collapsing one must not collapse the other.
+    collapseKey(group) {
+      return this.activeSection + ':' + (group.id || 'unfiled');
     },
 
     isCollapsed(key) {
@@ -589,13 +654,15 @@ export default {
       if (this.folderModalMode === 'rename' && this.folderBeingRenamed) {
         await this.$offline.renameFolder(this.folderBeingRenamed.id, name);
       } else {
-        await this.$offline.createFolder(name);
+        await this.$offline.createFolder(name, this.activeSection);
       }
       this.$refs.folderModal.hide();
     },
 
     async deleteFolder(folder) {
-      const message = this.$gettext('Delete this folder? The topos inside will be moved to "Unfiled".');
+      const message = this.$gettext(
+        'Supprimer ce dossier ? Les topos qu’il contient repasseront dans « Sans dossier ».'
+      );
       if (!window.confirm(message)) {
         return;
       }
@@ -609,7 +676,7 @@ export default {
     // Mode helpers. A missing mode means a pre-split entry, which was
     // always fully downloaded — see offline-store.listDocuments().
     isOffline(entry) {
-      return (entry.mode ?? 'offline') === 'offline';
+      return (entry.mode ?? OFFLINE_MODE) === OFFLINE_MODE;
     },
     isDownloading(entry) {
       return this.$offline.isDownloading(entry.type, entry.id, entry.lang);
@@ -618,10 +685,15 @@ export default {
     async download(entry) {
       try {
         await this.$offline.downloadForOffline(entry.type, entry.id, entry.lang);
+        // It has just left this list for the other tab, so say where it
+        // went — otherwise the card simply vanishes under the user's
+        // finger. It arrives unfiled: the two sections keep separate
+        // folders, so the one it had here means nothing there.
         toast({
           type: 'is-success',
           position: 'bottom-center',
-          message: this.$gettext('Topo téléchargé : photos et carte disponibles hors-ligne.'),
+          duration: 4500,
+          message: this.$gettext('Enregistré hors ligne. Retrouvez-le dans l’onglet « Hors ligne ».'),
         });
       } catch {
         toast({
@@ -637,17 +709,20 @@ export default {
       if (
         !window.confirm(
           this.$gettext(
-            'Retirer les photos et la carte de ce topo ? Il restera dans Mes topos, lisible en texte, mais ne sera plus complet sans réseau.'
+            'Repasser ce topo en ligne ? Il restera dans Mes topos mais ne sera plus accessible hors ligne.'
           )
         )
       ) {
         return;
       }
       await this.$offline.removeOfflineData(entry.type, entry.id, entry.lang);
+      // Same message as saving from a topo page: one wording for one
+      // fact, wherever the user changes it from.
+      this.$offline.notifyOnlineOnly(entry.type, entry.id, entry.lang);
     },
 
     async remove(entry) {
-      const message = this.$gettext('Remove this topo from offline storage?');
+      const message = this.$gettext('Retirer ce topo de Mes topos ?');
       if (!window.confirm(message)) {
         return;
       }
@@ -756,12 +831,19 @@ export default {
     },
 
     async purgeAll() {
-      const count = this.entries.length;
-      const msg = this.$gettext(
-        'Supprimer les {n} topos hors-ligne ? Les brouillons de sortie non publiés sont conservés.'
+      const count = this.sectionEntries.length;
+      const msg = (
+        this.activeSection === OFFLINE_MODE
+          ? this.$gettext(
+              'Supprimer les {n} topos enregistrés hors ligne ? Les brouillons de sortie non publiés sont conservés.'
+            )
+          : this.$gettext(
+              'Supprimer les {n} topos enregistrés en ligne ? Les brouillons de sortie non publiés sont conservés.'
+            )
       ).replace('{n}', count);
       if (!window.confirm(msg)) return;
-      await this.$offline.purgeAllDocuments();
+      // Scoped to the visible tab — the other list stays untouched.
+      await this.$offline.purgeAllDocuments(this.activeSection);
       this.storage = await this.$offline.getStorageUsage();
     },
 
@@ -843,6 +925,29 @@ export default {
   border: 2px dashed #e5e5e5;
   border-radius: 12px;
   background: #fafafa;
+}
+
+/* The two halves of "Mes topos". The tab is what tells the user
+   whether a topo works without a network, so it has to stay legible
+   at a glance — hence the full-width boxed tabs rather than a filter
+   control tucked into the toolbar. */
+.offline-tabs {
+  margin-bottom: 0.25rem;
+
+  a {
+    align-items: center;
+  }
+}
+
+.offline-section-hint {
+  margin: 0 0 0.75rem;
+}
+
+.offline-section-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
 }
 
 .offline-section {

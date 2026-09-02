@@ -24,5 +24,14 @@
     <span v-translate>xreport</span>
     <span v-translate>waypoint</span>
     <span v-translate>profile</span>
+
+    <!-- Built in JS, outside any template: the "Mes topos" save message
+         raised by $offline.notifyOnlineOnly(). Declared here so the
+         extractor sees them and the wording follows the app language. -->
+    <span v-translate>Enregistré dans « Mes topos en ligne ». Ce topo ne sera pas accessible hors ligne.</span>
+    <span v-translate>Enregistrer hors ligne</span>
+    <span v-translate>Enregistrement…</span>
+    <span v-translate>Enregistré hors ligne ✓</span>
+    <span v-translate>Échec — réessayer</span>
   </span>
 </template>

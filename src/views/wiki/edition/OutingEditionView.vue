@@ -62,7 +62,7 @@
            The V1 upstream flow is otherwise preserved as-is below. -->
       <div v-if="offlineRoutes.length" class="field offline-routes-field">
         <label class="label offline-routes-label">
-          <fa-icon icon="bookmark" />&nbsp;{{ $gettext('Mes itinéraires hors-ligne') }}
+          <fa-icon icon="bookmark" />&nbsp;{{ $gettext('Mes itinéraires hors ligne') }}
           <span class="tag is-light">{{ offlineRoutes.length }}</span>
         </label>
         <div class="offline-routes-list">

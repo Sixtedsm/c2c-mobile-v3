@@ -31,13 +31,13 @@
         <p class="bulk-offline-note">
           {{
             $gettext(
-              'Enregistrement léger : le texte seulement. Téléchargez ensuite depuis Mes topos ceux que vous emportez, pour avoir photos et carte.'
+              'Ces topos seront enregistrés en ligne : ils ne seront pas accessibles hors ligne. Depuis Mes topos, enregistrez hors ligne ceux que vous emportez.'
             )
           }}
         </p>
         <select v-model="selectedFolder" class="bulk-offline-select">
           <option value="">{{ $gettext('Sans dossier') }}</option>
-          <option v-for="f in $offline.folders" :key="f.id" :value="f.id">{{ f.name }}</option>
+          <option v-for="f in onlineFolders" :key="f.id" :value="f.id">{{ f.name }}</option>
           <option value="__new__">{{ $gettext('Nouveau dossier…') }}</option>
         </select>
         <div class="bulk-offline-actions">
@@ -50,6 +50,8 @@
 </template>
 
 <script>
+import { ONLINE_MODE } from '@/pwa/offline-store';
+
 // Bulk-save (#11): tab the currently-displayed listing page into the
 // user's offline store, optionally grouped into a folder. Sequential
 // saves so the device + tile servers don't drown in parallel fetches —
@@ -85,6 +87,12 @@ export default {
     canSave() {
       return SAVABLE_TYPES.has(this.documentType);
     },
+
+    // This picker only ever writes online entries, so it offers the online
+    // section's folders. The offline section keeps its own, separate set.
+    onlineFolders() {
+      return this.$offline.foldersInSection(ONLINE_MODE);
+    },
   },
 
   methods: {
@@ -105,7 +113,7 @@ export default {
         if (!name || !name.trim()) {
           return;
         }
-        folderId = await this.$offline.createFolder(name.trim());
+        folderId = await this.$offline.createFolder(name.trim(), ONLINE_MODE);
       }
       this.showPicker = false;
       await this.runSave(folderId);

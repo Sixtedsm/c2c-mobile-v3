@@ -273,6 +273,20 @@ async function pingReachable() {
   return false;
 }
 
+// The slim descriptor kept for every saved topo, in both states. An
+// online entry holds no document, so this is the only thing its card in
+// "Mes topos" has to work with — and a topo demoted back to online must
+// not degrade into an "Untitled" row.
+function buildMeta(data, lang) {
+  const locales = Array.isArray(data?.locales) ? data.locales : [];
+  const locale = locales.find((l) => l.lang === lang) ?? locales[0] ?? null;
+  return {
+    title: data?.cooked?.title ?? locale?.title ?? null,
+    activities: Array.isArray(data?.activities) ? data.activities : [],
+    elevation: data?.elevation_max ?? data?.elevation ?? null,
+  };
+}
+
 export default function install(Vue) {
   const vm = new Vue({
     name: 'OfflinePlugin',
@@ -306,9 +320,10 @@ export default function install(Vue) {
       offlineDocs() {
         return this.savedDocs.filter((e) => e.mode === store.OFFLINE_MODE);
       },
-      // Everything saved but not downloaded — the trip-planning list.
-      savedOnlyDocs() {
-        return this.savedDocs.filter((e) => e.mode === store.SAVED_MODE);
+      // "Mes topos en ligne": saved for later, but needing a network to
+      // open. The trip-planning list.
+      onlineDocs() {
+        return this.savedDocs.filter((e) => e.mode === store.ONLINE_MODE);
       },
     },
 
@@ -467,7 +482,7 @@ export default function install(Vue) {
       // the outing form unusable. The trade-off is that a bookmark no
       // longer means "ready for the mountain", so every surface showing
       // a saved topo has to make the difference obvious.
-      async saveDocument({ type, id, lang, folderId = null, mode = store.SAVED_MODE }) {
+      async saveDocument({ type, id, lang, folderId = null, mode = store.ONLINE_MODE }) {
         const key = `${type}/${id}/${lang}`;
         if (this.downloading.has(key)) {
           return;
@@ -479,7 +494,10 @@ export default function install(Vue) {
             throw new Error(`Unknown document type: ${type}`);
           }
           const { data } = await service.getCooked(id, lang);
-          await store.saveDocument({ type, id, lang, data, folderId, mode });
+          // The descriptor is stored in both states. An online entry has
+          // no payload to draw its card from, and a topo demoted back to
+          // online later must not turn into an "Untitled" row.
+          await store.saveDocument({ type, id, lang, data, meta: buildMeta(data, lang), folderId, mode });
           if (mode === store.OFFLINE_MODE) {
             await this.prefetchOfflineAssets(data, lang, folderId);
           }
@@ -551,8 +569,8 @@ export default function install(Vue) {
         }
       },
 
-      // Tell the user, at the moment of the gesture, that a bookmark no
-      // longer means "ready for the mountain".
+      // Tell the user, at the moment of the gesture, that saving a topo
+      // does not make it available without a network.
       //
       // This runs on a single user-initiated save only — never on the
       // bulk page save or a day pack, where one toast per document would
@@ -562,28 +580,34 @@ export default function install(Vue) {
       //
       // bulma-toast renders an HTMLElement message as-is, which is what
       // lets the button be real rather than a link we cannot wire.
-      notifyLightSave(type, id, lang) {
+      notifyOnlineOnly(type, id, lang) {
         if (typeof document === 'undefined') return;
+        const t = typeof this.$gettext === 'function' ? this.$gettext.bind(this) : (m) => m;
         const box = document.createElement('div');
         box.className = 'light-save-toast';
 
+        // Deliberately states one thing only (Sixte, 2026-09-02). The
+        // earlier wording enumerated what was missing — no photos, no
+        // map, text kept — and readers took "text is kept" to mean "it
+        // works offline". The single fact below is what matters; the
+        // button right under it is how you change that fact.
         const line = document.createElement('span');
-        line.textContent = 'Enregistré dans Mes topos — texte seul, sans photos ni carte.';
+        line.textContent = t('Enregistré dans « Mes topos en ligne ». Ce topo ne sera pas accessible hors ligne.');
         box.appendChild(line);
 
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'light-save-toast-btn';
-        btn.textContent = 'Télécharger pour la montagne';
+        btn.textContent = t('Enregistrer hors ligne');
         btn.addEventListener('click', async () => {
           btn.disabled = true;
-          btn.textContent = 'Téléchargement…';
+          btn.textContent = t('Enregistrement…');
           try {
             await this.downloadForOffline(type, id, lang);
-            btn.textContent = 'Disponible hors-ligne ✓';
+            btn.textContent = t('Enregistré hors ligne ✓');
           } catch {
             btn.disabled = false;
-            btn.textContent = 'Échec — réessayer';
+            btn.textContent = t('Échec — réessayer');
           }
         });
         box.appendChild(btn);
@@ -601,17 +625,21 @@ export default function install(Vue) {
         });
       },
 
-      // Promote a saved topo to a full offline package. Re-fetches the
-      // document on the way, so a topo saved months ago also comes back
-      // up to date. Keeps whatever folder it was already filed under.
+      // Promote a topo to a full offline package. Re-fetches the document
+      // on the way, so one saved months ago also comes back up to date.
+      //
+      // It arrives unfiled: the two sections keep independent folder sets
+      // (Sixte, 2026-09-02), so the folder it had among the online topos
+      // means nothing on the offline side. Filing it there is the user's
+      // call — and carrying the id over would point at a folder the
+      // offline section does not display.
       async downloadForOffline(type, id, lang) {
-        const entry = this.savedDocs.find((e) => e.type === type && String(e.id) === String(id) && e.lang === lang);
-        return this.saveDocument({ type, id, lang, folderId: entry?.folderId ?? null, mode: store.OFFLINE_MODE });
+        return this.saveDocument({ type, id, lang, folderId: null, mode: store.OFFLINE_MODE });
       },
 
-      // Demote back to a light entry: the topo stays in "Mes topos" and
-      // stays readable as text, it just no longer claims to be ready for
-      // the mountain.
+      // Demote back to an online entry: the topo stays in "Mes topos",
+      // moving to the online section, and needs a network again. As with
+      // the promotion, it arrives unfiled on the other side.
       //
       // Honest limitation: images already pulled into the service-worker
       // cache are not evicted here. Cache Storage has no per-document
@@ -619,7 +647,7 @@ export default function install(Vue) {
       // URL would risk breaking a sibling. That space is reclaimed by the
       // SW cache policy, not by this call.
       async removeOfflineData(type, id, lang) {
-        await store.setDocumentMode(type, id, lang, store.SAVED_MODE);
+        await store.setDocumentMode(type, id, lang, store.ONLINE_MODE);
         await this.refresh();
       },
 
@@ -641,11 +669,17 @@ export default function install(Vue) {
         return true;
       },
 
-      async createFolder(name) {
+      // section is ONLINE_MODE or OFFLINE_MODE — folders are per-section
+      // and never shared between the two halves of "Mes topos".
+      async createFolder(name, section = store.OFFLINE_MODE) {
         const id = `f_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        await store.saveFolder({ id, name });
+        await store.saveFolder({ id, name, section });
         await this.refresh();
         return id;
+      },
+
+      foldersInSection(section) {
+        return this.folders.filter((f) => f.section === section);
       },
 
       async renameFolder(id, name) {
@@ -709,13 +743,17 @@ export default function install(Vue) {
         return store.estimateUsage();
       },
 
-      // Purge every saved document + folder. Pending outings are left
-      // alone on purpose: they represent unsync'd user data and losing
-      // them silently would be a real data-loss regression. If the user
-      // wants to drop those too, they can discard each pending item
+      // Purge saved documents + folders. With no argument it clears both
+      // sections; passing one clears just that half, which is what the
+      // "Tout vider" button in "Mes topos" does — it sits under a tab, so
+      // it must not touch the list the user cannot see.
+      //
+      // Pending outings are left alone on purpose: they represent unsync'd
+      // user data and losing them silently would be a real data-loss
+      // regression. The user can discard each pending item individually
       // from the OfflineView list.
-      async purgeAllDocuments() {
-        const docs = this.savedDocs.slice();
+      async purgeAllDocuments(section = null) {
+        const docs = this.savedDocs.filter((d) => !section || d.mode === section);
         for (const d of docs) {
           try {
             await store.deleteDocument(d.type, d.id, d.lang);
@@ -723,7 +761,7 @@ export default function install(Vue) {
             /* keep going — one failure shouldn't halt the purge */
           }
         }
-        const folders = this.folders.slice();
+        const folders = this.folders.filter((f) => !section || f.section === section);
         for (const f of folders) {
           try {
             await store.deleteFolder(f.id);

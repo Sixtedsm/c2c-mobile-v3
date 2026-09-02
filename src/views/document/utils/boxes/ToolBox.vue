@@ -45,9 +45,7 @@
       @click="downloadOffline"
       :icon="isDownloadingOffline ? 'circle-notch' : 'download'"
       :icon-class="isDownloadingOffline ? 'fa-spin' : null"
-      :label="
-        isDownloadingOffline ? $gettext('Téléchargement…') : $gettext('Télécharger pour la montagne (photos, carte)')
-      "
+      :label="isDownloadingOffline ? $gettext('Enregistrement…') : $gettext('Enregistrer hors ligne')"
     />
 
     <!-- Pack "sortie du jour" (CDC §2.2): one-tap bundle of the route +
@@ -448,11 +446,9 @@ export default {
         return this.$gettext('Enregistrement…');
       }
       if (this.isOfflineReady) {
-        return this.$gettext('Disponible hors-ligne');
+        return this.$gettext('Enregistré hors ligne');
       }
-      return this.isSavedOffline
-        ? this.$gettext('Enregistré dans Mes topos (texte seul)')
-        : this.$gettext('Enregistrer dans Mes topos');
+      return this.isSavedOffline ? this.$gettext('Enregistré en ligne') : this.$gettext('Enregistrer dans Mes topos');
     },
 
     canSaveDayPack() {
@@ -519,7 +515,7 @@ export default {
           this.offlineDocId,
           this.offlineLang,
           this.isOfflineReady
-            ? this.$gettext("Retirer ce topo de Mes topos ? Vous ne pourrez plus l'ouvrir sans réseau.")
+            ? this.$gettext('Retirer ce topo de Mes topos ? Vous ne pourrez plus l’ouvrir hors ligne.')
             : this.$gettext('Retirer ce topo de Mes topos ?')
         );
       } else {
@@ -528,7 +524,7 @@ export default {
           id: this.offlineDocId,
           lang: this.offlineLang,
         });
-        this.$offline.notifyLightSave(this.documentType, this.offlineDocId, this.offlineLang);
+        this.$offline.notifyOnlineOnly(this.documentType, this.offlineDocId, this.offlineLang);
       }
     },
 

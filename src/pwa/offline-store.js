@@ -6,50 +6,85 @@ const folderKey = (folderId) => `folder:${folderId}`;
 const isDocKey = (key) => typeof key === 'string' && key.startsWith('doc:');
 const isFolderKey = (key) => typeof key === 'string' && key.startsWith('folder:');
 
-// Two kinds of saved entry:
-//   'saved'   — the document JSON only. Light (tens of KB), readable
-//               offline as text, but no images and no map tiles.
-//   'offline' — the full package: JSON + embedded images + gallery
+// A saved topo is in exactly one of two states, and the whole point of
+// the split is that the difference is unambiguous:
+//
+//   'online'  — a bookmark. Only the slim descriptor needed to draw its
+//               card is kept; opening the topo needs the network.
+//   'offline' — the full package: document + embedded images + gallery
 //               variants + surrounding map tiles. Megabytes, and what
 //               you actually want in your pocket on the mountain.
-// Entries written before this distinction existed carry no `mode` and
-// were always fully downloaded, so listDocuments() reads them as
-// 'offline'. Never default a missing mode to 'saved': that would tell
-// a user their topo is text-only when it is in fact complete.
-export const SAVED_MODE = 'saved';
+//
+// Stored values are migrated on read, in listDocuments():
+//   - no mode at all → 'offline'. Those pre-date the split and were
+//     always fully downloaded; reading them as bookmarks would tell a
+//     user their topo is unavailable when it is in fact complete.
+//   - 'saved' → 'online'. Short-lived intermediate name, same meaning.
+export const ONLINE_MODE = 'online';
 export const OFFLINE_MODE = 'offline';
+const LEGACY_SAVED_MODE = 'saved';
 
-export async function saveDocument({ type, id, lang, data, folderId = null, mode = OFFLINE_MODE }) {
+function normaliseMode(mode) {
+  if (!mode) {
+    return OFFLINE_MODE;
+  }
+  return mode === LEGACY_SAVED_MODE ? ONLINE_MODE : mode;
+}
+
+export async function saveDocument({ type, id, lang, data, meta = null, folderId = null, mode = OFFLINE_MODE }) {
   const previous = await get(docKey(type, id, lang));
+  const isOffline = mode === OFFLINE_MODE;
   await set(docKey(type, id, lang), {
     type,
     id,
     lang,
-    data,
+    // An online entry stores no document. Keeping one would leave the
+    // topo partly readable without a network, which is precisely the
+    // ambiguity the two states exist to remove.
+    data: isOffline ? data : null,
+    // …but its card still has to render with no network, so a slim
+    // descriptor travels separately from the content it describes.
+    meta: meta ?? previous?.meta ?? null,
     folderId,
     mode,
     savedAt: previous?.savedAt ?? Date.now(),
     // Only a full download refreshes this. It is what the freshness
-    // badge reads, and a light save must not make a stale package
-    // look freshly downloaded.
-    downloadedAt: mode === OFFLINE_MODE ? Date.now() : previous?.downloadedAt ?? null,
+    // badge reads, and a bookmark must not make a stale package look
+    // freshly downloaded.
+    downloadedAt: isOffline ? Date.now() : previous?.downloadedAt ?? null,
   });
 }
 
-// Flip an entry between the two modes without touching its payload or
-// its folder. Returns false when the document is not saved at all.
+// Flip an entry between the two states. Folders are per-section, so a
+// topo that changes state leaves its folder and lands unfiled on the
+// other side — filing it there again is the user's call.
 export async function setDocumentMode(type, id, lang, mode) {
   const entry = await get(docKey(type, id, lang));
   if (!entry) return false;
   entry.mode = mode;
-  if (mode === OFFLINE_MODE) entry.downloadedAt = Date.now();
+  entry.folderId = null;
+  if (mode === OFFLINE_MODE) {
+    entry.downloadedAt = Date.now();
+  } else {
+    // Leaving offline means the payload is no longer promised.
+    entry.data = null;
+  }
   await set(docKey(type, id, lang), entry);
   return true;
 }
 
 export async function getDocument(type, id, lang) {
   const entry = await get(docKey(type, id, lang));
-  return entry?.data ?? null;
+  if (!entry) {
+    return null;
+  }
+  // An online entry promises nothing without a network. Refuse it here
+  // rather than at each call site, so that a legacy row still carrying a
+  // payload cannot make one topo behave differently from another.
+  if (normaliseMode(entry.mode) === ONLINE_MODE) {
+    return null;
+  }
+  return entry.data ?? null;
 }
 
 export async function hasDocument(type, id, lang) {
@@ -65,7 +100,7 @@ export async function listDocuments() {
   const docKeys = allKeys.filter(isDocKey);
   const entries = await Promise.all(docKeys.map((k) => get(k)));
   // Normalise legacy entries in one place so no consumer has to guess.
-  return entries.filter(Boolean).map((e) => (e.mode ? e : { ...e, mode: OFFLINE_MODE }));
+  return entries.filter(Boolean).map((e) => ({ ...e, mode: normaliseMode(e.mode) }));
 }
 
 export async function setDocumentFolder(type, id, lang, folderId) {
@@ -77,8 +112,17 @@ export async function setDocumentFolder(type, id, lang, folderId) {
   await set(docKey(type, id, lang), entry);
 }
 
-export async function saveFolder({ id, name }) {
-  await set(folderKey(id), { id, name, createdAt: Date.now() });
+// Folders belong to one section. "Mes topos en ligne" and "Mes topos
+// hors ligne" are organised independently, so a folder created on one
+// side never appears on the other. A rename keeps the original section.
+export async function saveFolder({ id, name, section = OFFLINE_MODE }) {
+  const previous = await get(folderKey(id));
+  await set(folderKey(id), {
+    id,
+    name,
+    section: previous?.section ?? section,
+    createdAt: previous?.createdAt ?? Date.now(),
+  });
 }
 
 export async function deleteFolder(folderId) {
@@ -99,7 +143,10 @@ export async function deleteFolder(folderId) {
 export async function listFolders() {
   const allKeys = await keys();
   const folderKeys = allKeys.filter(isFolderKey);
-  return Promise.all(folderKeys.map((k) => get(k)));
+  const folders = await Promise.all(folderKeys.map((k) => get(k)));
+  // Folders created before sections existed held downloaded topos —
+  // back then everything was downloaded — so they belong offline.
+  return folders.filter(Boolean).map((f) => (f.section ? f : { ...f, section: OFFLINE_MODE }));
 }
 
 export async function estimateUsage() {

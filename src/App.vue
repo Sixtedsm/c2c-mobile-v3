@@ -1047,7 +1047,7 @@ html[data-shell='desktop'] {
   }
 }
 
-// Light-save toast (see $offline.notifyLightSave). bulma-toast appends
+// Light-save toast (see $offline.notifyOnlineOnly). bulma-toast appends
 // its nodes to a container on <body>, outside every component scope, so
 // these rules have to be global.
 .light-save-toast {

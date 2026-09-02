@@ -82,9 +82,7 @@ export default {
         {
           icon: 'bars',
           title: this.$gettext('Naviguer'),
-          text: this.$gettext(
-            'Cinq onglets en bas : Recherche, Récent, Mes topos hors-ligne, Moi et Plus pour le reste.'
-          ),
+          text: this.$gettext('Cinq onglets en bas : Recherche, Récent, Mes topos, Moi et Plus pour le reste.'),
         },
         {
           icon: 'bookmark',

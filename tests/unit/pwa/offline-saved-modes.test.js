@@ -1,15 +1,22 @@
-// "Saved" vs "offline" — the two ways a topo can live in Mes topos.
+// "En ligne" vs "hors ligne" — the two halves of Mes topos.
 //
 // Sixte, 2026-09-02: saving a topo used to always download the whole
 // package (images + ~250 map tiles), which filled storage and made the
-// offline-route picker on the outing form unusable. A plain save is now
-// light by default and the full download is an explicit second step.
+// offline-route picker on the outing form unusable. Saving is now a
+// bookmark and the download is an explicit second step.
 //
-// The riskiest part of that change is not the new behaviour but the old
-// data: every topo saved before this existed carries no `mode` and is in
-// fact fully downloaded. Reading those as light saves would tell a user
-// their topo is text-only when it is complete — right before they walk
-// out of network coverage. The legacy test below guards exactly that.
+// The distinction is only worth anything if it is absolute, so two
+// invariants are load-bearing here and both are tested below:
+//
+//   1. An online entry keeps NO document. The message shown at save time
+//      promises one thing — "ce topo ne sera pas accessible hors ligne" —
+//      and a stored payload would quietly make that false.
+//   2. Legacy rows stay trustworthy. Every topo saved before modes
+//      existed carries no `mode` and is in fact fully downloaded.
+//      Reading those as bookmarks would tell a user their topo is
+//      unavailable right before they walk out of network coverage.
+//
+// Folders are per-section, so a topo changing side arrives unfiled.
 
 import Vue from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,7 +31,7 @@ vi.mock('bulma-toast', () => ({ toast: vi.fn() }));
 // pipeline has something to chew on when it does run.
 const cookedDoc = {
   document_id: 123,
-  cooked: { description: '<img src="https://media.example.test/photo.jpg">' },
+  cooked: { title: 'Voie normale', description: '<img src="https://media.example.test/photo.jpg">' },
   associations: { images: [{ document_id: 9, filename: 'x.jpg' }] },
   geometry: {
     geom_detail: JSON.stringify({
@@ -70,20 +77,36 @@ beforeEach(async () => {
   for (const d of await store.listDocuments()) {
     await store.deleteDocument(d.type, d.id, d.lang);
   }
+  for (const f of await store.listFolders()) {
+    await store.deleteFolder(f.id);
+  }
 });
 
-describe('saving is light by default', () => {
-  it('stores the document without fetching any asset', async () => {
+describe('saving puts a topo online, not offline', () => {
+  it('stores no document and fetches no asset', async () => {
     const vm = mount();
     await vm.saveDocument({ type: 'route', id: 123, lang: 'fr' });
 
     const entries = await store.listDocuments();
     expect(entries).toHaveLength(1);
-    expect(entries[0].mode).toBe(store.SAVED_MODE);
-    // The text is still there — a light save is readable offline.
-    expect(entries[0].data).toEqual(cookedDoc);
-    // …but nothing heavy was pulled: no image, no map tile.
+    expect(entries[0].mode).toBe(store.ONLINE_MODE);
+    // The whole promise of the save-time message. Keeping the payload
+    // would leave the topo half-readable with no network, which is the
+    // ambiguity the two sections exist to remove.
+    expect(entries[0].data).toBeFalsy();
+    expect(await vm.getDocument('route', 123, 'fr')).toBeNull();
+    // …and nothing heavy was pulled: no image, no map tile.
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps enough metadata to draw the card', async () => {
+    const vm = mount();
+    await vm.saveDocument({ type: 'route', id: 123, lang: 'fr' });
+
+    const entry = (await store.listDocuments())[0];
+    // Without this the entry has no document and no descriptor, so its
+    // row in Mes topos degrades to "Sans titre".
+    expect(entry.meta.title).toBe('Voie normale');
   });
 
   it('downloads the full package when offline mode is asked for', async () => {
@@ -93,13 +116,14 @@ describe('saving is light by default', () => {
     const entry = (await store.listDocuments()).find((e) => e.type === 'route');
     expect(entry.mode).toBe(store.OFFLINE_MODE);
     expect(entry.downloadedAt).toBeTruthy();
+    expect(entry.data).toEqual(cookedDoc);
     // Embedded image + gallery variants + map tiles all go through fetch.
     expect(fetchSpy.mock.calls.length).toBeGreaterThan(1);
   });
 });
 
 describe('legacy entries stay trustworthy', () => {
-  it('reads a pre-mode entry as fully downloaded, never as a light save', async () => {
+  it('reads a pre-mode entry as fully downloaded, never as a bookmark', async () => {
     // Exactly what the store wrote before modes existed.
     const { set } = await import('idb-keyval');
     await set('doc:route/999/fr', {
@@ -119,18 +143,48 @@ describe('legacy entries stay trustworthy', () => {
     await vm.refresh();
     // The promise the user relies on in the field must hold.
     expect(vm.isOfflineReady('route', 999, 'fr')).toBe(true);
+    expect(await vm.getDocument('route', 999, 'fr')).toEqual(cookedDoc);
+  });
+
+  it('reads the short-lived saved mode as online', async () => {
+    const { set } = await import('idb-keyval');
+    await set('doc:route/998/fr', {
+      type: 'route',
+      id: 998,
+      lang: 'fr',
+      data: cookedDoc,
+      folderId: null,
+      mode: 'saved',
+      savedAt: Date.now(),
+    });
+
+    const entry = (await store.listDocuments()).find((e) => String(e.id) === '998');
+    expect(entry.mode).toBe(store.ONLINE_MODE);
+    // Even though the row still carries a payload, an online entry must
+    // not serve one — otherwise one topo behaves unlike its neighbour.
+    expect(await store.getDocument('route', 998, 'fr')).toBeNull();
+  });
+
+  it('files a folder created before sections existed on the offline side', async () => {
+    const { set } = await import('idb-keyval');
+    await set('folder:legacy1', { id: 'legacy1', name: 'Chartreuse', createdAt: Date.now() });
+
+    const folders = await store.listFolders();
+    // Back then everything in a folder was downloaded, so that is where
+    // those folders belong.
+    expect(folders.find((f) => f.id === 'legacy1').section).toBe(store.OFFLINE_MODE);
   });
 });
 
 describe('the outing form only offers mountain-ready topos', () => {
-  it('keeps light saves out of offlineDocs', async () => {
+  it('keeps online saves out of offlineDocs', async () => {
     const vm = mount();
     await vm.saveDocument({ type: 'route', id: 123, lang: 'fr' });
     await vm.refresh();
 
     expect(vm.savedDocs).toHaveLength(1);
     expect(vm.offlineDocs).toHaveLength(0);
-    expect(vm.savedOnlyDocs).toHaveLength(1);
+    expect(vm.onlineDocs).toHaveLength(1);
     expect(vm.isSaved('route', 123, 'fr')).toBe(true);
     expect(vm.isOfflineReady('route', 123, 'fr')).toBe(false);
   });
@@ -144,10 +198,10 @@ describe('a refresh must not silently demote a downloaded topo', () => {
     expect(vm.isOfflineReady('route', 123, 'fr')).toBe(true);
 
     // What OfflineView's "rafraîchir" button does. Because saveDocument
-    // now defaults to a light save, omitting the mode here would strip
-    // the images and the map from a topo the user believes is ready —
-    // and they would only find out with no signal.
-    await vm.saveDocument({ type: 'route', id: 123, lang: 'fr', mode: 'offline' });
+    // defaults to an online save, omitting the mode here would strip the
+    // images and the map from a topo the user believes is ready — and
+    // they would only find out with no signal.
+    await vm.saveDocument({ type: 'route', id: 123, lang: 'fr', mode: store.OFFLINE_MODE });
     await vm.refresh();
 
     expect(vm.isOfflineReady('route', 123, 'fr')).toBe(true);
@@ -155,7 +209,7 @@ describe('a refresh must not silently demote a downloaded topo', () => {
 });
 
 describe('promoting and demoting', () => {
-  it('downloadForOffline turns a light save into a full package', async () => {
+  it('downloadForOffline turns an online save into a full package', async () => {
     const vm = mount();
     await vm.saveDocument({ type: 'route', id: 123, lang: 'fr' });
     await vm.refresh();
@@ -166,24 +220,28 @@ describe('promoting and demoting', () => {
 
     expect(vm.isOfflineReady('route', 123, 'fr')).toBe(true);
     expect(vm.offlineDocs).toHaveLength(1);
+    // The payload only exists once the topo is genuinely downloaded.
+    expect(await vm.getDocument('route', 123, 'fr')).toEqual(cookedDoc);
   });
 
-  it('downloadForOffline keeps the topo in its folder', async () => {
+  it('downloadForOffline drops the online folder — the sections are separate', async () => {
     const vm = mount();
-    const folderId = await vm.createFolder('Projets 2026');
+    const folderId = await vm.createFolder('Préparation sortie du 12', store.ONLINE_MODE);
     await vm.saveDocument({ type: 'route', id: 123, lang: 'fr', folderId });
     await vm.refresh();
 
     await vm.downloadForOffline('route', 123, 'fr');
     await vm.refresh();
 
-    const entry = vm.savedDocs.find((e) => e.type === 'route');
-    expect(entry.folderId).toBe(folderId);
+    // Carrying the id over would file the topo under a folder the offline
+    // section does not display, so it would vanish from both lists.
+    expect(vm.savedDocs.find((e) => e.type === 'route').folderId).toBeNull();
   });
 
-  it('removeOfflineData demotes without losing the topo or its text', async () => {
+  it('removeOfflineData sends the topo back online, unfiled and unreadable', async () => {
     const vm = mount();
-    await vm.saveDocument({ type: 'route', id: 123, lang: 'fr', mode: store.OFFLINE_MODE });
+    const folderId = await vm.createFolder('Voyage en Argentine', store.OFFLINE_MODE);
+    await vm.saveDocument({ type: 'route', id: 123, lang: 'fr', folderId, mode: store.OFFLINE_MODE });
     await vm.refresh();
 
     await vm.removeOfflineData('route', 123, 'fr');
@@ -191,8 +249,55 @@ describe('promoting and demoting', () => {
 
     expect(vm.isSaved('route', 123, 'fr')).toBe(true);
     expect(vm.isOfflineReady('route', 123, 'fr')).toBe(false);
-    // Demoting must not throw the document away — the entry is still
-    // readable as text and still filed where the user put it.
-    expect(await vm.getDocument('route', 123, 'fr')).toEqual(cookedDoc);
+    // Demoting drops the payload: the topo is now exactly as available as
+    // any other online entry, which is what its section claims.
+    expect(await vm.getDocument('route', 123, 'fr')).toBeNull();
+    expect(vm.savedDocs.find((e) => e.type === 'route').folderId).toBeNull();
+    // …but the card still has a title.
+    expect(vm.savedDocs.find((e) => e.type === 'route').meta.title).toBe('Voie normale');
+  });
+});
+
+describe('folders belong to one section', () => {
+  it('never shows a folder on the other side', async () => {
+    const vm = mount();
+    const onlineId = await vm.createFolder('Mes sorties favorites', store.ONLINE_MODE);
+    const offlineId = await vm.createFolder('Voyage en Argentine', store.OFFLINE_MODE);
+    await vm.refresh();
+
+    expect(vm.foldersInSection(store.ONLINE_MODE).map((f) => f.id)).toEqual([onlineId]);
+    expect(vm.foldersInSection(store.OFFLINE_MODE).map((f) => f.id)).toEqual([offlineId]);
+  });
+
+  it('keeps a folder in its section when renamed', async () => {
+    const vm = mount();
+    const id = await vm.createFolder('Brouillon', store.ONLINE_MODE);
+    await vm.renameFolder(id, 'Préparation sortie du 12, 13, 14');
+    await vm.refresh();
+
+    const folder = vm.foldersInSection(store.ONLINE_MODE).find((f) => f.id === id);
+    expect(folder.name).toBe('Préparation sortie du 12, 13, 14');
+    expect(vm.foldersInSection(store.OFFLINE_MODE)).toHaveLength(0);
+  });
+});
+
+describe('emptying one section leaves the other alone', () => {
+  it('purges only the section it was given', async () => {
+    const vm = mount();
+    await vm.createFolder('Dossier en ligne', store.ONLINE_MODE);
+    await vm.createFolder('Dossier hors ligne', store.OFFLINE_MODE);
+    await vm.saveDocument({ type: 'route', id: 123, lang: 'fr' });
+    await vm.saveDocument({ type: 'route', id: 456, lang: 'fr', mode: store.OFFLINE_MODE });
+    await vm.refresh();
+    expect(vm.savedDocs).toHaveLength(2);
+
+    // "Tout vider" sits under a tab, so it must not touch the list the
+    // user cannot see.
+    await vm.purgeAllDocuments(store.ONLINE_MODE);
+
+    expect(vm.onlineDocs).toHaveLength(0);
+    expect(vm.offlineDocs).toHaveLength(1);
+    expect(vm.foldersInSection(store.ONLINE_MODE)).toHaveLength(0);
+    expect(vm.foldersInSection(store.OFFLINE_MODE)).toHaveLength(1);
   });
 });
