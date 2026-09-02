@@ -296,6 +296,18 @@
     <!-- TODO where is that ??
             <form-field :document="document" :field="fields.summary"/>
         -->
+    <!-- CDC §4.4. Placed at the end of the form, next to the moment of
+         publishing: the question it answers is "is this ready to go out",
+         which nobody asks before filling anything in. -->
+    <div class="outing-preview-action">
+      <button type="button" class="button is-fullwidth outing-preview-btn" @click="openPreview">
+        <fa-icon icon="eye" />
+        &nbsp;{{ $gettext('Prévisualiser la sortie') }}
+      </button>
+    </div>
+
+    <outing-preview-modal v-if="document" ref="previewModal" :document="document" :lang="previewLang" />
+
     <cotometer-window ref="cotometerWindow" v-if="document" v-model="document.ski_rating" />
   </edition-container>
 </template>
@@ -304,6 +316,7 @@
 import { toast } from 'bulma-toast';
 
 import CotometerWindow from './utils/CotometerWindow';
+import OutingPreviewModal from './utils/OutingPreviewModal';
 import documentEditionViewMixin from './utils/document-edition-view-mixin';
 
 import c2c from '@/js/apis/c2c';
@@ -311,7 +324,7 @@ import ol from '@/js/libs/ol';
 import { splitOnGaps } from '@/pwa/trace-segments';
 
 export default {
-  components: { CotometerWindow },
+  components: { CotometerWindow, OutingPreviewModal },
 
   mixins: [documentEditionViewMixin],
 
@@ -351,6 +364,13 @@ export default {
   },
 
   computed: {
+    // The mixin reads the language off the route, which has no lang
+    // param on the creation form. Falling back keeps the preview working
+    // for a brand-new outing — the case it is most useful in.
+    previewLang() {
+      return this.lang || this.document?.locales?.[0]?.lang || this.$user?.lang || this.$language?.current || 'fr';
+    },
+
     initialExtent() {
       if (this.$route.query.initial_bbox) {
         return this.$route.query.initial_bbox.split(',').map(parseFloat);
@@ -419,6 +439,10 @@ export default {
   },
 
   methods: {
+    openPreview() {
+      this.$refs.previewModal?.show();
+    },
+
     afterLoad() {
       this.showBothDates = this.document.date_start !== this.document.date_end;
       this.hydrateFromOutingSession();
@@ -692,6 +716,15 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+.outing-preview-action {
+  margin: 1.5rem 0 0.5rem;
+}
+
+.outing-preview-btn {
+  border-color: rgba(255, 153, 51, 0.6);
+  color: #b35c00;
+}
+
 .offline-routes-field {
   margin-top: 1rem;
   padding: 0.75rem;
