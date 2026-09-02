@@ -1047,6 +1047,38 @@ html[data-shell='desktop'] {
   }
 }
 
+// Light-save toast (see $offline.notifyLightSave). bulma-toast appends
+// its nodes to a container on <body>, outside every component scope, so
+// these rules have to be global.
+.light-save-toast {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  text-align: left;
+  max-width: 20rem;
+  line-height: 1.35;
+}
+.light-save-toast-btn {
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+  }
+  &:disabled {
+    opacity: 0.75;
+    cursor: default;
+  }
+}
+
 // HomeView "Dashboard / Activity feed" toggle (V1 HomeView.vue) —
 // on narrow columns the flex container's `justify-content:
 // space-between` shrinks the toggle label enough that its two

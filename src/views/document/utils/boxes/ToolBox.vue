@@ -528,6 +528,7 @@ export default {
           id: this.offlineDocId,
           lang: this.offlineLang,
         });
+        this.$offline.notifyLightSave(this.documentType, this.offlineDocId, this.offlineLang);
       }
     },
 

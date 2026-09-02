@@ -149,6 +149,9 @@ export default {
           id: this.docId,
           lang: this.lang,
         });
+        // Saving is light by default now, so say it here rather than let
+        // the user discover it with no signal on a ridge.
+        this.$offline.notifyLightSave(this.documentType, this.docId, this.lang);
       }
     },
   },

@@ -551,6 +551,56 @@ export default function install(Vue) {
         }
       },
 
+      // Tell the user, at the moment of the gesture, that a bookmark no
+      // longer means "ready for the mountain".
+      //
+      // This runs on a single user-initiated save only — never on the
+      // bulk page save or a day pack, where one toast per document would
+      // be noise. It carries the download action itself: the second step
+      // is the whole point of the split, so making the user go hunt for
+      // it elsewhere would just trade one confusion for another.
+      //
+      // bulma-toast renders an HTMLElement message as-is, which is what
+      // lets the button be real rather than a link we cannot wire.
+      notifyLightSave(type, id, lang) {
+        if (typeof document === 'undefined') return;
+        const box = document.createElement('div');
+        box.className = 'light-save-toast';
+
+        const line = document.createElement('span');
+        line.textContent = 'Enregistré dans Mes topos — texte seul, sans photos ni carte.';
+        box.appendChild(line);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'light-save-toast-btn';
+        btn.textContent = 'Télécharger pour la montagne';
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          btn.textContent = 'Téléchargement…';
+          try {
+            await this.downloadForOffline(type, id, lang);
+            btn.textContent = 'Disponible hors-ligne ✓';
+          } catch {
+            btn.disabled = false;
+            btn.textContent = 'Échec — réessayer';
+          }
+        });
+        box.appendChild(btn);
+
+        toast({
+          message: box,
+          type: 'is-info',
+          position: 'bottom-center',
+          // Long enough to read the line and reach the button on a phone.
+          duration: 8000,
+          dismissible: true,
+          // Otherwise tapping the button also dismisses the toast and the
+          // user never sees whether the download worked.
+          closeOnClick: false,
+        });
+      },
+
       // Promote a saved topo to a full offline package. Re-fetches the
       // document on the way, so a topo saved months ago also comes back
       // up to date. Keeps whatever folder it was already filed under.
