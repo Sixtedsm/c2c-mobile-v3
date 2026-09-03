@@ -3,10 +3,13 @@
     <button type="button" class="outing-session-banner-btn" @click="goToTopo">
       <span
         class="outing-session-banner-dot"
-        :class="{ 'is-recording': $outingSession.gpsTracking, 'is-paused': $outingSession.paused }"
+        :class="{
+          'is-recording': $outingSession.gpsTracking,
+          'is-paused': $outingSession.paused || $outingSession.recordingInterrupted,
+        }"
       ></span>
       <span class="outing-session-banner-text">
-        <strong>{{ $outingSession.paused ? $gettext('Sortie en pause') : $gettext('Sortie en cours') }}</strong>
+        <strong>{{ statusLabel }}</strong>
         <small>{{ elapsedLabel }}{{ metricsLabel }}</small>
       </span>
       <fa-icon icon="chevron-right" />
@@ -14,7 +17,12 @@
     <!-- The banner is the surface a paused outing is most likely to be
          seen from — the user has wandered off the topo page — so the way
          back belongs here and not only in the topo header menu. -->
-    <button v-if="$outingSession.paused" type="button" class="outing-session-banner-resume" @click="resumeOuting">
+    <button
+      v-if="$outingSession.paused || $outingSession.recordingInterrupted"
+      type="button"
+      class="outing-session-banner-resume"
+      @click="resumeOuting"
+    >
       <fa-icon icon="play" />
       &nbsp;{{ $gettext('Reprendre') }}
     </button>
@@ -65,6 +73,14 @@ export default {
     visible() {
       return this.active && !this.onOwnTopo;
     },
+    // Three states, and the third is the one that matters: the app was
+    // killed mid-recording and came back looking like a normal outing.
+    statusLabel() {
+      if (this.$outingSession.recordingInterrupted) return this.$gettext('Enregistrement interrompu');
+      if (this.$outingSession.paused) return this.$gettext('Sortie en pause');
+      return this.$gettext('Sortie en cours');
+    },
+
     elapsedLabel() {
       return formatElapsed(
         this.$outingSession.startedAt,

@@ -33,10 +33,36 @@
       </button>
 
       <div v-if="showMenu" class="start-outing-menu" @click.stop>
+        <!-- The app was killed while recording (feedback Gilles: 11 points
+             for a 3 h outing). Saying so is the whole point — the previous
+             behaviour came back looking like a normal outing with the GPS
+             quietly off, and the walk continued recording nothing. -->
+        <div v-if="$outingSession.recordingInterrupted" class="start-outing-interrupted">
+          <p>
+            <fa-icon icon="triangle-exclamation" />
+            &nbsp;{{
+              $gettext(
+                'L’enregistrement a été interrompu (application fermée par le téléphone). La portion parcourue depuis n’a pas été enregistrée.'
+              )
+            }}
+          </p>
+          <div class="start-outing-interrupted-actions">
+            <button type="button" class="button is-small is-primary" @click="resumeOuting">
+              <fa-icon icon="play" />&nbsp;{{ $gettext('Reprendre l’enregistrement') }}
+            </button>
+            <button type="button" class="button is-small is-text" @click="$outingSession.dismissInterruption()">
+              {{ $gettext('Ignorer') }}
+            </button>
+          </div>
+        </div>
+
         <div class="start-outing-menu-row">
           <label class="start-outing-toggle">
             <input type="checkbox" :checked="$outingSession.gpsTracking" @change="toggleTracking" />
-            <span>{{ $gettext('Enregistrer la trace GPS') }}</span>
+            <!-- Reports state, not an action: the line underneath says
+                 what is happening, and an imperative label above a state
+                 description reads as a contradiction (feedback Gilles). -->
+            <span>{{ $gettext('Enregistrement de la trace GPS') }}</span>
           </label>
           <p class="start-outing-toggle-hint">
             <template v-if="$outingSession.gpsTracking">
@@ -53,7 +79,7 @@
               </span>
             </template>
             <template v-else>
-              {{ $gettext('La trace ne sera pas enregistrée (économise la batterie).') }}
+              {{ $gettext('Enregistrement désactivé — cochez pour enregistrer la trace. (Économise la batterie.)') }}
             </template>
           </p>
         </div>
@@ -355,6 +381,16 @@ export default {
       // activities. Leave `activities` empty on purpose — the V1
       // form's validator will bark if the user tries to save without
       // picking their real activity of the day.
+      // Stop recording before leaving for the form (feedback Gilles: the
+      // black banner kept counting time and kilometres after he had
+      // finished). Beyond the wrong reading, a GPS still running while a
+      // form is filled adds the walk back to the car — and the drive
+      // home — to the trace that gets published.
+      //
+      // Paused rather than stopped: the session and the trace have to
+      // survive until the outing is actually saved, in case the user
+      // leaves the form and comes back.
+      this.$outingSession.pause();
       this.showStopModal = false;
       this.showMenu = false;
       this.$router.push({ name: 'outing-add', params: { lang: this.topoRef.lang }, query }).catch(() => {
@@ -497,6 +533,22 @@ export default {
     transform: scale(1.4);
     opacity: 0.6;
   }
+}
+
+.start-outing-interrupted {
+  padding: 0.6rem;
+  margin-bottom: 0.5rem;
+  border-radius: 4px;
+  background: rgba(229, 69, 69, 0.1);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.start-outing-interrupted-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.4rem;
 }
 
 .start-outing-paused-tag {

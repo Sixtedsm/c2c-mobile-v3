@@ -468,6 +468,21 @@ export default {
         if (String(session.topoRef.id) !== String(routeIdParam)) return;
       }
 
+      // Associate the route the outing was started from.
+      //
+      // Feedback Gilles (forum, sortie réelle): he removed that route
+      // from his saved topos before finishing the form, and the picker
+      // fell back to the bbox list — hundreds of routes, his own no
+      // longer among the offered ones. He asked whether removing a saved
+      // topo could be forbidden while an outing is unfinished.
+      //
+      // Forbidding it treats the symptom. The app already knows which
+      // route this outing came from — the session holds topoRef and the
+      // form receives ?r= — and was only using it as a guard. Ticking it
+      // here removes the need to hunt for it at all, and holds whether or
+      // not the topo is still saved on the device.
+      this.associateSessionRoute();
+
       // Pre-fill dates from the session start (the user is filling
       // right after the outing — typical case). Overwrites the
       // buildDocument default (today) only if there's a startedAt.
@@ -518,6 +533,43 @@ export default {
       if (distance > 0) this.document.length_total = distance;
       if (gain > 0) this.document.height_diff_up = gain;
       if (loss > 0) this.document.height_diff_down = loss;
+    },
+
+    // Tick the outing's own route, fetching it from wherever it can be
+    // had: the offline copy first (works with no network), the API
+    // otherwise. Silent when neither is possible — the "compléter plus
+    // tard" path already covers being offline with nothing saved.
+    async associateSessionRoute() {
+      const session = this.$outingSession;
+      const ref = session?.topoRef;
+      if (!ref || ref.type !== 'route') return;
+      // Never fight a choice the user already made.
+      if (this.document.associations.routes.length) return;
+
+      const lang = ref.lang || this.lang || 'fr';
+      let route = null;
+      try {
+        route = await this.$offline?.getDocument(ref.type, ref.id, lang);
+      } catch {
+        /* fall through to the network */
+      }
+      if (!route && this.$offline?.online !== false) {
+        try {
+          const response = await c2c.route.getCooked(ref.id, lang);
+          route = response.data;
+        } catch {
+          /* the bbox picker below stays the fallback */
+        }
+      }
+      if (!route) return;
+      // Re-check: the fetch was awaited, and the user may have ticked
+      // something in the meantime.
+      if (this.document.associations.routes.length) return;
+
+      // Through the V1 handler rather than pushing onto the array, so the
+      // localisation and map-fitting side effects happen exactly as they
+      // do when the box is ticked by hand.
+      this.changeRouteAssociation(true, route);
     },
 
     // Terrain-fallback save path — the user filled the form offline

@@ -65,6 +65,15 @@ function persist(state) {
         sessionActive: state.sessionActive,
         // Never re-persist gpsTracking=true — see restart logic below.
         gpsTracking: false,
+        // …but do remember that recording was MEANT to be running.
+        // Feedback Gilles (forum, sortie réelle): a phone kills the tab
+        // during a long outing — memory pressure with the screen locked,
+        // which is the normal state of a phone in a pocket. On reload the
+        // session came back "en cours" with the GPS silently off, and the
+        // walk continued recording nothing. Without this flag there is no
+        // way to tell that case apart from a session deliberately started
+        // without tracking.
+        wasTracking: state.gpsTracking,
         topoRef: state.topoRef,
         startedAt: state.startedAt,
         // A pause has to survive a reload: the phone in a pocket during
@@ -100,6 +109,11 @@ export default function install(Vue) {
         // off": starting a session without tracking is not a pause, so
         // only pause()/resume() move these.
         paused: !!snap?.paused,
+        // Recording was running when the app went away, and it was not a
+        // pause. Surfaced in the UI rather than silently corrected: the
+        // stretch walked since then is genuinely lost, and only the user
+        // can decide to pick the recording back up.
+        recordingInterrupted: !!(snap?.sessionActive && snap?.wasTracking && !snap?.paused),
         // Start of the pause currently running, null when not paused.
         pausedAt: snap?.pausedAt || null,
         // Total of the pauses already closed.
@@ -174,8 +188,11 @@ export default function install(Vue) {
     watch: {
       sessionActive: 'snapshot',
       paused: 'snapshot',
+      recordingInterrupted: 'snapshot',
       gpsTracking(active) {
         if (active) {
+          // Recording is running again, whatever brought it back.
+          this.recordingInterrupted = false;
           // Fresh run: forget the previous throttle cursor, otherwise a
           // restart within one sample interval drops the first fix.
           this._lastSampleTime = 0;
@@ -276,6 +293,7 @@ export default function install(Vue) {
         this.paused = false;
         this.pausedAt = null;
         this.pausedMs = 0;
+        this.recordingInterrupted = false;
         this._gapPending = false;
         this.gpsTracking = !!track;
       },
@@ -291,6 +309,12 @@ export default function install(Vue) {
         this.paused = true;
         this.pausedAt = Date.now();
         this.gpsTracking = false;
+      },
+
+      // Acknowledge the interruption without restarting the GPS — the
+      // user may be back at the car and about to fill the form.
+      dismissInterruption() {
+        this.recordingInterrupted = false;
       },
 
       // Pick the outing back up. The next recorded point is flagged so
@@ -320,6 +344,7 @@ export default function install(Vue) {
         this.paused = false;
         this.pausedAt = null;
         this.pausedMs = 0;
+        this.recordingInterrupted = false;
         this._gapPending = false;
       },
 

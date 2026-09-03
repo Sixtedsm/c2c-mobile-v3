@@ -763,7 +763,19 @@ export default {
     },
 
     async remove(entry) {
-      const message = this.$gettext('Retirer ce topo de Mes topos ?');
+      // Gilles asked whether removing a saved topo could be blocked while
+      // an outing on it is unfinished — he lost his by mistyping on a small
+      // screen. The outing form now ticks its own route by itself, so
+      // nothing breaks either way; a warning is enough, and forbidding it
+      // would strand anyone whose session never got closed.
+      const session = this.$outingSession;
+      const usedByOuting =
+        session?.sessionActive &&
+        session.topoRef?.type === entry.type &&
+        String(session.topoRef.id) === String(entry.id);
+      const message = usedByOuting
+        ? this.$gettext('Une sortie en cours porte sur ce topo. Le retirer quand même de Mes topos ?')
+        : this.$gettext('Retirer ce topo de Mes topos ?');
       if (!window.confirm(message)) {
         return;
       }

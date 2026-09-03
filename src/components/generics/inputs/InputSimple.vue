@@ -8,7 +8,12 @@
 
     <div v-if="options" class="select" :class="{ 'is-danger': hasError }">
       <select v-model="value_" :disabled="disabled">
-        <option v-if="!required" />
+        <!-- The way to clear an optional field. It used to render as a
+             blank row, which reads as a rendering fault rather than a
+             choice (feedback Gilles). value="" keeps exactly what an
+             empty <option> submitted before.
+        -->
+        <option v-if="!required" value="">{{ $gettext('Non renseigné') }}</option>
         <option v-for="option of options" :key="option" :value="option">
           {{ i18n ? $gettext(option, i18nContext) : option }}
         </option>

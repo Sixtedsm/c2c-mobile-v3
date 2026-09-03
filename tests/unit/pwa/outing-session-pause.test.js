@@ -237,3 +237,61 @@ describe('GPX marks the break as a real segment boundary', () => {
     expect(gpx.match(/<\/trkseg>/g)).toHaveLength(2);
   });
 });
+
+// Feedback Gilles (forum, sortie réelle 2026-09): "11 points pour 3 h de
+// marche". The screen-lock bug was fixed earlier; this covers the other
+// half of that symptom, which nothing was watching for — the phone
+// killing the tab. On reload the session came back looking perfectly
+// normal, with the GPS silently off, and the rest of the walk recorded
+// nothing at all.
+describe('a recording killed with the app does not come back silent', () => {
+  it('flags the interruption when the app is reloaded mid-recording', async () => {
+    const vm = mount();
+    vm.start({ type: 'route', id: 1, lang: 'fr' }, { track: true });
+    await flush();
+    geo.fire(45.0, 6.0, BASE, 1000);
+    await flush();
+
+    // No stop, no pause: the tab is simply gone, as it is whenever the
+    // OS reclaims memory from a locked phone.
+    const revived = mount();
+    expect(revived.sessionActive).toBe(true);
+    expect(revived.gpsTracking).toBe(false);
+    expect(revived.recordingInterrupted).toBe(true);
+  });
+
+  it('does not flag a session that was deliberately paused', async () => {
+    const vm = mount();
+    vm.start({ type: 'route', id: 1, lang: 'fr' }, { track: true });
+    await flush();
+    vm.pause();
+    await flush();
+
+    // The user chose this. Telling them their recording broke would be
+    // both wrong and alarming.
+    const revived = mount();
+    expect(revived.paused).toBe(true);
+    expect(revived.recordingInterrupted).toBe(false);
+  });
+
+  it('does not flag a session started without tracking', async () => {
+    const vm = mount();
+    vm.start({ type: 'route', id: 1, lang: 'fr' });
+    await flush();
+
+    const revived = mount();
+    expect(revived.recordingInterrupted).toBe(false);
+  });
+
+  it('clears the flag once recording is picked back up', async () => {
+    const vm = mount();
+    vm.start({ type: 'route', id: 1, lang: 'fr' }, { track: true });
+    await flush();
+
+    const revived = mount();
+    expect(revived.recordingInterrupted).toBe(true);
+    revived.resume();
+    await flush();
+    expect(revived.recordingInterrupted).toBe(false);
+  });
+});
