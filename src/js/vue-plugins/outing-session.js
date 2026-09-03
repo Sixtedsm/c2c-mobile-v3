@@ -12,6 +12,7 @@
 // Ported from the V4 experimental version — no V4-specific dependencies,
 // runs as a plain Vue 2 plugin on the V3 shell.
 
+import * as backgroundAudio from '@/pwa/background-audio';
 import { haversine } from '@/pwa/haversine';
 import { computeTraceMetrics, isUsableFix } from '@/pwa/trace-metrics';
 import { splitOnGaps } from '@/pwa/trace-segments';
@@ -148,6 +149,16 @@ export default function install(Vue) {
         // the phone locks after ~30 s and the page is frozen, which is
         // what turned a 1 h run into 3 recorded points.
         wakeLockActive: false,
+        // Is the background keep-alive actually playing? False means the
+        // page will be suspended as soon as the screen goes off, and the
+        // UI has to say so rather than let the user pocket the phone.
+        keepAliveActive: false,
+        // Measurement, not decoration. Whether a PWA can record with the
+        // screen off is an open question on iOS, so the session counts
+        // what actually arrived while hidden instead of assuming. A real
+        // outing then answers it with a number.
+        hiddenFixCount: 0,
+        hiddenMs: 0,
         // NOTE: there used to be a `wasTrackingBeforeHide` flag here,
         // backing a "battery guard" that stopped the watch whenever the
         // tab went hidden. That guard was the bug: a locked screen
@@ -193,6 +204,10 @@ export default function install(Vue) {
         if (active) {
           // Recording is running again, whatever brought it back.
           this.recordingInterrupted = false;
+          // Started here because every path that switches recording on
+          // runs through this watcher, and all of them originate in a
+          // tap — which is what the autoplay policy requires.
+          this.startKeepAlive();
           // Fresh run: forget the previous throttle cursor, otherwise a
           // restart within one sample interval drops the first fix.
           this._lastSampleTime = 0;
@@ -214,6 +229,7 @@ export default function install(Vue) {
           this.stopGpsWatch();
           this.stopWatchdog();
           this.releaseWakeLock();
+          this.stopKeepAlive();
         }
         this.snapshot();
       },
@@ -232,6 +248,7 @@ export default function install(Vue) {
       }
       this._onVisibility = () => {
         if (document.hidden) {
+          if (this.gpsTracking) this._hiddenSince = Date.now();
           // Last chance to write: a hidden tab can be killed without any
           // further notice, and on mobile this fires where beforeunload
           // does not. Everything still sitting in the debounce window
@@ -251,11 +268,18 @@ export default function install(Vue) {
           // watchdog notices the fix drought and rebuilds the watch.
           return;
         }
+        if (this._hiddenSince) {
+          this.hiddenMs += Math.max(0, Date.now() - this._hiddenSince);
+          this._hiddenSince = null;
+        }
         if (!this.gpsTracking) return;
         // Back in the foreground. Browsers release the wake lock while
         // hidden, so re-take it; and if fixes stopped arriving while we
         // were away, rebuild the watch rather than trusting a dead one.
         this.acquireWakeLock();
+        // The OS can stop the keep-alive on its own. Reflect what is
+        // actually true now, and try to pick it back up.
+        this.refreshKeepAlive();
         if (this.fixAgeMs > STALE_FIX_MS) this.restartGpsWatch();
       };
       document.addEventListener('visibilitychange', this._onVisibility);
@@ -402,6 +426,35 @@ export default function install(Vue) {
         });
       },
 
+      // Ask the OS to keep the page running once the screen goes off.
+      // See src/pwa/background-audio.js for why this takes the shape it
+      // does, and for what it costs.
+      async startKeepAlive() {
+        const ok = await backgroundAudio.start({
+          // Pausing from the lock screen would otherwise end the
+          // recording without a word. Treat it as what it looks like:
+          // the user asking to stop.
+          onStopRequest: () => this.pause(),
+        });
+        this.keepAliveActive = ok;
+      },
+
+      stopKeepAlive() {
+        backgroundAudio.stop();
+        this.keepAliveActive = false;
+        this._hiddenSince = null;
+      },
+
+      // Called on returning to the foreground: report what is true now
+      // rather than what we hoped, and try to restart if the OS cut it.
+      async refreshKeepAlive() {
+        if (backgroundAudio.isActive()) {
+          this.keepAliveActive = true;
+          return;
+        }
+        this.keepAliveActive = await backgroundAudio.resume();
+      },
+
       // Keep the screen awake while recording. Without this the phone
       // locks after ~30 s, the page is frozen by the OS and no fixes
       // arrive — the root cause of the 3-points-in-an-hour report.
@@ -482,6 +535,9 @@ export default function install(Vue) {
             // user does not look like a dead watch to the watchdog.
             this.lastFixAt = now;
             this.geoError = null;
+            if (typeof document !== 'undefined' && document.hidden) {
+              this.hiddenFixCount += 1;
+            }
             // A fix the receiver reports as poor is a cell-tower guess,
             // not a position. Keeping it would spike the drawn trace as
             // well as the published totals. Counted as liveness above,

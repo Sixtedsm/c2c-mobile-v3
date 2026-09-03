@@ -71,12 +71,28 @@
               <template v-if="$outingSession.elevationGainMeters > 0">
                 · +{{ tracedGain.value }} {{ tracedGain.unit }}
               </template>
-              <!-- Recording holds a screen Wake Lock: without it the
-                   phone locks, the page freezes and nothing is
-                   recorded. Say so, because it costs battery. -->
-              <span v-if="$outingSession.wakeLockActive" class="start-outing-wakelock">
-                <br />{{ $gettext('Écran maintenu allumé pendant l’enregistrement.') }}
+              <!-- What actually decides whether a pocketed phone keeps
+                   recording. The wake lock only covers the app being on
+                   screen; the browser drops it the moment the phone is
+                   locked. Saying "screen stays on" and nothing else left
+                   the user to guess about the case that matters. -->
+              <span class="start-outing-wakelock">
+                <br />
+                <template v-if="$outingSession.keepAliveActive">
+                  {{ $gettext('Enregistrement maintenu écran éteint. Vous pouvez ranger le téléphone.') }}
+                </template>
+                <template v-else>
+                  {{
+                    $gettext(
+                      'Gardez l’application à l’écran : l’enregistrement s’arrêtera si vous verrouillez le téléphone.'
+                    )
+                  }}
+                </template>
               </span>
+              <!-- The measurement. Whether a PWA can record with the
+                   screen off is an open question on iOS, so the app
+                   counts what really arrived instead of claiming. -->
+              <span v-if="$outingSession.hiddenMs > 0" class="start-outing-wakelock"> <br />{{ hiddenSummary }} </span>
             </template>
             <template v-else>
               {{ $gettext('Enregistrement désactivé — cochez pour enregistrer la trace. (Économise la batterie.)') }}
@@ -154,6 +170,9 @@
           {{ $outingSession.positions.length }} {{ $gettext('points enregistrés · ') }} {{ tracedDistance.value }}
           {{ tracedDistance.unit }} ·
           {{ elapsedLabel }}
+        </p>
+        <p v-if="$outingSession.hiddenMs > 0" class="start-outing-modal-sub">
+          {{ hiddenSummary }}
         </p>
         <p v-else class="start-outing-modal-sub">
           {{ $gettext('Aucune trace GPS enregistrée pour cette sortie.') }}
@@ -277,6 +296,21 @@ export default {
 
     tracedGain() {
       return elevation(this.$outingSession.elevationGainMeters, this.$appSettings?.units);
+    },
+
+    // Reads as a verdict, not a statistic: after a stretch with the
+    // screen off, either points came in or they did not.
+    hiddenSummary() {
+      const session = this.$outingSession;
+      const minutes = Math.max(1, Math.round(session.hiddenMs / 60000));
+      if (session.hiddenFixCount === 0) {
+        return this.$gettext(
+          'Écran éteint {min} min : aucun point enregistré. Le téléphone a suspendu l’application.'
+        ).replace('{min}', minutes);
+      }
+      return this.$gettext('Écran éteint {min} min : {n} points enregistrés.')
+        .replace('{min}', minutes)
+        .replace('{n}', session.hiddenFixCount);
     },
 
     elapsedLabel() {
