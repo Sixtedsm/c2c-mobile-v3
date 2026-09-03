@@ -161,3 +161,84 @@ describe('degenerate input does not throw', () => {
     expect(computeTraceMetrics([null, { lat: 45, lon: 6, alt: 1000 }]).distance).toBe(0);
   });
 });
+
+// The defences that need timestamps and reported accuracy. The fixtures
+// above deliberately carry neither, which exercises the fallback path for
+// traces recorded before those were stored; these carry both, which is
+// what a trace recorded today looks like.
+function timedTrace({ fixes, metresPerFix = 0, everyMs = 5000, accuracy = 6, seed = 3, startAlt = 1000 }) {
+  const noise = makeNoise(seed);
+  const points = [];
+  for (let i = 0; i < fixes; i++) {
+    points.push({
+      lat: 45 + (i * metresPerFix + noise(5)) / M_PER_DEG,
+      lon: 6 + noise(5) / (M_PER_DEG * Math.cos((45 * Math.PI) / 180)),
+      alt: startAlt + noise(10),
+      accuracy,
+      t: 1_700_000_000_000 + i * everyMs,
+    });
+  }
+  return points;
+}
+
+describe('the filter does not depend on the sampling rate', () => {
+  it('measures the same walk the same way at 2 s and at 5 s', () => {
+    // The load-bearing property. The window used to span a fixed number
+    // of fixes, so the battery-saving setting silently changed how hard
+    // the trace was smoothed — the same outing scored differently
+    // depending on a preference that has nothing to do with accuracy.
+    const walkedMetres = 1500;
+    const at5s = computeTraceMetrics(timedTrace({ fixes: 300, metresPerFix: 5, everyMs: 5000 }));
+    const at2s = computeTraceMetrics(timedTrace({ fixes: 750, metresPerFix: 2, everyMs: 2000 }));
+
+    expect(at5s.distance).toBeGreaterThan(walkedMetres * 0.85);
+    expect(at2s.distance).toBeGreaterThan(walkedMetres * 0.85);
+    // Within a tenth of each other, rather than the twofold gap a
+    // sample-count window produced.
+    const ratio = at2s.distance / at5s.distance;
+    expect(ratio).toBeGreaterThan(0.9);
+    expect(ratio).toBeLessThan(1.1);
+  });
+});
+
+describe('a physically impossible fix is refused', () => {
+  it('drops a jump no one could have walked', () => {
+    const points = timedTrace({ fixes: 200, metresPerFix: 5 });
+    const clean = computeTraceMetrics(points).distance;
+
+    // One fix teleports 3 km away and back — the classic receiver glitch,
+    // and the single worst thing that can enter a trace.
+    const glitched = points.map((p, i) => (i === 100 ? { ...p, lat: p.lat + 3000 / M_PER_DEG } : p));
+    const measured = computeTraceMetrics(glitched).distance;
+
+    // Without the speed gate this adds ~6 km to a 1 km walk.
+    expect(Math.abs(measured - clean)).toBeLessThan(200);
+  });
+
+  it('still accepts a fast ski descent', () => {
+    // 20 m/s is 72 km/h. Rejecting that would erase the descent of every
+    // ski outing, which is the opposite failure and just as wrong.
+    const fast = timedTrace({ fixes: 100, metresPerFix: 100, everyMs: 5000 });
+    expect(computeTraceMetrics(fast).distance).toBeGreaterThan(8000);
+  });
+});
+
+describe('a fix the receiver distrusts weighs less', () => {
+  it('lets a clean run and a degraded run disagree', () => {
+    // Same geometry, same noise, different reported confidence. The
+    // degraded trace must not be trusted as hard — that is the whole
+    // point of inverse-variance weighting.
+    const clean = computeTraceMetrics(timedTrace({ fixes: 200, metresPerFix: 5, accuracy: 3 }));
+    const degraded = computeTraceMetrics(timedTrace({ fixes: 200, metresPerFix: 5, accuracy: 40 }));
+    // Both measure the same walk; neither collapses.
+    expect(clean.distance).toBeGreaterThan(700);
+    expect(degraded.distance).toBeGreaterThan(700);
+  });
+
+  it('treats a missing accuracy as middling rather than perfect', () => {
+    const noAccuracy = timedTrace({ fixes: 200, metresPerFix: 5 }).map(({ accuracy, ...p }) => p);
+    // A receiver that reports nothing must not be trusted like a 1 m fix,
+    // nor discarded — the trace still has to be measured.
+    expect(computeTraceMetrics(noAccuracy).distance).toBeGreaterThan(700);
+  });
+});

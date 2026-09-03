@@ -545,19 +545,20 @@ export default function install(Vue) {
             if (!isUsableFix(pos.coords.accuracy)) return;
             // Browser may fire much more often than we need; throttle.
             if (now - this._lastSampleTime < intervalMs - 500) return;
-            // The stored point carries only what is read back later:
-            // coordinates, altitude and time. `accuracy` is used to accept
-            // or reject the fix above and never again, so keeping it in
-            // every one of thousands of points would be bytes and
-            // serialisation time spent on nothing.
+            // Everything here is read back later. Coordinates and time
+            // draw and measure the trace; `accuracy` weights each fix in
+            // the smoothing, so a fix taken under forest cover pulls the
+            // average less than a clean one (see trace-metrics.js). It is
+            // rounded to the metre — a receiver has no business claiming
+            // more, and the trace holds thousands of these.
             const sample = {
               lat: round6(pos.coords.latitude),
               lon: round6(pos.coords.longitude),
               alt: Number.isFinite(pos.coords.altitude) ? Math.round(pos.coords.altitude * 10) / 10 : null,
+              accuracy: Number.isFinite(pos.coords.accuracy) ? Math.round(pos.coords.accuracy) : null,
               t: now,
             };
-            // The live marker does want the accuracy circle.
-            this.currentPosition = { ...sample, accuracy: pos.coords.accuracy };
+            this.currentPosition = sample;
             const last = this.positions[this.positions.length - 1];
             if (!last || haversine(last, sample) >= MIN_DISTANCE_M) {
               // The flag lands on the first point actually recorded after
