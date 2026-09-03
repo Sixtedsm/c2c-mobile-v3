@@ -47,6 +47,26 @@
       </div>
       <p class="note">{{ $gettext('Un intervalle plus long économise la batterie mais lisse la trace.') }}</p>
 
+      <!-- Units (CDC §2.9). Display only: Camptocamp stores metres and
+           the app publishes metres whatever is chosen here. -->
+      <h2 class="section-label">{{ $gettext('Unités') }}</h2>
+      <div class="option-row">
+        <button
+          v-for="opt in unitOptions"
+          :key="opt.value"
+          type="button"
+          class="option-btn"
+          :class="{ 'is-active': $appSettings.state.units === opt.value }"
+          @click="setUnits(opt.value)"
+        >
+          <span class="gps-interval-value">{{ opt.short }}</span>
+          <span>{{ opt.label }}</span>
+        </button>
+      </div>
+      <p class="note">
+        {{ $gettext('Ne change que l’affichage. Vos sorties restent publiées en mètres sur Camptocamp.') }}
+      </p>
+
       <!-- Text size -->
       <h2 class="section-label">{{ $gettext('Taille du texte') }}</h2>
       <div class="option-row">
@@ -86,6 +106,12 @@ export default {
         { value: 'dark', label: this.$gettext('Sombre'), icon: 'moon' },
       ];
     },
+    unitOptions() {
+      return [
+        { value: 'metric', short: 'km / m', label: this.$gettext('Métrique') },
+        { value: 'imperial', short: 'mi / ft', label: this.$gettext('Impérial') },
+      ];
+    },
     textSizeOptions() {
       return [
         { value: 'small', label: this.$gettext('Petit'), demoSize: '0.85rem' },
@@ -103,6 +129,10 @@ export default {
   },
 
   methods: {
+    setUnits(value) {
+      this.$appSettings.setUnits(value);
+    },
+
     setGpsInterval(value) {
       this.$appSettings.setGpsIntervalS(value);
       // If a session is actively tracking, restart the watch so the new

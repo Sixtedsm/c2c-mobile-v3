@@ -40,10 +40,10 @@
           </label>
           <p class="start-outing-toggle-hint">
             <template v-if="$outingSession.gpsTracking">
-              {{ $outingSession.positions.length }} {{ $gettext('points · ') }}
-              {{ Math.round($outingSession.tracedDistanceMeters / 100) / 10 }} km
+              {{ $outingSession.positions.length }} {{ $gettext('points · ') }} {{ tracedDistance.value }}
+              {{ tracedDistance.unit }}
               <template v-if="$outingSession.elevationGainMeters > 0">
-                · +{{ Math.round($outingSession.elevationGainMeters) }} m
+                · +{{ tracedGain.value }} {{ tracedGain.unit }}
               </template>
               <!-- Recording holds a screen Wake Lock: without it the
                    phone locks, the page freezes and nothing is
@@ -125,7 +125,8 @@
       <div class="start-outing-modal-card">
         <h3>{{ $gettext('Arrêter la sortie') }}</h3>
         <p v-if="hasTrace" class="start-outing-modal-sub">
-          {{ $outingSession.positions.length }} {{ $gettext('points enregistrés · ') }} {{ traceKmLabel }} km ·
+          {{ $outingSession.positions.length }} {{ $gettext('points enregistrés · ') }} {{ tracedDistance.value }}
+          {{ tracedDistance.unit }} ·
           {{ elapsedLabel }}
         </p>
         <p v-else class="start-outing-modal-sub">
@@ -206,6 +207,7 @@
 import { toast } from 'bulma-toast';
 
 import { formatElapsed } from '@/pwa/elapsed-label';
+import { distance, elevation } from '@/pwa/units';
 
 export default {
   name: 'StartOutingControl',
@@ -240,6 +242,17 @@ export default {
         s.topoRef.lang === this.topoRef.lang
       );
     },
+    // CDC §2.9 — the figures shown while walking follow the same unit
+    // preference as the published ones. Reading kilometres in the field
+    // and miles on the topo would be its own kind of wrong.
+    tracedDistance() {
+      return distance(this.$outingSession.tracedDistanceMeters, this.$appSettings?.units);
+    },
+
+    tracedGain() {
+      return elevation(this.$outingSession.elevationGainMeters, this.$appSettings?.units);
+    },
+
     elapsedLabel() {
       return formatElapsed(
         this.$outingSession.startedAt,
@@ -250,9 +263,6 @@ export default {
     },
     hasTrace() {
       return this.$outingSession.positions.length > 0;
-    },
-    traceKmLabel() {
-      return (Math.round(this.$outingSession.tracedDistanceMeters / 100) / 10).toFixed(1);
     },
   },
 

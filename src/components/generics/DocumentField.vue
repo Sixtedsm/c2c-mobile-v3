@@ -40,16 +40,17 @@
 
     <span v-else>
       <span v-if="showPrefix">{{ prefix || field.prefix }}</span>
-      {{ divisor ? Math.round(value / divisor) : value }}
+      {{ displayed.value }}
     </span>
 
     <span v-if="showUnit && !field.skipSpaceBeforeUnit">&nbsp;</span>
-    <span v-if="showUnit">{{ unit || field.unit }}</span>
+    <span v-if="showUnit">{{ displayed.unit }}</span>
   </span>
 </template>
 
 <script>
 import { requireDocumentProperty, requireFieldProperty } from '@/js/properties-mixins';
+import { displayValueAndUnit } from '@/pwa/units';
 
 export default {
   mixins: [requireDocumentProperty, requireFieldProperty],
@@ -76,6 +77,15 @@ export default {
   computed: {
     value() {
       return this.document[this.field.name];
+    },
+
+    // V3 (CDC §2.9). Every numeric field of every document type is
+    // printed here, which is why the unit preference is applied at this
+    // one point: converting per view would guarantee that some screen
+    // keeps showing metres while the rest shows feet, and mixed units on
+    // a mountain are worse than no preference at all.
+    displayed() {
+      return displayValueAndUnit(this.value, this.unit || this.field.unit, this.divisor, this.$appSettings?.units);
     },
 
     isArray() {

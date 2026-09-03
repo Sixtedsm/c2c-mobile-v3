@@ -24,6 +24,9 @@ const defaults = {
   // let a user override the auto-detection — the "Version ordinateur"
   // / "Version mobile" toggle in MoreView / SideMenu writes here.
   shellMode: 'auto',
+  // Display units (CDC §2.9). Storage and the API stay metric always;
+  // this only changes what is printed.
+  units: 'metric',
 };
 
 const allowed = {
@@ -31,6 +34,7 @@ const allowed = {
   textSize: ['small', 'normal', 'large'],
   gpsIntervalS: ['5', '15', '30'],
   shellMode: ['auto', 'mobile', 'desktop'],
+  units: ['metric', 'imperial'],
 };
 
 function load() {
@@ -132,6 +136,13 @@ const api = {
     // No visual side-effect: $outingSession reads the value on next
     // startGpsWatch() call, so no apply() step needed here.
   },
+  setUnits(value) {
+    if (!allowed.units.includes(value)) return;
+    state.units = value;
+    persist(state);
+    // Nothing to apply to the DOM: every display reads $appSettings.units
+    // through a computed, so the change repaints on its own.
+  },
   setShellMode(value) {
     if (!allowed.shellMode.includes(value)) return;
     state.shellMode = value;
@@ -143,6 +154,12 @@ const api = {
   },
   get effectiveShellMode() {
     return effectiveShellMode(state.shellMode);
+  },
+  // Read by every display that shows a distance or an elevation. A
+  // shortcut over state.units so call sites do not each reach through
+  // `state` — and reactive, since `state` is a Vue observable.
+  get units() {
+    return state.units;
   },
   get gpsIntervalMs() {
     return (Number(state.gpsIntervalS) || 5) * 1000;

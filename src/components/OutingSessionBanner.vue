@@ -31,6 +31,7 @@
 // back to the topo so the user can stop / adjust / add photos.
 
 import { formatElapsed } from '@/pwa/elapsed-label';
+import { distance } from '@/pwa/units';
 
 export default {
   name: 'OutingSessionBanner',
@@ -73,9 +74,10 @@ export default {
       );
     },
     metricsLabel() {
-      const km = this.$outingSession.tracedDistanceMeters / 1000;
-      if (km < 0.05) return '';
-      return ` · ${km.toFixed(1)} km`;
+      const metres = this.$outingSession.tracedDistanceMeters;
+      if (metres < 50) return '';
+      const shown = distance(metres, this.$appSettings?.units);
+      return ` · ${shown.value} ${shown.unit}`;
     },
   },
 

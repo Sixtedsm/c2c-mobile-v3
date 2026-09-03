@@ -71,7 +71,7 @@
                 show-signs
               />
               <label-value v-if="document.length_total" :label="$gettext('length_total')">
-                {{ document.length_total / 1000 }}&nbsp;km
+                {{ totalLength.value }}&nbsp;{{ totalLength.unit }}
               </label-value>
 
               <!-- snow block -->
@@ -122,6 +122,7 @@
 import ConditionLevels from './field-viewers/ConditionLevels';
 
 import constants from '@/js/constants';
+import { distance } from '@/pwa/units';
 
 export default {
   components: {
@@ -153,6 +154,12 @@ export default {
 
     locale() {
       return this.document?.cooked;
+    },
+
+    // The only distance printed straight from the template rather than
+    // through a field renderer (CDC §2.9).
+    totalLength() {
+      return distance(this.document.length_total, this.$appSettings?.units);
     },
   },
 };
