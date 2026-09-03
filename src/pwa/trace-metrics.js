@@ -42,13 +42,13 @@ import { haversine } from '@/pwa/haversine';
 export const MAX_ACCURACY_M = 50;
 
 // Trailing mean applied before anything is measured.
-export const SMOOTHING_WINDOW = 9;
+const SMOOTHING_WINDOW = 9;
 
 // Horizontal noise floor, applied to smoothed positions.
-export const MIN_STEP_M = 10;
+const MIN_STEP_M = 10;
 
 // Vertical hysteresis. Vertical error is the worse of the two.
-export const ELEVATION_THRESHOLD_M = 10;
+const ELEVATION_THRESHOLD_M = 10;
 
 // Is this fix worth recording at all? Asked while sampling, so a garbage
 // position never enters the trace — it would spike the map as well as

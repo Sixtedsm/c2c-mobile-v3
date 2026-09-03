@@ -20,7 +20,8 @@ const MILES_PER_KM = 0.621371;
 // anything "imperial" would be nonsense.
 const CONVERTIBLE = new Set(['m', 'km']);
 
-export function isImperial(system) {
+// Internal: callers ask for a formatted value, not for a system test.
+function isImperial(system) {
   return system === IMPERIAL;
 }
 

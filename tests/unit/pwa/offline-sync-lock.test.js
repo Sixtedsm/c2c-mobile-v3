@@ -137,3 +137,58 @@ describe('offline sync queue — failure recovery (audit C-3)', () => {
     expect(vm.syncing).toBe(false);
   });
 });
+
+// The retry cap (src/pwa/sync-policy.js) stops the queue from retrying a
+// doomed outing on every reconnect. It also means an item can be frozen,
+// and the state around that has to stay coherent — a frozen item the user
+// cannot actually retry would be worse than the storm it replaced.
+describe('freezing and un-freezing a queued outing', () => {
+  it('freezes a permanently rejected outing instead of retrying it forever', async () => {
+    store.listPendingOutings.mockResolvedValue([pendingItem()]);
+    c2c.outing.create.mockRejectedValue({
+      response: { status: 400, data: { errors: [{ name: 'activities', description: 'required' }] } },
+    });
+
+    const vm = mountPlugin();
+    vm.online = true;
+    await vm.syncPendingOutings();
+
+    const [saved] = store.replacePendingOutings.mock.calls.at(-1);
+    // A 400 will answer identically however many times it is sent.
+    expect(saved[0].conflict).toBe(true);
+    expect(saved[0].freezeReason).toBe('invalid');
+    expect(saved[0].ambiguous).toBe(false);
+  });
+
+  it('flags a lost response as unknown rather than republishing blind', async () => {
+    store.listPendingOutings.mockResolvedValue([{ ...pendingItem(), attempts: 2 }]);
+    // No response at all: the server may have committed the outing.
+    c2c.outing.create.mockRejectedValue(new Error('Network Error'));
+
+    const vm = mountPlugin();
+    vm.online = true;
+    await vm.syncPendingOutings();
+
+    const [saved] = store.replacePendingOutings.mock.calls.at(-1);
+    expect(saved[0].conflict).toBe(true);
+    expect(saved[0].ambiguous).toBe(true);
+  });
+
+  it('gives a retried outing its full budget back', async () => {
+    // Without this the cap re-freezes the item on its first attempt and
+    // "Réessayer" appears to do nothing at all.
+    store.listPendingOutings.mockResolvedValue([
+      { ...pendingItem(), attempts: 3, conflict: true, freezeReason: 'exhausted', ambiguous: true },
+    ]);
+
+    const vm = mountPlugin();
+    vm.online = false; // no sync pass, just the state change
+    await vm.retryConflictedOuting('p1');
+
+    const [saved] = store.replacePendingOutings.mock.calls.at(-1);
+    expect(saved[0].conflict).toBe(false);
+    expect(saved[0].attempts).toBe(0);
+    expect(saved[0].freezeReason).toBeNull();
+    expect(saved[0].ambiguous).toBe(false);
+  });
+});

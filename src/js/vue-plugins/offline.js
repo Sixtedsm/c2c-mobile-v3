@@ -902,6 +902,9 @@ export default function install(Vue) {
             // held back, not rejected.
             lastError: null,
             conflict: false,
+            attempts: 0,
+            freezeReason: null,
+            ambiguous: false,
           };
         });
         await store.replacePendingOutings(next);
@@ -1053,6 +1056,13 @@ export default function install(Vue) {
               lastError: readable,
               uploadedImageIds,
             };
+            // The photos are already on the server and will never be
+            // re-sent — uploadedImageIds is what the retry uses. Keeping
+            // the blobs would hold megabytes of device storage for an
+            // item that may sit in the queue for weeks.
+            if (uploadedImageIds.length > 0) {
+              next.photos = [];
+            }
             if (verdict.freeze) {
               // Frozen items land where conflicts already do: visible in
               // "Mes topos", with retry / export / discard. Nothing is
@@ -1106,7 +1116,23 @@ export default function install(Vue) {
       // the user has read the warning.
       async retryConflictedOuting(id) {
         const queue = await store.listPendingOutings();
-        const next = queue.map((item) => (item.id === id ? { ...item, conflict: false, lastError: null } : item));
+        // `attempts` goes back to zero on purpose. The user has done
+        // something — reconnected properly, fixed the outing, checked the
+        // site — so the automatic budget starts over. Without this the
+        // retry cap would re-freeze the item on its very first attempt
+        // and the button would appear to do nothing at all.
+        const next = queue.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                conflict: false,
+                lastError: null,
+                attempts: 0,
+                freezeReason: null,
+                ambiguous: false,
+              }
+            : item
+        );
         await store.replacePendingOutings(next);
         this.pendingOutings = next;
         if (this.online) {

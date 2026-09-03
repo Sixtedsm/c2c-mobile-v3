@@ -481,6 +481,13 @@ export default {
       // form receives ?r= — and was only using it as a guard. Ticking it
       // here removes the need to hunt for it at all, and holds whether or
       // not the topo is still saved on the device.
+      // Fire-and-forget on purpose: the form must not wait on a network
+      // round trip to appear. Its continuation lands after the block
+      // below, and propagateProperties only fills fields that are still
+      // null — so the figures computed from the trace always win, in
+      // either order. That invariant is what keeps an associated route
+      // from overwriting a measured dénivelé; do not turn these
+      // assignments into unconditional ones without re-checking it.
       this.associateSessionRoute();
 
       // Pre-fill dates from the session start (the user is filling
