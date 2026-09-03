@@ -70,20 +70,32 @@ beforeEach(() => {
   });
 });
 
-// Two points ~111 m apart, then a break, then a jump of ~55 km, then
-// another ~111 m. Only the two 111 m steps were walked.
+// A leg of `count` fixes walking north from `lat`, climbing `climb`
+// metres in total.
+//
+// Legs are long enough for the smoothing window to fill. Metrics are
+// measured on a smoothed trace (src/pwa/trace-metrics.js), so a
+// four-point fixture would mostly measure the filter warming up rather
+// than the behaviour under test.
+function fireLeg(lat, alt, count, climb, startT) {
+  const stepDeg = 0.0001; // ~11 m between fixes
+  for (let i = 0; i < count; i++) {
+    geo.fire(lat + i * stepDeg, 6.0, startT + i * 6000, alt + (climb * i) / count);
+  }
+}
+
+// Two legs of ~440 m each, separated by a break during which the user
+// travelled 55 km. Only the two legs were walked.
 async function traceWithBreak(vm, breakIt) {
   vm.start({ type: 'route', id: 1, lang: 'fr' }, { track: true });
   await flush();
-  geo.fire(45.0, 6.0, BASE, 1000);
-  geo.fire(45.001, 6.0, BASE + 6000, 1100);
+  fireLeg(45.0, 1000, 40, 100, BASE);
   await flush();
 
   await breakIt();
   await flush();
 
-  geo.fire(45.5, 6.0, BASE + 20000, 2000);
-  geo.fire(45.501, 6.0, BASE + 26000, 2050);
+  fireLeg(45.5, 2000, 40, 50, BASE + 300000);
   await flush();
 }
 
@@ -96,12 +108,14 @@ describe('a break in the recording is never counted as ground covered', () => {
       vm.resume();
     });
 
-    expect(vm.positions).toHaveLength(4);
-    expect(vm.positions[2].gap).toBe(true);
-    // Two 111 m steps. Counting the jump would report ~55 km — and
-    // publish it as length_total.
-    expect(vm.tracedDistanceMeters).toBeGreaterThan(200);
-    expect(vm.tracedDistanceMeters).toBeLessThan(250);
+    // The first fix of the second leg opens a new segment.
+    expect(vm.positions.filter((p) => p.gap)).toHaveLength(1);
+    // Two legs of ~440 m. Counting the jump across the break would
+    // report ~55 km — and publish it as length_total. The bounds are
+    // loose on purpose: smoothing trims a little at each segment edge,
+    // and pinning an exact figure would break on any re-tuning.
+    expect(vm.tracedDistanceMeters).toBeGreaterThan(500);
+    expect(vm.tracedDistanceMeters).toBeLessThan(1200);
   });
 
   it('leaves the pause jump out of the elevation', async () => {
@@ -112,10 +126,12 @@ describe('a break in the recording is never counted as ground covered', () => {
       vm.resume();
     });
 
-    // +100 then +50. The 900 m climb across the break belongs to the
-    // drive up, not to the outing.
-    expect(Math.round(vm.elevationGainMeters)).toBe(150);
-    expect(Math.round(vm.elevationLossMeters)).toBe(0);
+    // ~100 m then ~50 m of real climbing. The 900 m step across the
+    // break belongs to the drive up, not to the outing — counting it
+    // would roughly double the published height_diff_up.
+    expect(vm.elevationGainMeters).toBeGreaterThan(80);
+    expect(vm.elevationGainMeters).toBeLessThan(200);
+    expect(vm.elevationLossMeters).toBeLessThan(20);
   });
 
   it('applies to the GPS checkbox too, not just to an explicit pause', async () => {
@@ -128,27 +144,27 @@ describe('a break in the recording is never counted as ground covered', () => {
       vm.gpsTracking = true;
     });
 
-    expect(vm.positions[2].gap).toBe(true);
-    expect(vm.tracedDistanceMeters).toBeLessThan(250);
+    expect(vm.positions.filter((p) => p.gap)).toHaveLength(1);
+    expect(vm.tracedDistanceMeters).toBeLessThan(1200);
   });
 
   it('does not flag a watchdog rebuild, where the ground was really walked', async () => {
     const vm = mount();
     vm.start({ type: 'route', id: 1, lang: 'fr' }, { track: true });
     await flush();
-    geo.fire(45.0, 6.0, BASE, 1000);
+    fireLeg(45.0, 1000, 20, 0, BASE);
     await flush();
 
     // Fixes dried up and the watchdog rebuilt the watch. The user kept
-    // moving throughout, so dropping that step would under-report the
+    // moving throughout, so dropping that ground would under-report the
     // outing — the opposite error, and just as wrong.
     vm.restartGpsWatch();
     await flush();
-    geo.fire(45.001, 6.0, BASE + 20000, 1000);
+    fireLeg(45.002, 1000, 20, 0, BASE + 200000);
     await flush();
 
-    expect(vm.positions[1].gap).toBeUndefined();
-    expect(vm.tracedDistanceMeters).toBeGreaterThan(100);
+    expect(vm.positions.some((p) => p.gap)).toBe(false);
+    expect(vm.tracedDistanceMeters).toBeGreaterThan(200);
   });
 });
 

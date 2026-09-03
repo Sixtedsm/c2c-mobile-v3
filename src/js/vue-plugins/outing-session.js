@@ -13,6 +13,7 @@
 // runs as a plain Vue 2 plugin on the V3 shell.
 
 import { haversine } from '@/pwa/haversine';
+import { computeTraceMetrics, isUsableFix } from '@/pwa/trace-metrics';
 import { splitOnGaps } from '@/pwa/trace-segments';
 
 const STORAGE_KEY = 'v3.outingSession';
@@ -25,11 +26,27 @@ const MAX_STALE_MS = 48 * 3600 * 1000; // drop sessions older than 48h
 // TIMEOUT — so the watchdog rebuilds it.
 const STALE_FIX_MS = 60 * 1000;
 const WATCHDOG_INTERVAL_MS = 30 * 1000;
-// Debounce persist() on `positions` — a long trace (thousands of
-// points) shouldn't JSON.stringify the whole state on every fix. 2 s
-// balances battery / CPU vs. the risk of losing the last few points
-// on an unexpected crash.
-const POSITIONS_PERSIST_DEBOUNCE_MS = 2000;
+// Debounce persist() on `positions` — a long trace should not
+// JSON.stringify the whole state on every fix.
+//
+// localStorage writes synchronously, so the cost lands on the main
+// thread of a phone that is already recording. Measured on a desktop, a
+// 10 h trace serialises in ~7.5 ms; a phone is several times slower, and
+// at a fixed 2 s interval that hitch would repeat every two seconds for
+// the rest of the day. So the interval grows with the trace: short
+// outings stay responsive to a crash, long ones stop paying per fix.
+// The cost of the longer window is bounded — a few lost points, against
+// a trace that is already many hours old.
+const PERSIST_DEBOUNCE_MIN_MS = 2000;
+const PERSIST_DEBOUNCE_MAX_MS = 15000;
+const PERSIST_DEBOUNCE_PER_POINT_MS = 4;
+
+// Six decimals is 0.11 m of latitude — an order of magnitude finer than
+// the best fix a phone will ever produce, and it cuts the stored trace
+// by about a third. Full float precision stores noise, literally.
+function round6(value) {
+  return Math.round(value * 1e6) / 1e6;
+}
 
 // XML entity escaping for GPX generation. Hoisted so it's not
 // re-created on every exportGpx() call.
@@ -147,41 +164,24 @@ export default function install(Vue) {
         if (!this.lastFixAt) return Infinity;
         return Date.now() - this.lastFixAt;
       },
-      // Distance covered by the recorded trace (meters).
+      // Distance, gain and loss, from src/pwa/trace-metrics.js.
       //
-      // A point flagged `gap` is the first one recorded after a pause,
-      // so the step leading to it did not happen on foot — it is the
-      // drive home, the chairlift, or simply the distance between where
-      // the user stopped and where they picked the outing back up.
-      // Counting it inflates length_total, which is published to
-      // camptocamp.org; these three loops are the reason the pause is
-      // a data-quality fix and not an ergonomics one.
-      tracedDistanceMeters() {
-        let d = 0;
-        for (let i = 1; i < this.positions.length; i += 1) {
-          if (this.positions[i].gap) continue;
-          d += haversine(this.positions[i - 1], this.positions[i]);
-        }
-        return d;
+      // One computed for all three: they walk the same trace and share
+      // the same segment and smoothing rules, and a trace can hold
+      // thousands of points that get re-measured on every fix. Three
+      // separate loops cost three walks and let the numbers disagree
+      // about where a recording break was.
+      traceMetrics() {
+        return computeTraceMetrics(this.positions);
       },
-      // Elevation gain along the recorded trace (meters).
+      tracedDistanceMeters() {
+        return this.traceMetrics.distance;
+      },
       elevationGainMeters() {
-        let g = 0;
-        for (let i = 1; i < this.positions.length; i += 1) {
-          if (this.positions[i].gap) continue;
-          const da = (this.positions[i].alt || 0) - (this.positions[i - 1].alt || 0);
-          if (da > 0) g += da;
-        }
-        return g;
+        return this.traceMetrics.gain;
       },
       elevationLossMeters() {
-        let l = 0;
-        for (let i = 1; i < this.positions.length; i += 1) {
-          if (this.positions[i].gap) continue;
-          const da = (this.positions[i].alt || 0) - (this.positions[i - 1].alt || 0);
-          if (da < 0) l += -da;
-        }
-        return l;
+        return this.traceMetrics.loss;
       },
     },
 
@@ -232,6 +232,12 @@ export default function install(Vue) {
       }
       this._onVisibility = () => {
         if (document.hidden) {
+          // Last chance to write: a hidden tab can be killed without any
+          // further notice, and on mobile this fires where beforeunload
+          // does not. Everything still sitting in the debounce window
+          // would otherwise be lost — up to fifteen seconds of trace on
+          // a long outing.
+          this.flushPersist();
           // Deliberately do NOT stop the watch here.
           //
           // The previous version flipped gpsTracking off on every
@@ -253,20 +259,27 @@ export default function install(Vue) {
         if (this.fixAgeMs > STALE_FIX_MS) this.restartGpsWatch();
       };
       document.addEventListener('visibilitychange', this._onVisibility);
+      // pagehide covers the cases visibilitychange does not: a real
+      // navigation away, and Safari putting the page into the back/
+      // forward cache.
+      this._onPageHide = () => this.flushPersist();
+      window.addEventListener('pagehide', this._onPageHide);
     },
 
+    // Only reached if something ever tears the singleton down — nothing
+    // does today, which is why the trace is flushed from the page
+    // lifecycle handlers above rather than from here. Kept correct so it
+    // does the right thing the day the plugin stops being a singleton.
     beforeDestroy() {
       this.stopGpsWatch();
       this.stopWatchdog();
       this.releaseWakeLock();
-      if (this._persistTimer) {
-        clearTimeout(this._persistTimer);
-        // Flush pending trace on unmount to avoid losing points that
-        // were still inside the debounce window.
-        persist(this.$data);
-      }
+      this.flushPersist();
       if (this._onVisibility && typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', this._onVisibility);
+      }
+      if (this._onPageHide && typeof window !== 'undefined') {
+        window.removeEventListener('pagehide', this._onPageHide);
       }
     },
 
@@ -275,12 +288,26 @@ export default function install(Vue) {
         persist(this.$data);
       },
 
+      // Write now and cancel anything pending, so a queued timer cannot
+      // fire later and re-persist a state that has since moved on.
+      flushPersist() {
+        if (this._persistTimer) {
+          clearTimeout(this._persistTimer);
+          this._persistTimer = null;
+        }
+        persist(this.$data);
+      },
+
       snapshotDebounced() {
         if (this._persistTimer) clearTimeout(this._persistTimer);
+        const delay = Math.min(
+          PERSIST_DEBOUNCE_MAX_MS,
+          PERSIST_DEBOUNCE_MIN_MS + this.positions.length * PERSIST_DEBOUNCE_PER_POINT_MS
+        );
         this._persistTimer = window.setTimeout(() => {
           this._persistTimer = null;
           persist(this.$data);
-        }, POSITIONS_PERSIST_DEBOUNCE_MS);
+        }, delay);
       },
 
       // Start an outing on a given topo. Does NOT enable GPS tracking
@@ -455,16 +482,26 @@ export default function install(Vue) {
             // user does not look like a dead watch to the watchdog.
             this.lastFixAt = now;
             this.geoError = null;
+            // A fix the receiver reports as poor is a cell-tower guess,
+            // not a position. Keeping it would spike the drawn trace as
+            // well as the published totals. Counted as liveness above,
+            // because the watch is plainly alive — it just cannot see.
+            if (!isUsableFix(pos.coords.accuracy)) return;
             // Browser may fire much more often than we need; throttle.
             if (now - this._lastSampleTime < intervalMs - 500) return;
+            // The stored point carries only what is read back later:
+            // coordinates, altitude and time. `accuracy` is used to accept
+            // or reject the fix above and never again, so keeping it in
+            // every one of thousands of points would be bytes and
+            // serialisation time spent on nothing.
             const sample = {
-              lat: pos.coords.latitude,
-              lon: pos.coords.longitude,
-              alt: pos.coords.altitude,
-              accuracy: pos.coords.accuracy,
+              lat: round6(pos.coords.latitude),
+              lon: round6(pos.coords.longitude),
+              alt: Number.isFinite(pos.coords.altitude) ? Math.round(pos.coords.altitude * 10) / 10 : null,
               t: now,
             };
-            this.currentPosition = sample;
+            // The live marker does want the accuracy circle.
+            this.currentPosition = { ...sample, accuracy: pos.coords.accuracy };
             const last = this.positions[this.positions.length - 1];
             if (!last || haversine(last, sample) >= MIN_DISTANCE_M) {
               // The flag lands on the first point actually recorded after

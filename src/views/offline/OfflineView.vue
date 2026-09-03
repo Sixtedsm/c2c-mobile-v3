@@ -57,7 +57,9 @@
             </span>
             <span v-else-if="item.conflict" class="tag is-warning is-small pending-outing-badge">
               <fa-icon icon="triangle-exclamation" />
-              &nbsp;{{ $gettext('En conflit') }}
+              &nbsp;{{
+                item.freezeReason === 'conflict' || !item.freezeReason ? $gettext('En conflit') : $gettext('À vérifier')
+              }}
             </span>
             <span v-else-if="item.attempts > 0" class="tag is-light is-danger is-small pending-outing-badge">
               {{ $gettext('Attempts:') }} {{ item.attempts }}
@@ -94,6 +96,13 @@
           >
             <fa-icon icon="circle-info" />
             &nbsp;{{ $gettext('Dernière erreur :') }} <code>{{ item.lastError }}</code>
+          </p>
+          <!-- Why the item stopped being retried. The ambiguous case is
+               the one that matters: the outing may already be on the site,
+               and republishing blind would duplicate it. -->
+          <p v-if="item.conflict" class="pending-outing-error">
+            <fa-icon icon="circle-info" />
+            &nbsp;{{ freezeExplanation(item) }}
           </p>
           <!-- Conflict resolution row (Lot 5 §2.4): shown only when the
                API returned 409 on a previous attempt. Three moves:
@@ -445,6 +454,7 @@ import c2c from '@/js/apis/c2c';
 import pullRefreshMixin from '@/js/pull-refresh-mixin';
 import { ageLabel, freshnessOf } from '@/pwa/offline-freshness';
 import { isDownloadComplete, OFFLINE_MODE, ONLINE_MODE } from '@/pwa/offline-store';
+import { freezeMessage } from '@/pwa/sync-policy';
 
 const TYPE_ICONS = {
   route: 'route',
@@ -781,6 +791,10 @@ export default {
       }
       await this.$offline.removeDocument(entry.type, entry.id, entry.lang);
       this.storage = await this.$offline.getStorageUsage();
+    },
+
+    freezeExplanation(item) {
+      return freezeMessage(item.freezeReason, item.ambiguous, (m) => this.$gettext(m));
     },
 
     retryConflict(id) {

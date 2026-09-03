@@ -7,6 +7,7 @@ import ol from '@/js/libs/ol';
 import uploadFile from '@/js/upload-file';
 import { extractEmbeddedImageIds, extractImageUrlsFromCooked } from '@/pwa/cooked-html-parser';
 import * as store from '@/pwa/offline-store';
+import { classifyFailure } from '@/pwa/sync-policy';
 
 // Push one File through the existing V1 upload pipeline (EXIF parse +
 // resize + POST to imageBackend). Adapts the callback-style helper to
@@ -1041,23 +1042,27 @@ export default function install(Vue) {
             // (CDC §2.4 "gestion des conflits"). Freeze the item and
             // surface it in the UI — an auto-retry would just fail
             // identically and the user has to make the call.
-            if (status === 409) {
-              remaining.push({
-                ...item,
-                attempts: item.attempts + 1,
-                lastError: readable,
-                conflict: true,
-                uploadedImageIds,
-              });
+            // The queue used to retry everything forever, which turned a
+            // permanently invalid payload into a failure toast on every
+            // reconnect, and turned a lost response into a second copy
+            // of the outing on the user account. See sync-policy.js.
+            const verdict = classifyFailure(status, item.attempts);
+            const next = {
+              ...item,
+              attempts: verdict.attemptsAfter,
+              lastError: readable,
+              uploadedImageIds,
+            };
+            if (verdict.freeze) {
+              // Frozen items land where conflicts already do: visible in
+              // "Mes topos", with retry / export / discard. Nothing is
+              // ever dropped without the user saying so.
+              next.conflict = true;
+              next.freezeReason = verdict.reason;
+              next.ambiguous = verdict.ambiguous;
               newConflicts += 1;
-            } else {
-              remaining.push({
-                ...item,
-                attempts: item.attempts + 1,
-                lastError: readable,
-                uploadedImageIds,
-              });
             }
+            remaining.push(next);
           }
         }
         await store.replacePendingOutings(remaining);
