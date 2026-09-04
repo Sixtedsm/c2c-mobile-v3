@@ -16,8 +16,25 @@ import * as backgroundAudio from '@/pwa/background-audio';
 import { haversine } from '@/pwa/haversine';
 import { createTraceMetrics, isUsableFix } from '@/pwa/trace-metrics';
 import { splitOnGaps } from '@/pwa/trace-segments';
+import {
+  classifyStorageError,
+  deleteTrace,
+  loadTrace,
+  newTraceId,
+  pruneTracesExcept,
+  requestPersistentStorage,
+  writeTail,
+} from '@/pwa/trace-store';
 
 const STORAGE_KEY = 'v3.outingSession';
+// Schema 1 kept the whole trace inside this key. Schema 2 keeps only the
+// session's metadata here and moves the points to IndexedDB — see
+// src/pwa/trace-store.js for why. A schema-1 snapshot is migrated on the
+// next boot, and never dropped before the migration has succeeded.
+const SNAPSHOT_SCHEMA = 2;
+// The trace tail is small and its write is asynchronous, so it does not
+// need the growing debounce the whole-blob write did.
+const TRACE_FLUSH_MS = 2000;
 const DEFAULT_TRACK_INTERVAL_MS = 5000; // fallback if $appSettings hasn't loaded yet
 const MIN_DISTANCE_M = 3; // ignore jitter under 3m (urban canyon GPS noise)
 const MAX_STALE_MS = 48 * 3600 * 1000; // drop sessions older than 48h
@@ -27,8 +44,10 @@ const MAX_STALE_MS = 48 * 3600 * 1000; // drop sessions older than 48h
 // TIMEOUT — so the watchdog rebuilds it.
 const STALE_FIX_MS = 60 * 1000;
 const WATCHDOG_INTERVAL_MS = 30 * 1000;
-// Debounce persist() on `positions` — a long trace should not
-// JSON.stringify the whole state on every fix.
+// Debounce the whole-blob write on `positions`. This is now only the
+// FALLBACK path — a browser with no usable IndexedDB (a private window,
+// site data blocked) still records, the old way, and says so. On the
+// normal path the trace never enters this blob at all.
 //
 // localStorage writes synchronously, so the cost lands on the main
 // thread of a phone that is already recording. Measured on a desktop, a
@@ -75,11 +94,18 @@ function loadSnapshot() {
   }
 }
 
+// Write the session metadata. Returns null on success, or a reason —
+// 'quota' / 'blocked' — that the caller shows to the user.
+//
+// It used to swallow every failure, which meant that once the origin's
+// 5 MB was full nothing was durable any more and nothing said so. That
+// is precisely the class of silence this whole effort is about.
 function persist(state) {
   try {
     window.localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
+        schema: SNAPSHOT_SCHEMA,
         sessionActive: state.sessionActive,
         // Never re-persist gpsTracking=true — see restart logic below.
         gpsTracking: false,
@@ -101,11 +127,19 @@ function persist(state) {
         paused: state.paused,
         pausedAt: state.pausedAt,
         pausedMs: state.pausedMs,
-        positions: state.positions,
+        // Where the points live. The blob itself carries them only in
+        // the fallback mode, and only until a migration succeeds —
+        // dropping them any earlier would lose a trace to make room for
+        // a schema change.
+        traceId: state.traceId,
+        tracePoints: state.positions.length,
+        legacyTrace: state.legacyTrace,
+        positions: state.legacyTrace ? state.positions : undefined,
       })
     );
-  } catch {
-    // localStorage full or denied — ignore, session won't survive reload
+    return null;
+  } catch (err) {
+    return classifyStorageError(err);
   }
 }
 
@@ -164,6 +198,24 @@ export default function install(Vue) {
         // Running totals, fed point by point rather than recomputed.
         // See syncTraceMetrics().
         traceMetricsSnapshot: { distance: 0, gain: 0, loss: 0 },
+        // Which trace in IndexedDB belongs to this session.
+        traceId: snap?.traceId || null,
+        // False until the points are back from IndexedDB. Only one
+        // consumer must not read through it — the outing form, which
+        // turns the trace into a published figure — and it awaits
+        // whenTraceReady(). Everything else renders a moment of zero.
+        traceReady: false,
+        // The trace still lives in the localStorage blob: either a
+        // schema-1 session not yet migrated, or a browser where
+        // IndexedDB is unusable. Recording still works; it is the old
+        // path, with its old limits, and the UI says so.
+        legacyTrace: !!snap && snap.schema !== SNAPSHOT_SCHEMA && Array.isArray(snap.positions),
+        // 'quota' | 'blocked' | null. Nothing about a full or refused
+        // store may be silent — see persist() above.
+        storageError: null,
+        // Whether the browser agreed to make this origin non-evictable.
+        // Advisory: nothing is gated on it.
+        storagePersisted: null,
         // Screen Wake Lock sentinel held while recording. Without it
         // the phone locks after ~30 s and the page is frozen, which is
         // what turned a 1 h run into 3 recorded points.
@@ -217,6 +269,13 @@ export default function install(Vue) {
           // runs through this watcher, and all of them originate in a
           // tap — which is what the autoplay policy requires.
           this.startKeepAlive();
+          // Same reason, different API: asked from a gesture, Firefox
+          // grants it without a prompt. Without it the whole origin is
+          // evictable under storage pressure — the trace, the offline
+          // topos and the sync queue alike. Advisory, nothing waits.
+          requestPersistentStorage().then((granted) => {
+            this.storagePersisted = granted;
+          });
           // Fresh run: forget the previous throttle cursor, otherwise a
           // restart within one sample interval drops the first fix.
           this._lastSampleTime = 0;
@@ -258,6 +317,9 @@ export default function install(Vue) {
       // they are a snapshot, and something has to fill it — otherwise a
       // reload showed 0 km and, worse, published it.
       this.syncTraceMetrics();
+      // Bring the trace back from IndexedDB, or migrate a schema-1 one
+      // into it. Held so the outing form can await it; it never rejects.
+      this._hydration = this.hydrateTrace();
 
       // Wire the tab-hidden battery guard once. The listener stays for
       // the whole app lifetime — the plugin is a singleton.
@@ -273,6 +335,12 @@ export default function install(Vue) {
           // would otherwise be lost — up to fifteen seconds of trace on
           // a long outing.
           this.flushPersist();
+          // A hidden tab can be killed with no further notice, and this
+          // is the last moment IndexedDB is reliably allowed to finish a
+          // write. Not awaited — there is nothing useful to do with the
+          // result here, and blocking the handler would only make the
+          // kill more likely.
+          this.flushTrace();
           // Deliberately do NOT stop the watch here.
           //
           // The previous version flipped gpsTracking off on every
@@ -334,7 +402,7 @@ export default function install(Vue) {
 
     methods: {
       snapshot() {
-        persist(this.$data);
+        this.storageError = persist(this.$data);
       },
 
       // Write now and cancel anything pending, so a queued timer cannot
@@ -344,7 +412,7 @@ export default function install(Vue) {
           clearTimeout(this._persistTimer);
           this._persistTimer = null;
         }
-        persist(this.$data);
+        this.storageError = persist(this.$data);
       },
 
       // Advance the running totals over whatever is new, then persist.
@@ -373,7 +441,113 @@ export default function install(Vue) {
 
       onPositionsChanged() {
         this.syncTraceMetrics();
-        this.snapshotDebounced();
+        if (this.legacyTrace) {
+          // Fallback: the points still travel inside the blob.
+          this.snapshotDebounced();
+        } else {
+          this.scheduleTraceFlush();
+        }
+      },
+
+      scheduleTraceFlush() {
+        if (this._traceTimer) return;
+        this._traceTimer = window.setTimeout(() => {
+          this._traceTimer = null;
+          this.flushTrace();
+        }, TRACE_FLUSH_MS);
+      },
+
+      // Append everything recorded since the last successful write.
+      //
+      // Serialised rather than concurrent: two overlapping writes would
+      // race on the same tail chunk, and the later one could report a
+      // flushed count covering points the earlier one never wrote. A
+      // request arriving mid-flight marks the store dirty instead, and
+      // is honoured as soon as the current write lands.
+      async flushTrace() {
+        if (!this.traceId || this.legacyTrace) return;
+        if (this._traceWriting) {
+          this._traceDirty = true;
+          return;
+        }
+        if (this._traceTimer) {
+          window.clearTimeout(this._traceTimer);
+          this._traceTimer = null;
+        }
+        this._traceWriting = true;
+        const generation = this._traceGeneration;
+        try {
+          const flushed = await writeTail(this.traceId, this.positions, this._flushedCount || 0);
+          // A start() or discardTrace() during the write invalidates the
+          // cursor: it would count points from a trace that no longer
+          // exists.
+          if (generation === this._traceGeneration) {
+            this._flushedCount = flushed;
+            if (this.storageError) this.storageError = null;
+          }
+        } catch (err) {
+          this.storageError = classifyStorageError(err);
+        } finally {
+          this._traceWriting = false;
+          if (this._traceDirty) {
+            this._traceDirty = false;
+            this.flushTrace();
+          }
+        }
+      },
+
+      // Bring a recorded trace back, or move a schema-1 one into
+      // IndexedDB. Never rejects: a session that cannot reach its store
+      // still has to run, on the fallback path, with the reason shown.
+      async hydrateTrace() {
+        const generation = this._traceGeneration;
+        try {
+          if (this.legacyTrace) {
+            // The points are already in memory from the snapshot, so
+            // there is no window where the trace is missing. Write them
+            // out, and only then stop carrying them in the blob.
+            const traceId = newTraceId();
+            const flushed = await writeTail(traceId, this.positions, 0);
+            if (generation !== this._traceGeneration) return;
+            this.traceId = traceId;
+            this._flushedCount = flushed;
+            this.legacyTrace = false;
+            this.snapshot();
+          } else if (this.traceId) {
+            const points = await loadTrace(this.traceId);
+            if (generation !== this._traceGeneration) return;
+            if (points.length) {
+              // Assigned, not pushed: one notification instead of
+              // thousands, and the identity check in syncTraceMetrics
+              // turns it into a single full recompute.
+              this.positions = points;
+              this._flushedCount = points.length;
+              this.syncTraceMetrics();
+            }
+          }
+          await pruneTracesExcept(this.traceId);
+        } catch (err) {
+          // IndexedDB unusable. Keep recording the old way rather than
+          // not at all, and keep the points in the blob so a reload
+          // still finds them.
+          if (generation === this._traceGeneration) {
+            this.storageError = classifyStorageError(err);
+            this.legacyTrace = true;
+          }
+        } finally {
+          if (generation === this._traceGeneration) {
+            this.traceReady = true;
+            if (this._watchPendingHydration) {
+              this._watchPendingHydration = false;
+              this.startGpsWatch();
+            }
+          }
+        }
+      },
+
+      // For the one consumer that must not read a half-loaded trace.
+      whenTraceReady() {
+        return this._hydration || Promise.resolve();
       },
 
       snapshotDebounced() {
@@ -384,13 +558,16 @@ export default function install(Vue) {
         );
         this._persistTimer = window.setTimeout(() => {
           this._persistTimer = null;
-          persist(this.$data);
+          this.storageError = persist(this.$data);
         }, delay);
       },
 
       // Start an outing on a given topo. Does NOT enable GPS tracking
       // unless the caller passes { track: true }.
       start({ type, id, lang }, { track = false } = {}) {
+        // Invalidate anything still in flight against the old trace: a
+        // hydration reading it back, a write reporting a flushed count.
+        const previousTraceId = this.newTraceGeneration();
         this.sessionActive = true;
         this.topoRef = { type, id, lang };
         this.startedAt = Date.now();
@@ -400,7 +577,28 @@ export default function install(Vue) {
         this.pausedMs = 0;
         this.recordingInterrupted = false;
         this._gapPending = false;
+        this.traceId = newTraceId();
+        this._flushedCount = 0;
+        this.legacyTrace = false;
+        this.storageError = null;
+        // A brand-new trace has nothing to load.
+        this.traceReady = true;
         this.gpsTracking = !!track;
+        if (previousTraceId) deleteTrace(previousTraceId).catch(() => {});
+      },
+
+      // Bump the generation and hand back the trace it retired, so the
+      // caller can delete it. Same token idiom as the keep-alive above:
+      // async work started under an old generation must not write back.
+      newTraceGeneration() {
+        const previousTraceId = this.traceId;
+        this._traceGeneration = (this._traceGeneration || 0) + 1;
+        this._traceDirty = false;
+        if (this._traceTimer) {
+          window.clearTimeout(this._traceTimer);
+          this._traceTimer = null;
+        }
+        return previousTraceId;
       },
 
       // Suspend an outing in progress (CDC §2.4). The session, the topo
@@ -440,6 +638,14 @@ export default function install(Vue) {
       // Trace kept in memory until export/discard so the user can attach
       // it to a draft outing right after.
       stop() {
+        // The stored copy has done its job: the session is over, and
+        // whatever happens to the trace next (a GPX export, the outing
+        // form) happens from memory. Leaving the chunks behind would
+        // slowly fill the very store this all exists to protect.
+        const previousTraceId = this.newTraceGeneration();
+        if (previousTraceId) deleteTrace(previousTraceId).catch(() => {});
+        this.traceId = null;
+        this._flushedCount = 0;
         // Setting gpsTracking to false runs the watcher above, which
         // clears the watch, the watchdog and the wake lock.
         this.gpsTracking = false;
@@ -701,6 +907,13 @@ export default function install(Vue) {
 
       startGpsWatch() {
         if (!navigator.geolocation || this.watchId !== null) return;
+        // Recording into a trace that is still loading would put the new
+        // points before the old ones and lose the count. The hydration
+        // calls back here the moment it lands.
+        if (!this.traceReady) {
+          this._watchPendingHydration = true;
+          return;
+        }
         // Sample rate is user-controlled via AppSettings (CDC §2.9).
         // Snapshot at watch start — a mid-watch change is honored by
         // stop+start, not by mutating the closure.
@@ -781,8 +994,12 @@ export default function install(Vue) {
       },
 
       discardTrace() {
+        const previousTraceId = this.newTraceGeneration();
         this.positions = [];
+        this._flushedCount = 0;
+        this.traceId = this.sessionActive ? newTraceId() : null;
         this.snapshot();
+        if (previousTraceId) deleteTrace(previousTraceId).catch(() => {});
       },
 
       // Build a GPX 1.1 document from the recorded trace. Standard

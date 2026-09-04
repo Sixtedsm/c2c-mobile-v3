@@ -13,7 +13,20 @@ function LocalStorageItem(key) {
 }
 
 LocalStorageItem.prototype.commit_ = function () {
-  window.localStorage.setItem(this.key, JSON.stringify(this.data_));
+  try {
+    window.localStorage.setItem(this.key, JSON.stringify(this.data_));
+  } catch (err) {
+    // The origin's quota is shared by everything the app stores, and one
+    // large writer filling it used to make EVERY other write throw —
+    // including user.js persisting the auth token, which signed the user
+    // out. The in-memory value stays correct; only its durability is
+    // lost, and that is a far smaller failure than the one it caused.
+    //
+    // Not silent to a developer, and not fatal to a walker: the outing
+    // session reports storage trouble in the UI on its own (see
+    // src/pwa/trace-store.js), which is the surface where it matters.
+    console.warn('localStorage write failed for ' + this.key, err);
+  }
 };
 
 LocalStorageItem.prototype.get = function (propertyName, defaultIfUndefined) {

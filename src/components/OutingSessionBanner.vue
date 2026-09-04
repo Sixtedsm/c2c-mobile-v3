@@ -86,12 +86,14 @@ export default {
     // refused to try. Both look identical from the outside (a trace that
     // stops growing), and neither used to be said anywhere.
     isStalled() {
-      return !!this.$outingSession.geoError || this.$outingSession.gpsSilent;
+      return !!this.$outingSession.geoError || !!this.$outingSession.storageError || this.$outingSession.gpsSilent;
     },
 
-    // The states, most alarming first: an outright refusal, then a
-    // recording that has gone quiet, then the two the app already knew.
+    // The states, most alarming first: a trace that is no longer being
+    // saved, an outright refusal, a recording gone quiet, then the two
+    // the app already knew.
     statusLabel() {
+      if (this.$outingSession.storageError) return this.$gettext('Trace non sauvegardée');
       if (this.$outingSession.geoError) return this.$gettext('GPS bloqué');
       if (this.$outingSession.gpsSilent) return this.$gettext('Aucun point reçu');
       if (this.$outingSession.recordingInterrupted) return this.$gettext('Enregistrement interrompu');

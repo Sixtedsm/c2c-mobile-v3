@@ -532,8 +532,13 @@ export default {
       this.$refs.previewModal?.show();
     },
 
-    afterLoad() {
+    async afterLoad() {
       this.showBothDates = this.document.date_start !== this.document.date_end;
+      // The trace comes back from IndexedDB asynchronously. Every other
+      // reader can render a moment of zero and correct itself; this one
+      // writes length_total and the published geometry, so it waits.
+      // Never rejects.
+      await this.$outingSession?.whenTraceReady();
       this.hydrateFromOutingSession();
     },
 

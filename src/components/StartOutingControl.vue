@@ -56,6 +56,22 @@
           </div>
         </div>
 
+        <!-- The store is full, or the browser refuses to keep anything.
+             Loud, and with the only recovery that actually works: the
+             trace in memory is still complete, so getting it out of the
+             page is what saves the day. Silence here is what let a whole
+             recording become undurable without a word. -->
+        <div v-if="storageMessage" class="start-outing-alert is-error is-block">
+          <p>
+            <fa-icon icon="triangle-exclamation" />
+            &nbsp;{{ storageMessage }}
+          </p>
+          <button v-if="hasTrace" type="button" class="button is-small is-danger" @click="exportGpx">
+            <fa-icon icon="download" />
+            &nbsp;{{ $gettext('Exporter le GPX maintenant') }}
+          </button>
+        </div>
+
         <!-- A geolocation failure used to be recorded in state and shown
              nowhere at all: a refused permission stopped the recording in
              complete silence. Same helper, same wording as the map and
@@ -353,6 +369,23 @@ export default {
 
     tracedGain() {
       return elevation(this.$outingSession.elevationGainMeters, this.$appSettings?.units);
+    },
+
+    // Two different failures behind one flag, and the difference is what
+    // the user can do about it: free some room, or use another browser.
+    storageMessage() {
+      const reason = this.$outingSession.storageError;
+      if (reason === 'quota') {
+        return this.$gettext(
+          'Mémoire du téléphone pleine : la trace n’est plus sauvegardée. Exportez le GPX avant de fermer l’application.'
+        );
+      }
+      if (reason === 'blocked') {
+        return this.$gettext(
+          'Ce navigateur refuse d’enregistrer des données (navigation privée ?). La trace ne survivra pas à une fermeture.'
+        );
+      }
+      return '';
     },
 
     // The single source of wording for geolocation failures, shared with
@@ -837,6 +870,15 @@ export default {
     background: #fff5e6;
     border: 1px solid rgba(255, 153, 51, 0.5);
     color: #a35a00;
+  }
+
+  // Stacks the message above its recovery button.
+  &.is-block {
+    display: block;
+
+    p {
+      margin-bottom: 0.45rem;
+    }
   }
 }
 
