@@ -5,6 +5,22 @@
       :sub-title="$gettext('Main informations about your outing')"
       expanded-on-load
     >
+      <!-- Provenance of the figures the app filled in. Inside the only
+           section that is open on load, and not beside the fields it
+           describes: "Détails" is collapsed, and a warning nobody opens
+           is the same as no warning. The app filling in a distance and a
+           dénivelé without saying so is what let a wrong reading travel
+           all the way to camptocamp.org unnoticed (feedback Gilles, mail
+           2026-09-04). Whether the trace was used or rejected, this says
+           which, and why. -->
+      <div v-if="traceNotice" class="notification trace-notice" :class="traceNotice.level">
+        <p class="trace-notice-title">
+          <fa-icon :icon="traceNotice.icon" />
+          &nbsp;{{ traceNotice.title }}
+        </p>
+        <p class="trace-notice-sub">{{ traceNotice.detail }}</p>
+      </div>
+
       <div class="columns">
         <form-field
           class="is-narrow"
@@ -321,7 +337,9 @@ import documentEditionViewMixin from './utils/document-edition-view-mixin';
 
 import c2c from '@/js/apis/c2c';
 import ol from '@/js/libs/ol';
+import { elapsedMs, formatDuration } from '@/pwa/elapsed-label';
 import { splitOnGaps } from '@/pwa/trace-segments';
+import { summariseTrace } from '@/pwa/trace-usability';
 
 export default {
   components: { CotometerWindow, OutingPreviewModal },
@@ -360,10 +378,81 @@ export default {
       // real one. Consumed by saveAsIncompleteDraft() below.
       routeNote: '',
       savingIncomplete: false,
+      // What the GPS recording was worth, and whether its figures were
+      // used. Null when the form was not opened from a session. Read by
+      // the notice in the "Details" section — the figures the app fills
+      // in have to say where they come from, because the user is the
+      // only one who can tell a good recording from a bad one.
+      traceSummary: null,
     };
   },
 
   computed: {
+    // One sentence for what the app did with the recording, one for why.
+    // Four cases, and the three failures are the ones that matter: each
+    // says which figures were left for the user to fill, so an empty
+    // dénivelé does not read as an oversight.
+    traceNotice() {
+      const summary = this.traceSummary;
+      if (!summary) return null;
+
+      const points = this.$gettext('{n} points enregistrés').replace('{n}', summary.points);
+      const recorded = formatDuration(summary.recordedMs);
+
+      if (summary.usable) {
+        return {
+          level: 'is-info',
+          icon: 'route',
+          title: this.$gettext('Distance, dénivelés et trace calculés depuis l’enregistrement GPS'),
+          detail: this.$gettext('{points} sur {duration} d’enregistrement. Vérifiez les chiffres avant de publier.')
+            .replace('{points}', points)
+            .replace('{duration}', recorded),
+        };
+      }
+
+      if (summary.points === 0) {
+        return {
+          level: 'is-warning',
+          icon: 'triangle-exclamation',
+          title: this.$gettext('Aucune trace GPS pour cette sortie'),
+          detail: this.$gettext(
+            'L’enregistrement était désactivé. Distance, dénivelés et altitudes ci-dessous viennent de l’itinéraire — corrigez-les si votre sortie en diffère.'
+          ),
+        };
+      }
+
+      // Rounded here because the sentence changes when it lands on zero:
+      // the smoothing in trace-metrics discards pure noise outright, and
+      // "ne couvre que 0 m" reads like a bug rather than a diagnosis.
+      const metres = Math.round(this.$outingSession?.tracedDistanceMeters || 0);
+
+      const detail = {
+        'too-few-points': this.$gettext(
+          '{points} : trop peu pour décrire une sortie. Les chiffres de l’itinéraire ont été repris à la place.'
+        ),
+        'too-short': metres
+          ? this.$gettext(
+              'La trace ne couvre que {distance} m — l’enregistrement a tourné à l’arrêt. Les chiffres de l’itinéraire ont été repris à la place.'
+            )
+          : this.$gettext(
+              'L’enregistrement n’a mesuré aucun déplacement : le téléphone est resté sur place. Les chiffres de l’itinéraire ont été repris à la place.'
+            ),
+        partial: this.$gettext(
+          'L’enregistrement n’a tourné que {duration} sur la durée de la sortie. Sa distance n’est pas celle de la sortie, elle n’a pas été reprise.'
+        ),
+      }[summary.reason];
+
+      return {
+        level: 'is-warning',
+        icon: 'triangle-exclamation',
+        title: this.$gettext('L’enregistrement GPS n’a pas servi à remplir les chiffres'),
+        detail: (detail || '')
+          .replace('{points}', points)
+          .replace('{distance}', metres)
+          .replace('{duration}', recorded),
+      };
+    },
+
     // The mixin reads the language off the route, which has no lang
     // param on the creation form. Falling back keeps the preview working
     // for a brand-new outing — the case it is most useful in.
@@ -488,6 +577,10 @@ export default {
       // either order. That invariant is what keeps an associated route
       // from overwriting a measured dénivelé; do not turn these
       // assignments into unconditional ones without re-checking it.
+      //
+      // Its mirror image is why the trace has to earn the right to write
+      // at all: a figure the trace puts down cannot be corrected by the
+      // route afterwards. See the usability guard below.
       this.associateSessionRoute();
 
       // Pre-fill dates from the session start (the user is filling
@@ -500,7 +593,22 @@ export default {
         this.showBothDates = false;
       }
 
-      if (!session.positions.length) return;
+      // Does this recording actually describe the outing? A handful of
+      // fixes taken standing still is a position, not a walk, and writing
+      // its 15 metres into the form does two kinds of damage: it publishes
+      // a false figure, and it fills the field that the itinéraire's own
+      // dénivelé would otherwise have propagated into. See
+      // src/pwa/trace-usability.js — this is Gilles' 0,015 km.
+      //
+      // Computed even for an empty trace, so the notice below can say
+      // "nothing was recorded" rather than leave the blank fields to be
+      // read as an oversight.
+      const summary = summariseTrace(session.positions, {
+        distanceMeters: session.tracedDistanceMeters,
+        elapsedMs: elapsedMs(session.startedAt, Date.now(), session.pausedMs, session.pausedAt),
+      });
+      this.traceSummary = summary;
+      if (!summary.usable) return;
 
       // GPS trace in EPSG:3857 (C2C's storage projection), split at the
       // recording breaks: a point flagged `gap` opens a new segment.
@@ -830,6 +938,34 @@ export default {
 // visually as a warning card so the user notices it right below the
 // normal itinéraire pickers. Same orange palette as offline-routes-*
 // so the two offline-mode helpers read as one coherent flow.
+.trace-notice {
+  padding: 0.7rem 0.85rem;
+  margin-bottom: 1rem;
+
+  &.is-info {
+    background: #eef4fa;
+    border: 1px solid rgba(51, 122, 183, 0.35);
+    color: #2b5d86;
+  }
+
+  &.is-warning {
+    background: #fff5e6;
+    border: 1px solid rgba(255, 153, 51, 0.5);
+    color: #a35a00;
+  }
+}
+
+.trace-notice-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.trace-notice-sub {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin-top: 0.2rem;
+}
+
 .incomplete-draft-notice {
   margin: 1rem 0 0;
   padding: 0.85rem;

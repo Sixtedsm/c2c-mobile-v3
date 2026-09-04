@@ -59,10 +59,18 @@
         <div class="start-outing-menu-row">
           <label class="start-outing-toggle">
             <input type="checkbox" :checked="$outingSession.gpsTracking" @change="toggleTracking" />
-            <!-- Reports state, not an action: the line underneath says
-                 what is happening, and an imperative label above a state
-                 description reads as a contradiction (feedback Gilles). -->
-            <span>{{ $gettext('Enregistrement de la trace GPS') }}</span>
+            <!-- Names the current state, not the checkbox. "Enregistrement
+                 de la trace GPS" left Gilles asking when he was supposed to
+                 tick it — at the start of the outing? at the end? A label
+                 that says what is happening right now cannot raise that
+                 question (mail 2026-09-04). -->
+            <span>
+              {{
+                $outingSession.gpsTracking
+                  ? $gettext('Trace GPS : enregistrement en cours')
+                  : $gettext('Trace GPS : pas d’enregistrement')
+              }}
+            </span>
           </label>
           <p class="start-outing-toggle-hint">
             <template v-if="$outingSession.gpsTracking">
@@ -141,7 +149,17 @@
           <input type="checkbox" v-model="wantTracking" />
           <span>
             <strong>{{ $gettext('Enregistrer la trace GPS') }}</strong>
-            <small>{{ $gettext('Position toutes les 5 s · génère un GPX à la fin · consomme de la batterie') }}</small>
+            <!-- Two sentences rather than one neutral description: what
+                 unticking costs is the thing that was missing, and it is
+                 only worth saying in the state where it applies. -->
+            <small v-if="wantTracking">
+              {{
+                $gettext('Position toutes les 5 s · trace, distance et dénivelés calculés · consomme de la batterie')
+              }}
+            </small>
+            <small v-else class="is-warning">
+              {{ $gettext('Décoché : aucune trace ne sera enregistrée pour cette sortie. Économise la batterie.') }}
+            </small>
           </span>
         </label>
 
@@ -171,11 +189,19 @@
           {{ tracedDistance.unit }} ·
           {{ elapsedLabel }}
         </p>
-        <p v-if="$outingSession.hiddenMs > 0" class="start-outing-modal-sub">
+        <p v-if="hasTrace && $outingSession.hiddenMs > 0" class="start-outing-modal-sub">
           {{ hiddenSummary }}
         </p>
-        <p v-else class="start-outing-modal-sub">
-          {{ $gettext('Aucune trace GPS enregistrée pour cette sortie.') }}
+        <!-- Said loudly and once, here: this is the last moment where the
+             absence of a trace can still be explained rather than
+             discovered on the published outing. -->
+        <p v-if="!hasTrace" class="start-outing-modal-warning">
+          <fa-icon icon="triangle-exclamation" />
+          &nbsp;{{
+            $gettext(
+              'Aucune trace GPS n’a été enregistrée : l’enregistrement était désactivé pendant cette sortie. Distance et dénivelés seront à saisir à la main.'
+            )
+          }}
         </p>
 
         <div class="start-outing-stop-options">
@@ -350,7 +376,14 @@ export default {
         );
         if (!proceed) return;
       }
-      this.wantTracking = false;
+      // Recording is the default, and unticking it is the deliberate
+      // choice. Feedback Gilles (mail 2026-09-04): he walked 30 km and
+      // +1900 m, came back, and had no trace — the box had been off, and
+      // nothing about "Démarrer la sortie" suggested it had to be ticked
+      // first. His own question says it: "quand faut-il cocher ?".
+      // Someone starting an outing from the topo page is, by that act,
+      // asking the app to follow them.
+      this.wantTracking = true;
       this.showStartModal = true;
     },
 
@@ -719,6 +752,19 @@ export default {
   line-height: 1.4;
 }
 
+.start-outing-modal-warning {
+  display: flex;
+  align-items: flex-start;
+  padding: 0.6rem 0.7rem;
+  margin: 0 0 1rem;
+  border-radius: 8px;
+  background: #fff5e6;
+  border: 1px solid rgba(255, 153, 51, 0.5);
+  color: #a35a00;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .start-outing-checkbox {
   display: flex;
   align-items: flex-start;
@@ -870,6 +916,11 @@ html[data-theme='dark'] {
   }
   .start-outing-modal-sub {
     color: #b5b5b5;
+  }
+  .start-outing-modal-warning {
+    background: #3a2f1a;
+    border-color: rgba(255, 153, 51, 0.4);
+    color: #ffb866;
   }
   .start-outing-checkbox {
     background: #3a2f1a;

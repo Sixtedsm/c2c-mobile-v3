@@ -12,7 +12,14 @@
         <strong>{{ statusLabel }}</strong>
         <small>{{ elapsedLabel }}{{ metricsLabel }}</small>
       </span>
-      <fa-icon icon="chevron-right" />
+      <!-- Names its destination. On its own the chevron only said "this
+           is tappable", which left the whole banner unexplained: Gilles
+           asked what it was for and why it had an arrow (mail
+           2026-09-04). "Voir le topo" answers both at once. -->
+      <span class="outing-session-banner-go">
+        {{ $gettext('Voir le topo') }}
+        <fa-icon icon="chevron-right" />
+      </span>
     </button>
     <!-- The banner is the surface a paused outing is most likely to be
          seen from — the user has wandered off the topo page — so the way
@@ -98,13 +105,18 @@ export default {
   },
 
   watch: {
-    // Only run the elapsed-time tick while there's actually a session
-    // to display. Idle branches (no session, or user on the session's
-    // own topo) don't schedule the interval at all.
+    // Two effects, one condition. The tick: only run the elapsed-time
+    // interval while there is actually a session to display — idle
+    // branches (no session, or user on the session's own topo) don't
+    // schedule it at all. The attribute: reserve room at the bottom of
+    // the scroll surface while the banner is up, since it floats over
+    // .page-content and was covering the last field of the page
+    // underneath (visible on Gilles' screenshots, mail 2026-09-04).
     visible: {
       handler(now) {
         if (now) this.startTick();
         else this.stopTick();
+        this.reserveRoom(now);
       },
       immediate: true,
     },
@@ -112,9 +124,20 @@ export default {
 
   beforeDestroy() {
     this.stopTick();
+    this.reserveRoom(false);
   },
 
   methods: {
+    // A data attribute rather than a class, so it reads plainly in the
+    // inspector next to data-shell and the CSS rule can be scoped to the
+    // mobile shell — the only place where .page-content is the scrolling
+    // element.
+    reserveRoom(active) {
+      if (typeof document === 'undefined') return;
+      if (active) document.documentElement.setAttribute('data-session-banner', 'true');
+      else document.documentElement.removeAttribute('data-session-banner');
+    },
+
     resumeOuting() {
       this.$outingSession.resume();
     },
@@ -229,6 +252,17 @@ export default {
   cursor: pointer;
 }
 
+.outing-session-banner-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
 .outing-session-banner-text {
   display: flex;
   flex-direction: column;
@@ -247,6 +281,13 @@ export default {
 </style>
 
 <style lang="scss">
+// Height of the banner (≈40 px) plus the 8 px it already floats above
+// the nav. Applied to the single scroll surface of the mobile shell so
+// the last field of a form clears the pill instead of hiding under it.
+html[data-shell='mobile'][data-session-banner] .page-content {
+  padding-bottom: 52px;
+}
+
 html[data-theme='dark'] {
   .outing-session-banner-btn {
     background: #ff9933;

@@ -11,12 +11,28 @@
 //
 // `pausedMs` is the total of the completed pauses; `pausedAt` is set
 // while a pause is still running, and that open interval is charged too.
-export function formatElapsed(startedAt, now = Date.now(), pausedMs = 0, pausedAt = null) {
-  if (!startedAt) return '';
+
+// The duration itself, in milliseconds. Split out from the label because
+// the form needs the number, not the wording: comparing how long the GPS
+// actually recorded against how long the outing lasted is what tells a
+// full trace apart from a few seconds of noise (see trace-usability.js).
+export function elapsedMs(startedAt, now = Date.now(), pausedMs = 0, pausedAt = null) {
+  if (!startedAt) return 0;
   const openPause = pausedAt ? Math.max(0, now - pausedAt) : 0;
-  const sec = Math.floor((now - startedAt - (pausedMs || 0) - openPause) / 1000);
-  if (sec < 0) return '0 min';
+  return Math.max(0, now - startedAt - (pausedMs || 0) - openPause);
+}
+
+// The wording, from a plain duration. Callers that already hold a number
+// of milliseconds — how long the GPS recorded, say — need the same
+// "3h45" / "12 min" phrasing without inventing a fake start timestamp.
+export function formatDuration(ms) {
+  const sec = Math.floor(Math.max(0, ms || 0) / 1000);
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   return h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m} min`;
+}
+
+export function formatElapsed(startedAt, now = Date.now(), pausedMs = 0, pausedAt = null) {
+  if (!startedAt) return '';
+  return formatDuration(elapsedMs(startedAt, now, pausedMs, pausedAt));
 }

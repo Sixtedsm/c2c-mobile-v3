@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { formatElapsed } from '@/pwa/elapsed-label';
+import { elapsedMs, formatDuration, formatElapsed } from '@/pwa/elapsed-label';
 
 const NOW = 1700000000000;
 const MIN = 60 * 1000;
@@ -62,5 +62,47 @@ describe('paused time is discounted', () => {
 
   it('is unchanged when nothing was paused', () => {
     expect(formatElapsed(start, start + 7_200_000)).toBe('2h00');
+  });
+});
+
+// The same duration, as a number. The form compares it against how long
+// the GPS actually recorded, to tell a trace that describes the outing
+// apart from one that describes a coffee break.
+describe('elapsedMs', () => {
+  it('is zero without a start', () => {
+    expect(elapsedMs(null, NOW)).toBe(0);
+  });
+
+  it('measures the wall clock when nothing was paused', () => {
+    expect(elapsedMs(NOW, NOW + 2 * HOUR)).toBe(2 * HOUR);
+  });
+
+  it('subtracts finished and open pauses alike', () => {
+    const now = NOW + 2 * HOUR;
+    expect(elapsedMs(NOW, now, 30 * MIN, now - 30 * MIN)).toBe(HOUR);
+  });
+
+  it('clamps to zero rather than returning a negative duration', () => {
+    expect(elapsedMs(NOW, NOW + MIN, HOUR)).toBe(0);
+  });
+});
+
+// The same wording from a bare duration — what the outing form has when
+// it reports how long the GPS actually recorded.
+describe('formatDuration', () => {
+  it('phrases hours and minutes like formatElapsed', () => {
+    expect(formatDuration(2 * HOUR + 45 * MIN)).toBe('2h45');
+    expect(formatDuration(12 * MIN)).toBe('12 min');
+  });
+
+  it('does not treat a zero duration as a missing one', () => {
+    // formatElapsed returns '' for a falsy start; a duration of zero is a
+    // real answer and has to read as one.
+    expect(formatDuration(0)).toBe('0 min');
+  });
+
+  it('is defensive about junk', () => {
+    expect(formatDuration(-5)).toBe('0 min');
+    expect(formatDuration(undefined)).toBe('0 min');
   });
 });
