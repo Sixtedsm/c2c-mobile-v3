@@ -8,7 +8,7 @@
       <div class="offline-status">
         <span :class="$offline.online ? 'tag is-success is-light' : 'tag is-warning'">
           <fa-icon :icon="$offline.online ? 'cloud' : 'plug'" />
-          &nbsp;{{ $offline.online ? $gettext('Online') : $gettext('Offline') }}
+          &nbsp;{{ $offline.online ? $gettext('Connecté') : $gettext('Hors connexion') }}
         </span>
         <span v-if="storageLabel" class="storage-info is-size-7 has-text-grey">{{ storageLabel }}</span>
       </div>
@@ -40,7 +40,7 @@
           <fa-icon icon="rotate" :class="{ 'fa-spin': $offline.syncing }" />
           &nbsp;{{ $offline.syncing ? $gettext('Syncing…') : $gettext('Sync now') }}
         </button>
-        <span v-else class="tag is-warning">{{ $gettext('Offline') }}</span>
+        <span v-else class="tag is-warning">{{ $gettext('Hors connexion') }}</span>
       </header>
       <ul class="pending-outings-list">
         <li
@@ -204,7 +204,7 @@
         }}
       </p>
       <router-link :to="{ name: 'routes' }" class="button is-primary mt-2">
-        {{ $gettext('Browse the topoguide') | uppercaseFirstLetter }}
+        {{ $gettext('Parcourir le topoguide') | uppercaseFirstLetter }}
       </router-link>
     </div>
 

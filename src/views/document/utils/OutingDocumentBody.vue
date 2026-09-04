@@ -119,14 +119,41 @@
 // It needs only `document`: `fields` comes from the type definition and
 // `locale` is the cooked locale carried on the document itself, exactly as
 // document-view-mixin derives them.
+import DocumentPrintLicense from './DocumentPrintLicense';
+import CommentsBox from './boxes/CommentsBox';
+import ImagesBox from './boxes/ImagesBox';
+import MapBox from './boxes/MapBox';
+import ToolBox from './boxes/ToolBox';
+import ActivitiesField from './field-viewers/ActivitiesField';
 import ConditionLevels from './field-viewers/ConditionLevels';
+import DoubleNumericField from './field-viewers/DoubleNumericField';
+import FieldView from './field-viewers/FieldView';
+import LabelValue from './field-viewers/LabelValue';
+import MarkdownSection from './field-viewers/MarkdownSection';
+import ProfilesLinks from './field-viewers/ProfilesLinks';
 
 import constants from '@/js/constants';
 import { distance } from '@/pwa/units';
 
 export default {
+  // document-view-mixin registers these locally, and this component does
+  // not use that mixin — so every one of them has to be declared here.
+  // Leaving them out fails neither the build nor the lint: Vue resolves
+  // components at render time, so an unknown tag renders as nothing and
+  // the outing page simply comes up almost empty.
   components: {
+    ActivitiesField,
+    CommentsBox,
     ConditionLevels,
+    DocumentPrintLicense,
+    DoubleNumericField,
+    FieldView,
+    ImagesBox,
+    LabelValue,
+    MapBox,
+    MarkdownSection,
+    ProfilesLinks,
+    ToolBox,
   },
 
   props: {
