@@ -430,16 +430,37 @@ export default function install(Vue) {
       // See src/pwa/background-audio.js for why this takes the shape it
       // does, and for what it costs.
       async startKeepAlive() {
+        const token = this.nextKeepAliveToken();
         const ok = await backgroundAudio.start({
           // Pausing from the lock screen would otherwise end the
           // recording without a word. Treat it as what it looks like:
           // the user asking to stop.
           onStopRequest: () => this.pause(),
         });
+        // Recording can stop while playback is still starting — toggling
+        // the GPS checkbox twice in a second is enough. Without this the
+        // clip would go on playing with nothing left to record, leaving a
+        // media control on the lock screen and the menu claiming the
+        // recording is being held.
+        if (token !== this._keepAliveToken || !this.gpsTracking) {
+          backgroundAudio.stop();
+          this.keepAliveActive = false;
+          return;
+        }
         this.keepAliveActive = ok;
       },
 
+      // Invalidates any keep-alive call still in flight. Plain instance
+      // state rather than data(): Vue reserves underscore-prefixed keys,
+      // and nothing renders this.
+      nextKeepAliveToken() {
+        this._keepAliveToken = (this._keepAliveToken || 0) + 1;
+        return this._keepAliveToken;
+      },
+
       stopKeepAlive() {
+        // Anything still starting up must not switch itself on after this.
+        this.nextKeepAliveToken();
         backgroundAudio.stop();
         this.keepAliveActive = false;
         this._hiddenSince = null;
@@ -452,7 +473,16 @@ export default function install(Vue) {
           this.keepAliveActive = true;
           return;
         }
-        this.keepAliveActive = await backgroundAudio.resume();
+        const token = this.nextKeepAliveToken();
+        const resumed = await backgroundAudio.resume();
+        // Same race as startKeepAlive: the user can stop the outing while
+        // the browser is deciding whether to allow playback again.
+        if (token !== this._keepAliveToken || !this.gpsTracking) {
+          backgroundAudio.stop();
+          this.keepAliveActive = false;
+          return;
+        }
+        this.keepAliveActive = resumed;
       },
 
       // Keep the screen awake while recording. Without this the phone

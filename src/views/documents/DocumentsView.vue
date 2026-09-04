@@ -33,9 +33,12 @@
           <near-me-button v-if="documentAreGeoLocalized" class="header-item" />
           <!-- Bulk save current page for offline use (#11). Component
                auto-hides for non-savable types (images, profiles). -->
+          <!-- Acts on what is on screen: with the offline filter on, the
+               button would otherwise save thirty topos while showing
+               three. -->
           <bulk-offline-button
             v-if="documents && documents.documents"
-            :documents="documents.documents"
+            :documents="visibleDocuments.documents || []"
             :document-type="documentType"
             class="header-item"
           />

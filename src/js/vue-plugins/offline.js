@@ -9,6 +9,9 @@ import { extractEmbeddedImageIds, extractImageUrlsFromCooked } from '@/pwa/cooke
 import * as store from '@/pwa/offline-store';
 import { classifyFailure } from '@/pwa/sync-policy';
 
+// Name of the cross-tab Web Lock guarding the publish pass.
+const SYNC_LOCK_NAME = 'c2c-v3-sync-pending-outings';
+
 // Push one File through the existing V1 upload pipeline (EXIF parse +
 // resize + POST to imageBackend). Adapts the callback-style helper to
 // a Promise so sync code can `await` it cleanly. Returns the enriched
@@ -914,20 +917,42 @@ export default function install(Vue) {
         }
       },
 
-      // Public entry point for the pending-outing queue. Claims the
-      // re-entrancy lock SYNCHRONOUSLY — before any await — then hands
-      // off to runPendingOutingsSync for the actual work.
+      // Public entry point for the pending-outing queue.
+      //
+      // Two locks, because there are two ways to publish the same outing
+      // twice:
+      //
+      //   - Two callers in THIS tab. The `syncing` flag is claimed
+      //     synchronously, before any await. It used to be set after the
+      //     first one, which left a window where the online event and a
+      //     tap on "Synchroniser" both passed the check and both POSTed
+      //     the queue.
+      //   - Two TABS. `syncing` lives in memory, so it says nothing about
+      //     what another tab is doing — and a network reconnection wakes
+      //     every open tab at once, which is precisely when the queue is
+      //     non-empty. Web Locks serialises them; `ifAvailable` means a
+      //     tab that loses the race simply skips this pass instead of
+      //     queueing up to repeat it.
       async syncPendingOutings() {
         if (this.syncing || !this.online) {
           return;
         }
-        // The lock used to be claimed *after* the first await, which
-        // left a window where two callers both passed the check above:
-        // the online event handler firing while the user also taps
-        // "Synchroniser" in OfflineView. Both then read the same queue
-        // and POSTed it, publishing every pending outing twice on the
-        // user's camptocamp.org account. Claiming it here closes that
-        // window — a second caller now returns on the guard.
+        if (navigator.locks?.request) {
+          return navigator.locks.request(SYNC_LOCK_NAME, { ifAvailable: true }, async (lock) => {
+            // Held by another tab: it is publishing the same queue right
+            // now, and this pass has nothing left to do.
+            if (!lock) return undefined;
+            return this.runGuardedSync();
+          });
+        }
+        // No Web Locks (older Safari): the in-tab guard is all there is.
+        return this.runGuardedSync();
+      },
+
+      async runGuardedSync() {
+        if (this.syncing) {
+          return;
+        }
         this.syncing = true;
         try {
           await this.runPendingOutingsSync();

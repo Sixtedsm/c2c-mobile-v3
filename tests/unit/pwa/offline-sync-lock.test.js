@@ -9,7 +9,7 @@
 // outing API.
 
 import Vue from 'vue';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // c2c.outing.create is the network call the loop makes per queued item.
 vi.mock('@/js/apis/c2c', () => ({
@@ -190,5 +190,59 @@ describe('freezing and un-freezing a queued outing', () => {
     expect(saved[0].attempts).toBe(0);
     expect(saved[0].freezeReason).toBeNull();
     expect(saved[0].ambiguous).toBe(false);
+  });
+});
+
+// `syncing` lives in memory, so it says nothing about what another tab is
+// doing — and a network reconnection wakes every open tab at once, which
+// is exactly when the queue is non-empty. Two tabs would then read the
+// same queue and publish every outing twice on the user's account.
+describe('two tabs do not publish the same queue twice', () => {
+  // clearAllMocks lives in the first describe, not at file level.
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // navigator.locks is a getter-only property, so it has to be defined
+  // rather than assigned.
+  const withLocks = (request) => Object.defineProperty(navigator, 'locks', { value: { request }, configurable: true });
+
+  afterEach(() => {
+    delete navigator.locks;
+  });
+
+  it('skips the pass when another tab already holds the lock', async () => {
+    store.listPendingOutings.mockResolvedValue([pendingItem()]);
+    c2c.outing.create.mockResolvedValue({ data: { document_id: 42 } });
+    // `ifAvailable` hands back a null lock when someone else holds it.
+    withLocks(vi.fn(async (name, opts, fn) => fn(null)));
+
+    const vm = mountPlugin();
+    await vm.syncPendingOutings();
+
+    expect(c2c.outing.create).not.toHaveBeenCalled();
+  });
+
+  it('publishes when the lock is free', async () => {
+    store.listPendingOutings.mockResolvedValue([pendingItem()]);
+    c2c.outing.create.mockResolvedValue({ data: { document_id: 42 } });
+    withLocks(vi.fn(async (name, opts, fn) => fn({ name })));
+
+    const vm = mountPlugin();
+    await vm.syncPendingOutings();
+
+    expect(c2c.outing.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('still works on a browser without Web Locks', async () => {
+    // Older Safari. The in-tab guard is all there is, and losing that
+    // would be worse than the cross-tab race it protects against.
+    store.listPendingOutings.mockResolvedValue([pendingItem()]);
+    c2c.outing.create.mockResolvedValue({ data: { document_id: 42 } });
+
+    const vm = mountPlugin();
+    await vm.syncPendingOutings();
+
+    expect(c2c.outing.create).toHaveBeenCalledTimes(1);
   });
 });

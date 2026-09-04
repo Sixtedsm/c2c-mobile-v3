@@ -311,3 +311,45 @@ describe('a recording killed with the app does not come back silent', () => {
     expect(revived.recordingInterrupted).toBe(false);
   });
 });
+
+// The keep-alive plays an inaudible clip so the phone does not suspend the
+// page once the screen is off. Starting playback is asynchronous, and the
+// user can stop recording while it is still starting — toggling the GPS
+// checkbox twice in a second is enough. If the clip then switches itself
+// on, it plays with nothing left to record: a media control sits on the
+// lock screen, the battery pays for it, and the menu claims the recording
+// is being held.
+describe('the keep-alive never outlives the recording', () => {
+  it('does not switch on after recording has already stopped', async () => {
+    const vm = mount();
+    vm.start({ type: 'route', id: 1, lang: 'fr' }, { track: true });
+    // Stop before the audio had any chance to finish starting.
+    vm.gpsTracking = false;
+    await flush();
+
+    expect(vm.keepAliveActive).toBe(false);
+  });
+
+  it('is off once the outing is stopped', async () => {
+    const vm = mount();
+    vm.start({ type: 'route', id: 1, lang: 'fr' }, { track: true });
+    await flush();
+    vm.stop();
+    await flush();
+
+    expect(vm.keepAliveActive).toBe(false);
+    expect(vm.gpsTracking).toBe(false);
+  });
+
+  it('is off while the outing is paused', async () => {
+    const vm = mount();
+    vm.start({ type: 'route', id: 1, lang: 'fr' }, { track: true });
+    await flush();
+    vm.pause();
+    await flush();
+
+    // Nothing is being recorded during a pause, so nothing should be
+    // holding the phone awake for it.
+    expect(vm.keepAliveActive).toBe(false);
+  });
+});

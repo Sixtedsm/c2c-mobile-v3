@@ -4,19 +4,19 @@
       type="button"
       class="button is-small bulk-offline-btn"
       :disabled="busy || !documents.length"
-      :title="busy ? $gettext('Saving') + ' ' + savedCount + '/' + total : $gettext('Save page offline')"
-      :aria-label="$gettext('Save page offline')"
+      :title="busy ? $gettext('Enregistrement') + ' ' + savedCount + '/' + total : $gettext('Enregistrer la page')"
+      :aria-label="$gettext('Enregistrer la page')"
       @click="open"
     >
       <fa-icon :icon="busy ? 'rotate' : 'bookmark'" :class="{ 'fa-spin': busy }" />
       <!-- Label hidden on mobile so the button stays compact in the
            header (tap-target = the whole button via title/aria-label). -->
       <span class="bulk-offline-label is-hidden-mobile">
-        &nbsp;{{ busy ? $gettext('Saving') + ' ' + savedCount + '/' + total : $gettext('Save page offline') }}
+        &nbsp;{{ busy ? $gettext('Enregistrement') + ' ' + savedCount + '/' + total : $gettext('Enregistrer la page') }}
       </span>
       <!-- On mobile during a bulk save, show the count next to the icon
            so the user gets progress feedback without taking up the
-           "Save page offline" text room. -->
+           "Enregistrer la page" text room. -->
       <span v-if="busy" class="bulk-offline-progress-mobile is-hidden-tablet">
         &nbsp;{{ savedCount }}/{{ total }}
       </span>
