@@ -56,6 +56,24 @@
           </div>
         </div>
 
+        <!-- A geolocation failure used to be recorded in state and shown
+             nowhere at all: a refused permission stopped the recording in
+             complete silence. Same helper, same wording as the map and
+             the "près de moi" button. -->
+        <p v-if="geoErrorMessage" class="start-outing-alert is-error">
+          <fa-icon icon="triangle-exclamation" />
+          &nbsp;{{ geoErrorMessage }}
+        </p>
+
+        <!-- Recording, but nothing arriving. Distinct from an error: the
+             watch is alive and the sky is not. Worth saying, because a
+             point counter that has stopped moving is only visible to
+             someone already suspicious. -->
+        <p v-else-if="$outingSession.gpsSilent" class="start-outing-alert is-warning">
+          <fa-icon icon="triangle-exclamation" />
+          &nbsp;{{ silenceLabel }}
+        </p>
+
         <div class="start-outing-menu-row">
           <label class="start-outing-toggle">
             <input type="checkbox" :checked="$outingSession.gpsTracking" @change="toggleTracking" />
@@ -143,6 +161,18 @@
         <h3>{{ $gettext('Démarrer la sortie') }}</h3>
         <p class="start-outing-modal-sub">
           {{ $gettext('Position GPS sur la carte, distance parcourue, brouillon local, synchro différée.') }}
+        </p>
+
+        <!-- Said before the outing rather than discovered after it: with
+             the permission refused, ticking the box below would start a
+             recording that cannot record. -->
+        <p v-if="$outingSession.geoPermission === 'denied'" class="start-outing-alert is-error">
+          <fa-icon icon="triangle-exclamation" />
+          &nbsp;{{
+            $gettext(
+              'Géolocalisation refusée pour ce site. Autorisez-la dans les réglages du navigateur, sinon aucune trace ne sera enregistrée.'
+            )
+          }}
         </p>
 
         <label class="start-outing-checkbox">
@@ -277,6 +307,7 @@
 
 import { toast } from 'bulma-toast';
 
+import { geolocationErrorMessage } from '@/js/geolocation-error-message';
 import { formatElapsed } from '@/pwa/elapsed-label';
 import { distance, elevation } from '@/pwa/units';
 
@@ -324,6 +355,25 @@ export default {
       return elevation(this.$outingSession.elevationGainMeters, this.$appSettings?.units);
     },
 
+    // The single source of wording for geolocation failures, shared with
+    // OlMap and NearMeButton.
+    geoErrorMessage() {
+      const err = this.$outingSession.geoError;
+      return err ? geolocationErrorMessage(err, this.$gettext) : '';
+    },
+
+    // Built from lastFixAt against this component's own ticking clock —
+    // the age itself cannot be reactive, since nothing observes the wall
+    // clock. Same shape as elapsedLabel just below.
+    silenceLabel() {
+      const last = this.$outingSession.lastFixAt;
+      if (!last) {
+        return this.$gettext('Aucune position reçue pour l’instant. Cherchez une vue dégagée sur le ciel.');
+      }
+      const minutes = Math.max(1, Math.round((this.now - last) / 60000));
+      return this.$gettext('Aucun point depuis {min} min — le signal ne passe pas.').replace('{min}', minutes);
+    },
+
     // Reads as a verdict, not a statistic: after a stretch with the
     // screen off, either points came in or they did not.
     hiddenSummary() {
@@ -349,6 +399,22 @@ export default {
     },
     hasTrace() {
       return this.$outingSession.positions.length > 0;
+    },
+  },
+
+  watch: {
+    // Toast on the transition, keyed on the code rather than the object:
+    // the watch callback assigns a fresh error object per failure, so
+    // watching identity would re-toast on every repeat of the same
+    // problem — several times a minute in a tunnel.
+    '$outingSession.geoError.code'(code) {
+      if (!code) return;
+      toast({
+        type: 'is-danger',
+        position: 'bottom-center',
+        duration: 6000,
+        message: this.geoErrorMessage,
+      });
     },
   },
 
@@ -752,6 +818,28 @@ export default {
   line-height: 1.4;
 }
 
+.start-outing-alert {
+  display: flex;
+  align-items: flex-start;
+  padding: 0.5rem 0.6rem;
+  margin: 0 0 0.5rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+
+  &.is-error {
+    background: rgba(192, 57, 43, 0.08);
+    border: 1px solid rgba(192, 57, 43, 0.35);
+    color: #a5271b;
+  }
+
+  &.is-warning {
+    background: #fff5e6;
+    border: 1px solid rgba(255, 153, 51, 0.5);
+    color: #a35a00;
+  }
+}
+
 .start-outing-modal-warning {
   display: flex;
   align-items: flex-start;
@@ -916,6 +1004,18 @@ html[data-theme='dark'] {
   }
   .start-outing-modal-sub {
     color: #b5b5b5;
+  }
+  .start-outing-alert {
+    &.is-error {
+      background: rgba(255, 143, 107, 0.12);
+      border-color: rgba(255, 143, 107, 0.4);
+      color: #ff8f6b;
+    }
+    &.is-warning {
+      background: #3a2f1a;
+      border-color: rgba(255, 153, 51, 0.4);
+      color: #ffb866;
+    }
   }
   .start-outing-modal-warning {
     background: #3a2f1a;

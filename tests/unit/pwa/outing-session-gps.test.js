@@ -145,7 +145,13 @@ describe('GPS tracking — watchdog rebuilds a dead watch (audit C-1)', () => {
     // watch delivers neither a position nor an error, which is exactly
     // why the watchdog has to look at the fix drought itself.
     s.lastFixAt = Date.now() - 120 * 1000;
-    vi.advanceTimersByTime(35 * 1000);
+    // 65 s, not 35: the watchdog now also waits for the *watch* to be a
+    // full staleness window old before tearing it down. That patience
+    // used to be bought by restartGpsWatch() resetting lastFixAt, which
+    // erased the very drought the UI needs to show. Same one-rebuild-
+    // per-minute cadence, measured on the watch instead of faked on the
+    // data. The assertions below are unchanged.
+    vi.advanceTimersByTime(65 * 1000);
 
     expect(geo.cleared).toContain(idBefore);
     expect(s.watchId).not.toBe(idBefore);

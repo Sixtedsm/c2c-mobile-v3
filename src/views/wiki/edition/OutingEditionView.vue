@@ -593,6 +593,12 @@ export default {
         this.showBothDates = false;
       }
 
+      // The totals are advanced by a watcher, which Vue batches to the
+      // next tick. This is the one read in the app that turns them into
+      // a published figure, so take the cheap certainty rather than the
+      // race: the call only walks whatever is new, usually nothing.
+      session.syncTraceMetrics?.();
+
       // Does this recording actually describe the outing? A handful of
       // fixes taken standing still is a position, not a walk, and writing
       // its 15 metres into the form does two kinds of damage: it publishes

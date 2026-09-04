@@ -135,13 +135,19 @@ function weightedMean(window, pick) {
 // One pass rather than three: they share the segment and smoothing logic,
 // and computing them separately let them disagree about where a break
 // was — as well as costing three walks of a trace that can hold thousands
-// of points and is recomputed on every fix.
+// of points.
 //
 // A point flagged `gap` opens a new segment: the step leading to it was
 // not walked with the app watching (a pause, or tracking switched off),
 // and neither the smoothing window nor the speed check may straddle it.
-export function computeTraceMetrics(positions) {
-  const points = Array.isArray(positions) ? positions : [];
+//
+// Exposed as an accumulator rather than only as a whole-trace function
+// because the recorder needs the running total after every fix, and
+// re-walking the trace each time is O(n²) over an outing. The body below
+// is the loop that used to live in computeTraceMetrics, moved verbatim
+// into push() — which is why the existing tests, all of which go through
+// computeTraceMetrics, validate the split without being touched.
+export function createTraceMetrics() {
   let distance = 0;
   let gain = 0;
   let loss = 0;
@@ -160,79 +166,92 @@ export function computeTraceMetrics(positions) {
     lastRaw = null;
   };
 
-  for (const point of points) {
-    if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) continue;
-    if (point.gap) resetSegment();
+  return {
+    push(point) {
+      if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) return;
+      if (point.gap) resetSegment();
 
-    // 1. Physically impossible movement is a glitch, not a step. Dropping
-    //    it before the window sees it keeps one bad fix from dragging the
-    //    average sideways for the rest of the window.
-    if (lastRaw && typeof point.t === 'number' && typeof lastRaw.t === 'number') {
-      const seconds = (point.t - lastRaw.t) / 1000;
-      if (seconds > 0 && haversine(lastRaw, point) / seconds > MAX_SPEED_MS) {
-        continue;
+      // 1. Physically impossible movement is a glitch, not a step. Dropping
+      //    it before the window sees it keeps one bad fix from dragging the
+      //    average sideways for the rest of the window.
+      if (lastRaw && typeof point.t === 'number' && typeof lastRaw.t === 'number') {
+        const seconds = (point.t - lastRaw.t) / 1000;
+        if (seconds > 0 && haversine(lastRaw, point) / seconds > MAX_SPEED_MS) {
+          return;
+        }
       }
-    }
-    lastRaw = point;
+      lastRaw = point;
 
-    const entry = { point, weight: weightOf(point) };
+      const entry = { point, weight: weightOf(point) };
 
-    window.push(entry);
-    while (
-      window.length > MIN_WINDOW_SAMPLES &&
-      shouldEvict(window, point.t, SMOOTHING_WINDOW_MS, FALLBACK_WINDOW_SAMPLES)
-    ) {
-      window.shift();
-    }
-
-    if (hasAltitude(point.alt)) {
-      altWindow.push(entry);
+      window.push(entry);
       while (
-        altWindow.length > MIN_WINDOW_SAMPLES &&
-        shouldEvict(altWindow, point.t, ALTITUDE_WINDOW_MS, FALLBACK_ALTITUDE_SAMPLES)
+        window.length > MIN_WINDOW_SAMPLES &&
+        shouldEvict(window, point.t, SMOOTHING_WINDOW_MS, FALLBACK_WINDOW_SAMPLES)
       ) {
-        altWindow.shift();
+        window.shift();
       }
-    }
 
-    const smoothed = {
-      lat: weightedMean(window, (p) => p.lat),
-      lon: weightedMean(window, (p) => p.lon),
-      // Averaged over the fixes that actually carried an altitude. A
-      // dropout is skipped, never read as zero — `alt || 0` turned every
-      // one of them into a 2 000 m descent followed by a 2 000 m climb.
-      alt: altWindow.length ? weightedMean(altWindow, (p) => p.alt) : null,
-    };
-    if (!Number.isFinite(smoothed.lat) || !Number.isFinite(smoothed.lon)) continue;
+      if (hasAltitude(point.alt)) {
+        altWindow.push(entry);
+        while (
+          altWindow.length > MIN_WINDOW_SAMPLES &&
+          shouldEvict(altWindow, point.t, ALTITUDE_WINDOW_MS, FALLBACK_ALTITUDE_SAMPLES)
+        ) {
+          altWindow.shift();
+        }
+      }
 
-    if (previous) {
-      const step = haversine(previous, smoothed);
-      if (step >= MIN_STEP_M) {
-        distance += step;
+      const smoothed = {
+        lat: weightedMean(window, (p) => p.lat),
+        lon: weightedMean(window, (p) => p.lon),
+        // Averaged over the fixes that actually carried an altitude. A
+        // dropout is skipped, never read as zero — `alt || 0` turned every
+        // one of them into a 2 000 m descent followed by a 2 000 m climb.
+        alt: altWindow.length ? weightedMean(altWindow, (p) => p.alt) : null,
+      };
+      if (!Number.isFinite(smoothed.lat) || !Number.isFinite(smoothed.lon)) return;
+
+      if (previous) {
+        const step = haversine(previous, smoothed);
+        if (step >= MIN_STEP_M) {
+          distance += step;
+          previous = smoothed;
+        }
+      } else {
         previous = smoothed;
       }
-    } else {
-      previous = smoothed;
-    }
 
-    if (hasAltitude(smoothed.alt)) {
-      if (reference === null) {
-        reference = smoothed.alt;
-      } else {
-        const change = smoothed.alt - reference;
-        if (change >= ELEVATION_THRESHOLD_M) {
-          gain += change;
+      if (hasAltitude(smoothed.alt)) {
+        if (reference === null) {
           reference = smoothed.alt;
-        } else if (change <= -ELEVATION_THRESHOLD_M) {
-          loss += -change;
-          reference = smoothed.alt;
+        } else {
+          const change = smoothed.alt - reference;
+          if (change >= ELEVATION_THRESHOLD_M) {
+            gain += change;
+            reference = smoothed.alt;
+          } else if (change <= -ELEVATION_THRESHOLD_M) {
+            loss += -change;
+            reference = smoothed.alt;
+          }
+          // Smaller changes leave the reference alone on purpose, so a slow
+          // real climb still accumulates once it clears the threshold
+          // instead of being lost a centimetre at a time.
         }
-        // Smaller changes leave the reference alone on purpose, so a slow
-        // real climb still accumulates once it clears the threshold
-        // instead of being lost a centimetre at a time.
       }
-    }
-  }
+    },
 
-  return { distance, gain, loss };
+    get result() {
+      return { distance, gain, loss };
+    },
+  };
+}
+
+// The whole-trace form. Every existing caller and every test uses this.
+export function computeTraceMetrics(positions) {
+  const accumulator = createTraceMetrics();
+  for (const point of Array.isArray(positions) ? positions : []) {
+    accumulator.push(point);
+  }
+  return accumulator.result;
 }

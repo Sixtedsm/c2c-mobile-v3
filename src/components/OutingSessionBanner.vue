@@ -1,11 +1,14 @@
 <template>
   <div v-if="visible" class="outing-session-banner no-print" role="status">
     <button type="button" class="outing-session-banner-btn" @click="goToTopo">
+      <!-- The pulse is the promise that fixes are arriving; it must not
+           outlive them. A recording gone silent, or one the browser has
+           refused outright, gets the still amber dot instead. -->
       <span
         class="outing-session-banner-dot"
         :class="{
-          'is-recording': $outingSession.gpsTracking,
-          'is-paused': $outingSession.paused || $outingSession.recordingInterrupted,
+          'is-recording': $outingSession.gpsTracking && !isStalled,
+          'is-paused': isPausedLike || isStalled,
         }"
       ></span>
       <span class="outing-session-banner-text">
@@ -24,12 +27,7 @@
     <!-- The banner is the surface a paused outing is most likely to be
          seen from — the user has wandered off the topo page — so the way
          back belongs here and not only in the topo header menu. -->
-    <button
-      v-if="$outingSession.paused || $outingSession.recordingInterrupted"
-      type="button"
-      class="outing-session-banner-resume"
-      @click="resumeOuting"
-    >
+    <button v-if="isPausedLike" type="button" class="outing-session-banner-resume" @click="resumeOuting">
       <fa-icon icon="play" />
       &nbsp;{{ $gettext('Reprendre') }}
     </button>
@@ -80,9 +78,22 @@ export default {
     visible() {
       return this.active && !this.onOwnTopo;
     },
-    // Three states, and the third is the one that matters: the app was
-    // killed mid-recording and came back looking like a normal outing.
+    isPausedLike() {
+      return this.$outingSession.paused || this.$outingSession.recordingInterrupted;
+    },
+
+    // Recording is on, but nothing is coming in — or the browser has
+    // refused to try. Both look identical from the outside (a trace that
+    // stops growing), and neither used to be said anywhere.
+    isStalled() {
+      return !!this.$outingSession.geoError || this.$outingSession.gpsSilent;
+    },
+
+    // The states, most alarming first: an outright refusal, then a
+    // recording that has gone quiet, then the two the app already knew.
     statusLabel() {
+      if (this.$outingSession.geoError) return this.$gettext('GPS bloqué');
+      if (this.$outingSession.gpsSilent) return this.$gettext('Aucun point reçu');
       if (this.$outingSession.recordingInterrupted) return this.$gettext('Enregistrement interrompu');
       if (this.$outingSession.paused) return this.$gettext('Sortie en pause');
       return this.$gettext('Sortie en cours');

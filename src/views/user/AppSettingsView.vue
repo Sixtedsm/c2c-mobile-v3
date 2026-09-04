@@ -135,14 +135,13 @@ export default {
 
     setGpsInterval(value) {
       this.$appSettings.setGpsIntervalS(value);
-      // If a session is actively tracking, restart the watch so the new
-      // interval takes effect immediately.
-      if (this.$outingSession?.gpsTracking) {
-        this.$outingSession.gpsTracking = false;
-        this.$nextTick(() => {
-          this.$outingSession.gpsTracking = true;
-        });
-      }
+      // Apply it to a recording already running. This used to toggle
+      // gpsTracking off and on, which runs the session's watcher and
+      // therefore flags a discontinuity — so changing a preference cut
+      // the trace and the exported GPX in two at a point where the user
+      // had not stopped walking. Rebuilding the watch is documented as
+      // not flagging one, which is the meaning wanted here.
+      this.$outingSession?.applyGpsInterval();
     },
 
     replayOnboarding() {

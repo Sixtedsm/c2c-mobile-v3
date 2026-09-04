@@ -14,7 +14,7 @@
 
 import * as backgroundAudio from '@/pwa/background-audio';
 import { haversine } from '@/pwa/haversine';
-import { computeTraceMetrics, isUsableFix } from '@/pwa/trace-metrics';
+import { createTraceMetrics, isUsableFix } from '@/pwa/trace-metrics';
 import { splitOnGaps } from '@/pwa/trace-segments';
 
 const STORAGE_KEY = 'v3.outingSession';
@@ -140,11 +140,30 @@ export default function install(Vue) {
         positions: snap?.positions || [],
         watchId: null,
         geoError: null,
-        // Timestamp of the last fix the browser delivered. Drives the
-        // watchdog and lets the UI prove tracking is actually alive —
-        // the original failure was invisible precisely because nothing
-        // recorded whether fixes were still arriving.
+        // Timestamp of the last fix the browser actually delivered.
+        // Written by the success callback and by nothing else — that is
+        // the whole point. It used to be reset by restartGpsWatch() too,
+        // so the watchdog silently erased the evidence of the drought it
+        // was repairing, and no UI could ever show a stalled recording.
         lastFixAt: null,
+        // When the current watch was created. Carries the watchdog's
+        // patience (don't tear a fresh watch down before it has had a
+        // chance to produce anything) now that lastFixAt no longer lies.
+        watchStartedAt: null,
+        // 'granted' | 'denied' | 'prompt' | 'unknown'. Asked before the
+        // user walks away, and re-read when the OS revokes it mid-outing
+        // — which otherwise stops the recording without a word.
+        geoPermission: 'unknown',
+        // Recording, but nothing is coming in. The state the app could
+        // not name: the checkbox said "en cours" while the trace stood
+        // still. Real state rather than a computed, because the only
+        // thing that changes is the wall clock and Vue cannot observe
+        // that — see fixAgeMs() below. Set by the watchdog tick, cleared
+        // by every fix that lands.
+        gpsSilent: false,
+        // Running totals, fed point by point rather than recomputed.
+        // See syncTraceMetrics().
+        traceMetricsSnapshot: { distance: 0, gain: 0, loss: 0 },
         // Screen Wake Lock sentinel held while recording. Without it
         // the phone locks after ~30 s and the page is frozen, which is
         // what turned a 1 h run into 3 recorded points.
@@ -167,32 +186,22 @@ export default function install(Vue) {
     },
 
     computed: {
-      // How long since the browser last handed us a position. Infinity
-      // when tracking has never produced a fix. The watchdog and the
-      // visibility handler both read this, and the UI can surface it so
-      // a stalled recording is visible instead of silent.
-      fixAgeMs() {
-        if (!this.lastFixAt) return Infinity;
-        return Date.now() - this.lastFixAt;
-      },
       // Distance, gain and loss, from src/pwa/trace-metrics.js.
       //
-      // One computed for all three: they walk the same trace and share
-      // the same segment and smoothing rules, and a trace can hold
-      // thousands of points that get re-measured on every fix. Three
-      // separate loops cost three walks and let the numbers disagree
-      // about where a recording break was.
-      traceMetrics() {
-        return computeTraceMetrics(this.positions);
-      },
+      // Plain reads of a snapshot the accumulator maintains. They used to
+      // be a computed that re-walked the entire trace on every fix — and
+      // the floating session banner, mounted for the whole outing, reads
+      // one of them, so the walk really did happen every five seconds.
+      // On a ten-hour outing that is tens of millions of point visits for
+      // a number that changed by one step.
       tracedDistanceMeters() {
-        return this.traceMetrics.distance;
+        return this.traceMetricsSnapshot.distance;
       },
       elevationGainMeters() {
-        return this.traceMetrics.gain;
+        return this.traceMetricsSnapshot.gain;
       },
       elevationLossMeters() {
-        return this.traceMetrics.loss;
+        return this.traceMetricsSnapshot.loss;
       },
     },
 
@@ -212,6 +221,7 @@ export default function install(Vue) {
           // restart within one sample interval drops the first fix.
           this._lastSampleTime = 0;
           this.lastFixAt = null;
+          this.geoError = null;
           // Recording resuming over an existing trace means a hole: the
           // user was somewhere between the last point and the next, and
           // that step was not walked with the app watching. Flagged here
@@ -230,17 +240,25 @@ export default function install(Vue) {
           this.stopWatchdog();
           this.releaseWakeLock();
           this.stopKeepAlive();
+          this.gpsSilent = false;
         }
         this.snapshot();
       },
       // Positions accrue at ~5 s intervals — debouncing writes to
       // localStorage prevents a 3600-point trace from re-serializing
       // ~350 KB on every fix.
-      positions: { handler: 'snapshotDebounced', deep: false },
+      positions: { handler: 'onPositionsChanged', deep: false },
       topoRef: { handler: 'snapshot', deep: true },
     },
 
     created() {
+      // A session revived from storage arrives with its trace already in
+      // data(), so the positions watcher never fires for it. The totals
+      // used to be a computed and simply evaluated on first read; now
+      // they are a snapshot, and something has to fill it — otherwise a
+      // reload showed 0 km and, worse, published it.
+      this.syncTraceMetrics();
+
       // Wire the tab-hidden battery guard once. The listener stays for
       // the whole app lifetime — the plugin is a singleton.
       if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') {
@@ -280,9 +298,12 @@ export default function install(Vue) {
         // The OS can stop the keep-alive on its own. Reflect what is
         // actually true now, and try to pick it back up.
         this.refreshKeepAlive();
-        if (this.fixAgeMs > STALE_FIX_MS) this.restartGpsWatch();
+        if (this.fixAgeMs() > STALE_FIX_MS) this.restartGpsWatch();
       };
       document.addEventListener('visibilitychange', this._onVisibility);
+      // Fire-and-forget: knowing the permission state is useful, waiting
+      // for it is not, and nothing here may delay the app booting.
+      this.watchGeoPermission();
       // pagehide covers the cases visibilitychange does not: a real
       // navigation away, and Safari putting the page into the back/
       // forward cache.
@@ -305,6 +326,10 @@ export default function install(Vue) {
       if (this._onPageHide && typeof window !== 'undefined') {
         window.removeEventListener('pagehide', this._onPageHide);
       }
+      if (this._permissionStatus) {
+        this._permissionStatus.onchange = null;
+        this._permissionStatus = null;
+      }
     },
 
     methods: {
@@ -320,6 +345,35 @@ export default function install(Vue) {
           this._persistTimer = null;
         }
         persist(this.$data);
+      },
+
+      // Advance the running totals over whatever is new, then persist.
+      //
+      // The cursor and the accumulator are plain instance state, not
+      // data(): nothing renders them, and making thousands of window
+      // entries reactive would cost more than the walk they replace.
+      //
+      // The array-identity check is what makes wholesale replacement
+      // safe — discardTrace(), and later the reload path — by falling
+      // back to a single full recompute. That is correct and rare; the
+      // per-fix path never takes it.
+      syncTraceMetrics() {
+        if (this._metricsArray !== this.positions || this._metricsCursor > this.positions.length) {
+          this._metricsAcc = createTraceMetrics();
+          this._metricsCursor = 0;
+          this._metricsArray = this.positions;
+        }
+        for (let i = this._metricsCursor; i < this.positions.length; i++) {
+          this._metricsAcc.push(this.positions[i]);
+        }
+        this._metricsCursor = this.positions.length;
+        // A fresh object, so one assignment notifies every reader once.
+        this.traceMetricsSnapshot = this._metricsAcc.result;
+      },
+
+      onPositionsChanged() {
+        this.syncTraceMetrics();
+        this.snapshotDebounced();
       },
 
       snapshotDebounced() {
@@ -432,10 +486,18 @@ export default function install(Vue) {
       async startKeepAlive() {
         const token = this.nextKeepAliveToken();
         const ok = await backgroundAudio.start({
-          // Pausing from the lock screen would otherwise end the
-          // recording without a word. Treat it as what it looks like:
-          // the user asking to stop.
-          onStopRequest: () => this.pause(),
+          // The lock-screen media control is not a "stop my outing"
+          // button, and it was wired as one. A headset button, a car
+          // pairing over Bluetooth, or any other app taking audio focus
+          // pauses this element — and that used to pause the outing,
+          // stopping the clock and the GPS on someone halfway up a
+          // couloir. Withdraw only what was actually lost: the
+          // background guarantee. The recording carries on, and the
+          // "keep the app on screen" line already written for
+          // keepAliveActive === false says exactly the right thing.
+          onStopRequest: () => {
+            this.keepAliveActive = false;
+          },
         });
         // Recording can stop while playback is still starting — toggling
         // the GPS checkbox twice in a second is enough. Without this the
@@ -521,25 +583,32 @@ export default function install(Vue) {
       // returning to the foreground — a watch that stopped delivering
       // never recovers on its own, and because watchId stayed set the
       // old code could never restart it.
+      //
+      // It deliberately does NOT touch lastFixAt. It used to, to buy the
+      // patient retry described on the watchdog below, and the price was
+      // that a tunnel looked exactly like a healthy recording. The
+      // patience now comes from watchStartedAt, which startGpsWatch sets.
       restartGpsWatch() {
         this.stopGpsWatch();
-        // Give the fresh watch a full staleness window to produce its
-        // first fix. Without this the age stays stale and the watchdog
-        // would tear the watch down again every 30 s for as long as
-        // there is no signal — a tunnel or a deep couloir would cause
-        // continuous churn instead of a patient retry.
-        this.lastFixAt = Date.now();
         this.startGpsWatch();
       },
 
       // Rebuild the watch whenever fixes dry up. This is what catches
       // the silent failures: an OS-suspended watch delivers neither a
       // position nor an error, so only the absence of fixes reveals it.
+      //
+      // Two conditions, and they measure different things. gpsSilent asks
+      // whether data is arriving; watchAgeMs gives a freshly built watch
+      // a full staleness window to produce its first fix, so a tunnel or
+      // a deep couloir gets a patient retry once a minute instead of
+      // continuous teardown churn. Between rebuilds fixAgeMs keeps
+      // growing, which is what lets the UI say how long it has been.
       startWatchdog() {
         this.stopWatchdog();
         this._watchdog = window.setInterval(() => {
           if (!this.gpsTracking) return;
-          if (this.fixAgeMs > STALE_FIX_MS) this.restartGpsWatch();
+          this.gpsSilent = this.fixAgeMs() > STALE_FIX_MS;
+          if (this.gpsSilent && this.watchAgeMs() >= STALE_FIX_MS) this.restartGpsWatch();
         }, WATCHDOG_INTERVAL_MS);
       },
 
@@ -550,12 +619,93 @@ export default function install(Vue) {
         }
       },
 
+      // How long since the browser last handed us a position; Infinity
+      // when tracking has never produced one.
+      //
+      // A method, not a computed, and that is load-bearing: the only
+      // quantity that changes here is the wall clock, which Vue cannot
+      // observe. As a computed it froze at whatever it read first and
+      // stayed frozen for the whole drought — so the watchdog would have
+      // decided a stalled watch was fine, forever. Anything rendered
+      // from these ages has to tick its own clock, which is what both UI
+      // surfaces already do for the elapsed time.
+      fixAgeMs() {
+        if (!this.lastFixAt) return Infinity;
+        return Date.now() - this.lastFixAt;
+      },
+
+      // Age of the current watch, not of the data. Only the watchdog's
+      // backoff reads it; everything user-facing reads fixAgeMs().
+      watchAgeMs() {
+        if (!this.watchStartedAt) return Infinity;
+        return Date.now() - this.watchStartedAt;
+      },
+
+      // What the browser will actually allow, before the user walks
+      // away. Nothing in the app asked this until now, so a revoked
+      // permission only showed up as a recording that quietly produced
+      // nothing.
+      //
+      // 'unknown' is a real answer, not a failure: Safari has long
+      // thrown on this descriptor, and a browser without the Permissions
+      // API must keep every path that a granted permission would open.
+      async queryGeoPermission() {
+        if (typeof navigator === 'undefined' || !navigator.permissions?.query) return 'unknown';
+        try {
+          const status = await navigator.permissions.query({ name: 'geolocation' });
+          return status?.state || 'unknown';
+        } catch {
+          return 'unknown';
+        }
+      },
+
+      // Keep watching it. A permission revoked from the OS settings
+      // mid-outing is one of the ways recording stops without a word,
+      // and it produces no error callback at all — the fixes simply
+      // stop. The PermissionStatus object is held on the instance
+      // because Chrome has historically dropped the change event once
+      // it is garbage collected.
+      async watchGeoPermission() {
+        if (typeof navigator === 'undefined' || !navigator.permissions?.query) return;
+        try {
+          const status = await navigator.permissions.query({ name: 'geolocation' });
+          this.geoPermission = status.state || 'unknown';
+          this._permissionStatus = status;
+          status.onchange = () => {
+            this.geoPermission = status.state || 'unknown';
+            if (status.state === 'denied' && this.gpsTracking) {
+              // Same shape the watch's own error callback produces, so
+              // it flows through the one wording helper the app already
+              // has (src/js/geolocation-error-message.js).
+              this.geoError = { code: 1 };
+              this.gpsTracking = false;
+            }
+          };
+        } catch {
+          /* Safari: no Permissions API for geolocation. */
+        }
+      },
+
+      // Apply a new sampling interval to a running recording.
+      //
+      // AppSettings used to do this by toggling gpsTracking off and on,
+      // which runs the watcher above and therefore flags a gap — so
+      // changing a preference cut the trace and the GPX in two at an
+      // arbitrary point. Rebuilding the watch is documented as not
+      // flagging one, which is exactly the semantics wanted here: the
+      // user never stopped walking.
+      applyGpsInterval() {
+        if (!this.gpsTracking) return;
+        this.restartGpsWatch();
+      },
+
       startGpsWatch() {
         if (!navigator.geolocation || this.watchId !== null) return;
         // Sample rate is user-controlled via AppSettings (CDC §2.9).
         // Snapshot at watch start — a mid-watch change is honored by
         // stop+start, not by mutating the closure.
         const intervalMs = this.$appSettings?.gpsIntervalMs ?? DEFAULT_TRACK_INTERVAL_MS;
+        this.watchStartedAt = Date.now();
         this.acquireWakeLock();
         this.startWatchdog();
         this.watchId = navigator.geolocation.watchPosition(
@@ -564,6 +714,7 @@ export default function install(Vue) {
             // Record liveness before any throttling, so a stationary
             // user does not look like a dead watch to the watchdog.
             this.lastFixAt = now;
+            this.gpsSilent = false;
             this.geoError = null;
             if (typeof document !== 'undefined' && document.hidden) {
               this.hiddenFixCount += 1;
@@ -626,6 +777,7 @@ export default function install(Vue) {
           navigator.geolocation.clearWatch(this.watchId);
         }
         this.watchId = null;
+        this.watchStartedAt = null;
       },
 
       discardTrace() {
