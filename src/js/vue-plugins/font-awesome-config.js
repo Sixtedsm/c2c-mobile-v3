@@ -214,6 +214,12 @@ import { faReply as faReplyV3 } from '@fortawesome/free-solid-svg-icons/faReply'
 import { faThumbsUp as faThumbsUpV3 } from '@fortawesome/free-solid-svg-icons/faThumbsUp';
 import { faPaperPlane as faPaperPlaneV3 } from '@fortawesome/free-solid-svg-icons/faPaperPlane';
 import { faPenToSquare as faPenToSquareV3 } from '@fortawesome/free-solid-svg-icons/faPenToSquare';
+// Used by the outing controls and the live-trace page. It was referenced
+// in templates without ever being registered, so every render logged
+// "Could not find one or more icon(s) {prefix: fas, iconName: pause}"
+// and drew nothing.
+import { faPause } from '@fortawesome/free-solid-svg-icons/faPause';
+import { faThumbtack } from '@fortawesome/free-solid-svg-icons/faThumbtack';
 import { faPlay as faPlayV3 } from '@fortawesome/free-solid-svg-icons/faPlay';
 import { faSpinner as faSpinnerV3 } from '@fortawesome/free-solid-svg-icons/faSpinner';
 import { faRightFromBracket as faRightFromBracketV3 } from '@fortawesome/free-solid-svg-icons/faRightFromBracket';
@@ -246,6 +252,8 @@ export default function install(Vue) {
     faThumbsUpV3,
     faPaperPlaneV3,
     faPenToSquareV3,
+    faPause,
+    faThumbtack,
     faPlayV3,
     faSpinnerV3,
     faRightFromBracketV3,

@@ -27,9 +27,12 @@
     <section v-if="$offline.pendingOutings.length" class="pending-outings">
       <header class="pending-outings-header">
         <fa-icon icon="upload" />
+        <!-- "waiting for you", not "waiting for the network": the queue
+             no longer publishes itself when connectivity returns, so this
+             line has to say whose move it is. -->
         <span class="pending-outings-title">
           {{ $offline.pendingOutings.length }}
-          {{ $gettext('outing(s) waiting to be published') }}
+          {{ $gettext('sortie(s) en attente de votre publication') }}
         </span>
         <button
           v-if="$offline.online"
@@ -38,7 +41,7 @@
           @click="$offline.syncPendingOutings()"
         >
           <fa-icon icon="rotate" :class="{ 'fa-spin': $offline.syncing }" />
-          &nbsp;{{ $offline.syncing ? $gettext('Syncing…') : $gettext('Sync now') }}
+          &nbsp;{{ $offline.syncing ? $gettext('Publication…') : $gettext('Publier maintenant') }}
         </button>
         <span v-else class="tag is-warning">{{ $gettext('Hors connexion') }}</span>
       </header>

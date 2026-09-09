@@ -438,6 +438,22 @@ export default {
   }
   ::v-deep .dropdown-menu {
     z-index: 30;
+    // Never wider than the screen: the menu is right-anchored, so an
+    // over-wide card pushes its own left edge off-screen.
+    max-width: calc(100vw - 1rem);
+  }
+  // Bulma sets white-space: nowrap on dropdown items. The French labels
+  // ("Ajouter un itinéraire", "Ajouter une sortie"…) are longer than the
+  // card, so they ran outside it (Loïc_P, forum 2026-09-08).
+  ::v-deep .dropdown-content {
+    max-width: 100%;
+  }
+  ::v-deep .dropdown-item {
+    white-space: normal;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    line-height: 1.25;
   }
 }
 

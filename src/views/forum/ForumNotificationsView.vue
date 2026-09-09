@@ -61,7 +61,7 @@
                   <span>&nbsp;{{ actionLabel(n) }}</span>
                 </p>
                 <p v-if="n.fancy_title || n.data?.topic_title" class="fn-topic">
-                  {{ n.fancy_title || n.data.topic_title }}
+                  {{ plainTitle(n.fancy_title, n.data.topic_title) }}
                 </p>
                 <p class="fn-date">{{ formatDate(n.created_at) }}</p>
               </div>
@@ -88,6 +88,7 @@
 import { toast } from 'bulma-toast';
 
 import forum from '@/js/apis/forum';
+import { plainTitle } from '@/pwa/cooked-html-parser';
 
 // Human-readable labels for Discourse notification_type ids. Full
 // enum: mentioned=1, replied=2, quoted=3, edited=4, liked=5, pm=6,
@@ -142,6 +143,9 @@ export default {
   },
 
   methods: {
+    // Discourse hands titles over as HTML. See plainTitle().
+    plainTitle,
+
     async load() {
       this.loading = true;
       this.error = false;

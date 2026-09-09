@@ -4,7 +4,7 @@
     <div class="fr-body">
       <div class="fr-title-line">
         <fa-icon v-if="isPinned" icon="thumbtack" class="fr-pinned-icon" :title="$gettext('Épinglé')" />
-        <span class="fr-title">{{ topic.fancy_title || topic.title }}</span>
+        <span class="fr-title">{{ plainTitle(topic.fancy_title, topic.title) }}</span>
       </div>
       <div v-if="tags.length" class="fr-tags">
         <router-link
@@ -47,6 +47,7 @@ import CategoryPill from './CategoryPill.vue';
 import UserAvatar from './UserAvatar.vue';
 
 import forum from '@/js/apis/forum';
+import { plainTitle } from '@/pwa/cooked-html-parser';
 
 export default {
   name: 'ForumTopicRow',
@@ -102,6 +103,8 @@ export default {
   },
 
   methods: {
+    // Discourse hands titles over as HTML. See plainTitle().
+    plainTitle,
     formatDate(d) {
       if (!d) return '';
       try {

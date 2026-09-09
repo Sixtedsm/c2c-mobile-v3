@@ -1,5 +1,5 @@
 <template>
-  <div :class="noWrapper ? '' : 'column'" v-show="visible">
+  <div :class="noWrapper ? 'form-field-stacked' : 'column'" v-show="visible">
     <div class="field">
       <label class="label">
         <marker-helper :name="helper || field.helper" />
@@ -109,3 +109,11 @@ export default {
   },
 };
 </script>
+
+<style scoped lang="scss">
+// Restores, for stacked (no-wrapper) fields, the separation Bulma gives
+// fields inside a column — see the template comment above.
+.form-field-stacked:not(:last-child) {
+  margin-bottom: 0.75rem;
+}
+</style>

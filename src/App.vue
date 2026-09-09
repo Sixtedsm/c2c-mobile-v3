@@ -35,12 +35,25 @@
     <!-- keep router view in last -->
     <div class="page-content is-block-print">
       <!-- Slide-fade transition on route change (#8). Only the entering
-           view animates (translate + fade in); leaving view disappears
-           instantly — avoids two views overlapping inside the
-           position-absolute scroll container and the layout glitches
-           that come with it. Keying by $route.name means filter/query
-           updates (same component, different querystring) don't replay
-           the animation — only real navigation does. -->
+           view animates (translate + fade in); the leaving view
+           disappears instantly — no .route-slide-leave-* rule exists, on
+           purpose. Keying by $route.name means filter/query updates
+           (same component, different querystring) don't replay the
+           animation — only real navigation does.
+
+           The leaving view is taken out of the flow explicitly (see
+           .route-slide-leave-active below) rather than left to overlap
+           the incoming one. Without that, both sit inside the same
+           position-absolute .page-content for the length of the enter
+           animation — long enough to leave a *destroyed* component on
+           screen, which is what froze the Récent feed at ten cards until
+           the tab was left and reopened (feedback Sixte, 2026-09-09).
+
+           Deliberately NOT mode="out-in": that makes inserting the new
+           view wait on the old one's transitionend, an event that does
+           not always arrive (a backgrounded tab, a stray global
+           transition rule). Tried, and it left navigation showing an
+           empty page. Hiding the leaver costs nothing and cannot hang. -->
       <transition name="route-slide">
         <router-view class="router-view" :key="$route.name || $route.path" />
       </transition>
@@ -1020,6 +1033,13 @@ html[data-shell='desktop'] {
 // Route slide-fade (#8). Subtle 200ms slide-from-bottom + opacity.
 // `enter` only — leave is instant to dodge layout flicker inside the
 // position-absolute .page-content.
+// The leaving view is removed from view at once — it is on its way out
+// and must never be mistaken for the live one. See the transition
+// comment in the template.
+.route-slide-leave-active {
+  display: none !important;
+}
+
 .route-slide-enter-active {
   transition: transform 0.22s ease, opacity 0.22s ease;
 }

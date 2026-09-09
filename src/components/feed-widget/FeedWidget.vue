@@ -124,6 +124,16 @@ export default {
     },
 
     load() {
+      // The infinite-scroll directive keeps its listener on the scroll
+      // container, not on this component, so a widget whose element is
+      // still on screen after being torn down goes on being asked for
+      // more. It would then append page after page to an instance that
+      // can never render them again — the feed looks frozen while the
+      // network works. Refusing here makes that state harmless.
+      if (this._isDestroyed || this._isBeingDestroyed) {
+        return;
+      }
+
       if (this.promise && this.promise.loading) {
         return;
       }

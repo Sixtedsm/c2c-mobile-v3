@@ -340,6 +340,7 @@ import ReplyEditor from '@/components/forum/ReplyEditor.vue';
 import UserAvatar from '@/components/forum/UserAvatar.vue';
 import forum from '@/js/apis/forum';
 import config from '@/js/config';
+import { plainTitle } from '@/pwa/cooked-html-parser';
 
 // How many post ids to hydrate at once when the user taps "Load more".
 // Discourse recommends batches of 20 — matches the size of the initial
@@ -408,7 +409,7 @@ export default {
 
   computed: {
     title() {
-      return this.topic?.fancy_title || this.topic?.title || '';
+      return plainTitle(this.topic?.fancy_title, this.topic?.title);
     },
 
     hydratedPosts() {

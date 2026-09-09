@@ -37,7 +37,7 @@
         <ul v-else-if="bookmarks.length" class="fb-list">
           <li v-for="bm in bookmarks" :key="bm.id" class="fb-item">
             <router-link :to="{ name: 'forum-topic', params: { id: bm.topic_id, slug: bm.slug } }" class="fb-link">
-              <span class="fb-item-title">{{ bm.fancy_title || bm.title }}</span>
+              <span class="fb-item-title">{{ plainTitle(bm.fancy_title, bm.title) }}</span>
               <span class="fb-item-meta">
                 <span v-if="bm.category_id">
                   <fa-icon icon="folder" />
@@ -79,6 +79,7 @@
 import { toast } from 'bulma-toast';
 
 import forum from '@/js/apis/forum';
+import { plainTitle } from '@/pwa/cooked-html-parser';
 
 export default {
   name: 'ForumBookmarksView',
@@ -103,6 +104,9 @@ export default {
   },
 
   methods: {
+    // Discourse hands titles over as HTML. See plainTitle().
+    plainTitle,
+
     async load() {
       this.loading = true;
       this.error = false;

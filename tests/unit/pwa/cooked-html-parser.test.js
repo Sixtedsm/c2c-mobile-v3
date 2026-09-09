@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { extractEmbeddedImageIds, extractImageUrlsFromCooked } from '@/pwa/cooked-html-parser';
+import { extractEmbeddedImageIds, extractImageUrlsFromCooked, plainTitle } from '@/pwa/cooked-html-parser';
 
 describe('extractImageUrlsFromCooked', () => {
   const apiBase = 'https://api.example';
@@ -77,5 +77,49 @@ describe('extractEmbeddedImageIds', () => {
       access: '<img c2c:document-id="2">',
     };
     expect(extractEmbeddedImageIds(cooked).sort()).toEqual(['1', '2']);
+  });
+});
+
+// Discourse hands topic titles over as HTML: it applies typographic
+// substitutions and encodes them as entities, and it inlines emoji as
+// <img> tags. Interpolated by Vue — which escapes, correctly — the
+// reader got `Topo &rdquo;jeux d&rsquo;enfants&rdquo;` where the title
+// should be (feedback gilles74, forum 2026-09-08).
+describe('plainTitle', () => {
+  it('decodes the entities Discourse puts in a fancy title', () => {
+    expect(plainTitle('Topo &rdquo;jeux d&rsquo;enfants&rdquo; à la grande gliere')).toBe(
+      'Topo ”jeux d’enfants” à la grande gliere'
+    );
+    expect(plainTitle('Neige &amp; glace &lt;2000 m')).toBe('Neige & glace <2000 m');
+  });
+
+  it('drops the emoji images Discourse inlines', () => {
+    expect(plainTitle('Sortie <img src="/images/emoji/smile.png" class="emoji" alt=":smile:"> réussie')).toBe(
+      'Sortie réussie'
+    );
+  });
+
+  it('returns a plain title untouched', () => {
+    expect(plainTitle('A vendre SKIN P3 16 avec sac de compression')).toBe(
+      'A vendre SKIN P3 16 avec sac de compression'
+    );
+  });
+
+  it('falls back when there is no fancy title', () => {
+    expect(plainTitle(null, 'Titre brut')).toBe('Titre brut');
+    expect(plainTitle('', 'Titre brut')).toBe('Titre brut');
+    expect(plainTitle(undefined, undefined)).toBe('');
+  });
+
+  it('never yields markup, whatever it is handed', () => {
+    // These strings come from other people's posts. A title is not worth
+    // an injection surface, so the result is always text — and every
+    // caller interpolates it as text.
+    const out = plainTitle('<b onmouseover="steal()">gras</b> et &lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(out).not.toMatch(/<b/);
+    expect(out).toContain('gras');
+    // The escaped script tag decodes to literal characters, which is
+    // exactly what it should read as.
+    expect(out).toContain('<script>alert(1)</script>');
   });
 });

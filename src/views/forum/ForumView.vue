@@ -36,76 +36,11 @@
       </section>
 
       <template v-else>
-        <!-- User-specific block: current logged-in user's own topics.
-             Shown at the top so it acts as a quick way back to a
-             discussion the user opened. Skipped when the user has no
-             Discourse username on file. -->
-        <section v-if="myTopics.length" class="forum-block">
-          <h2 class="forum-block-title">
-            <fa-icon icon="user" />
-            &nbsp;{{ $gettext('Mes discussions') }}
-          </h2>
-          <ul class="forum-list">
-            <li v-for="t in myTopics.slice(0, 3)" :key="t.id">
-              <topic-row :topic="t" :categories="categories" />
-            </li>
-          </ul>
-          <p v-if="myTopicsUsername" class="forum-block-more">
-            <router-link :to="{ name: 'forum-user', params: { username: myTopicsUsername } }">
-              {{ $gettext('Voir tout mon profil forum') }} →
-            </router-link>
-          </p>
-        </section>
-
-        <!-- Pinned topics: Discourse marks topics as pinned or
-             pinned_globally. Show them prominently — that's where
-             announcements live. -->
-        <section v-if="pinnedTopics.length" class="forum-block">
-          <h2 class="forum-block-title">
-            <fa-icon icon="thumbtack" />
-            &nbsp;{{ $gettext('Épinglés') }}
-          </h2>
-          <ul class="forum-list">
-            <li v-for="t in pinnedTopics.slice(0, 5)" :key="t.id">
-              <topic-row :topic="t" :categories="categories" />
-            </li>
-          </ul>
-        </section>
-
-        <!-- Category tree — parent categories with their children
-             indented underneath. Two-level Discourse hierarchy is
-             enough (no grand-children in the c2c forum).  -->
-        <section v-if="categoryTree.length" class="forum-block">
-          <h2 class="forum-block-title">
-            <fa-icon icon="folder" />
-            &nbsp;{{ $gettext('Catégories') }}
-          </h2>
-          <ul class="forum-cat-tree">
-            <li v-for="parent in categoryTree" :key="parent.id" class="forum-cat-node">
-              <router-link
-                :to="{ name: 'forum-category', params: { slug: parent.slug, id: parent.id } }"
-                class="forum-cat-link"
-                :style="{ borderLeftColor: '#' + (parent.color || 'aaaaaa') }"
-              >
-                <span class="forum-cat-name">{{ parent.name }}</span>
-                <span class="forum-cat-count">{{ parent.topic_count }}</span>
-              </router-link>
-              <ul v-if="parent.children.length" class="forum-cat-children">
-                <li v-for="child in parent.children" :key="child.id">
-                  <router-link
-                    :to="{ name: 'forum-category', params: { slug: child.slug, id: child.id } }"
-                    class="forum-cat-link is-child"
-                    :style="{ borderLeftColor: '#' + (child.color || 'aaaaaa') }"
-                  >
-                    <span class="forum-cat-name">{{ child.name }}</span>
-                    <span class="forum-cat-count">{{ child.topic_count }}</span>
-                  </router-link>
-                </li>
-              </ul>
-            </li>
-          </ul>
-        </section>
-
+        <!-- Feed first. The list of recent discussions is what a forum
+             is opened for; "Mes discussions", the pinned announcements
+             and the category tree are all navigation around it, and
+             they pushed it below the fold (feedback gilles74, forum
+             2026-09-08). -->
         <!-- Feed: Latest vs Top over a period. Two tabs; Top opens a
              sub-selector for the time window (mensuel / hebdo / …).
              All endpoints are public — no cookie needed. -->
@@ -197,6 +132,75 @@
           <p v-else class="forum-empty">
             {{ emptyFeedLabel }}
           </p>
+        </section>
+        <!-- User-specific block: current logged-in user's own topics.
+             Shown at the top so it acts as a quick way back to a
+             discussion the user opened. Skipped when the user has no
+             Discourse username on file. -->
+        <section v-if="myTopics.length" class="forum-block">
+          <h2 class="forum-block-title">
+            <fa-icon icon="user" />
+            &nbsp;{{ $gettext('Mes discussions') }}
+          </h2>
+          <ul class="forum-list">
+            <li v-for="t in myTopics.slice(0, 3)" :key="t.id">
+              <topic-row :topic="t" :categories="categories" />
+            </li>
+          </ul>
+          <p v-if="myTopicsUsername" class="forum-block-more">
+            <router-link :to="{ name: 'forum-user', params: { username: myTopicsUsername } }">
+              {{ $gettext('Voir tout mon profil forum') }} →
+            </router-link>
+          </p>
+        </section>
+
+        <!-- Pinned topics: Discourse marks topics as pinned or
+             pinned_globally. Show them prominently — that's where
+             announcements live. -->
+        <section v-if="pinnedTopics.length" class="forum-block">
+          <h2 class="forum-block-title">
+            <fa-icon icon="thumbtack" />
+            &nbsp;{{ $gettext('Épinglés') }}
+          </h2>
+          <ul class="forum-list">
+            <li v-for="t in pinnedTopics.slice(0, 5)" :key="t.id">
+              <topic-row :topic="t" :categories="categories" />
+            </li>
+          </ul>
+        </section>
+
+        <!-- Category tree — parent categories with their children
+             indented underneath. Two-level Discourse hierarchy is
+             enough (no grand-children in the c2c forum).  -->
+        <section v-if="categoryTree.length" class="forum-block">
+          <h2 class="forum-block-title">
+            <fa-icon icon="folder" />
+            &nbsp;{{ $gettext('Catégories') }}
+          </h2>
+          <ul class="forum-cat-tree">
+            <li v-for="parent in categoryTree" :key="parent.id" class="forum-cat-node">
+              <router-link
+                :to="{ name: 'forum-category', params: { slug: parent.slug, id: parent.id } }"
+                class="forum-cat-link"
+                :style="{ borderLeftColor: '#' + (parent.color || 'aaaaaa') }"
+              >
+                <span class="forum-cat-name">{{ parent.name }}</span>
+                <span class="forum-cat-count">{{ parent.topic_count }}</span>
+              </router-link>
+              <ul v-if="parent.children.length" class="forum-cat-children">
+                <li v-for="child in parent.children" :key="child.id">
+                  <router-link
+                    :to="{ name: 'forum-category', params: { slug: child.slug, id: child.id } }"
+                    class="forum-cat-link is-child"
+                    :style="{ borderLeftColor: '#' + (child.color || 'aaaaaa') }"
+                  >
+                    <span class="forum-cat-name">{{ child.name }}</span>
+                    <span class="forum-cat-count">{{ child.topic_count }}</span>
+                  </router-link>
+                </li>
+              </ul>
+            </li>
+          </ul>
         </section>
 
         <!-- Popular tags — public endpoint. Tap a tag to browse the

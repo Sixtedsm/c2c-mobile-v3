@@ -72,3 +72,39 @@ export function extractEmbeddedImageIds(cooked) {
 }
 
 export { IMAGE_FORMATS };
+
+// A Discourse title, as plain text.
+//
+// `fancy_title` is HTML: Discourse applies typographic substitutions
+// (curly quotes, dashes) and encodes them as entities, and it inlines
+// emoji as <img> tags. Rendered through a Vue interpolation — which
+// escapes, correctly — the reader gets `Topo &rdquo;jeux d&rsquo;enfants&rdquo;`
+// instead of the title (feedback gilles74, forum 2026-09-08).
+//
+// Decoding to text rather than rendering the HTML is the deliberate
+// choice: these strings come from other people's posts, and a title is
+// never worth an injection surface. Tags are dropped, entities resolved,
+// and the result is only ever interpolated as text.
+export function plainTitle(fancyTitle, fallback = '') {
+  const source = typeof fancyTitle === 'string' && fancyTitle ? fancyTitle : fallback;
+  if (typeof source !== 'string' || !source) return '';
+  // Nothing to do for a title carrying no markup — the common case.
+  if (!/[<&]/.test(source)) return source.trim();
+
+  // Tags go first, by string surgery, so nothing is ever parsed as an
+  // element: `holder.innerHTML = source` on a <div> would build real
+  // nodes, and some browsers start fetching an <img> even in a detached
+  // subtree — which is an onerror handler away from being a problem.
+  const withoutTags = source.replace(/<[^>]*>/g, '');
+
+  if (typeof document === 'undefined' || !document.createElement) return withoutTags.trim();
+  // A textarea is inert by construction: its content is RCDATA, so
+  // assigning innerHTML creates no elements at all, only decodes the
+  // character references. Anything that still looks like a tag after
+  // this is plain text, and every caller interpolates it as text.
+  const holder = document.createElement('textarea');
+  holder.innerHTML = withoutTags;
+  // Collapse whitespace: dropping an inlined emoji otherwise leaves a
+  // double space in the middle of the title.
+  return (holder.value || '').replace(/\s+/g, ' ').trim();
+}

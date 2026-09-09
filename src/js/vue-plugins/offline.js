@@ -398,7 +398,7 @@ export default function install(Vue) {
       this.refresh()
         .then(() => {
           if (this.online && this.pendingOutings.length) {
-            this.syncPendingOutings();
+            this.announcePendingOutings();
           }
         })
         .catch(() => {
@@ -423,8 +423,35 @@ export default function install(Vue) {
         }
         this.online = true;
         if (this.pendingOutings.length) {
-          this.syncPendingOutings();
+          this.announcePendingOutings();
         }
+      },
+
+      // Publishing is a decision, not a side effect of the network
+      // coming back.
+      //
+      // The queue used to publish itself the moment connectivity
+      // returned. Loïc and Florence reported the same surprise on the
+      // forum (2026-09-08): the outing was already online while they
+      // were still looking for it in the app. Nothing was lost — but a
+      // trip report is public writing under someone's name, and nobody
+      // had said go. So the queue now says it is ready and waits.
+      //
+      // The two syncs that remain automatic are both the continuation of
+      // an explicit tap: resolving a conflict, and attaching the
+      // itinéraire a queued outing was waiting for.
+      announcePendingOutings() {
+        const ready = this.pendingOutings.filter((item) => !item.conflict && !item.needsRouteAssoc).length;
+        if (!ready) return;
+        toast({
+          type: 'is-info',
+          position: 'bottom-center',
+          duration: 6000,
+          message:
+            ready === 1
+              ? `Une sortie est prête à être publiée. Ouvrez « Mes topos » pour l'envoyer.`
+              : `${ready} sorties sont prêtes à être publiées. Ouvrez « Mes topos » pour les envoyer.`,
+        });
       },
 
       // navigator.onLine has a long track record of false negatives
