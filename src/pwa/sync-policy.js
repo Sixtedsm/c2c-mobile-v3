@@ -27,7 +27,14 @@ export const MAX_SYNC_ATTEMPTS = 3;
 const RETRYABLE_STATUSES = new Set([401, 403, 408, 429]);
 
 // `attempts` is the count *before* this failure.
-export function classifyFailure(status, attempts) {
+//
+// `timedOut` says the request was sent and no answer ever came — as
+// opposed to a connection that was never established. The difference
+// matters more than it looks: a connection refused in a valley is safe to
+// retry, because nothing reached the server, while a request that timed
+// out may well have been committed. Retrying the second kind is how a
+// single outing becomes two on someone's account.
+export function classifyFailure(status, attempts, { timedOut = false } = {}) {
   const attemptsAfter = attempts + 1;
 
   if (status === 409) {
@@ -46,6 +53,19 @@ export function classifyFailure(status, attempts) {
   // No status means the exchange broke somewhere unknown — possibly
   // after the server had already committed the outing.
   const ambiguous = typeof status !== 'number';
+
+  // The request went out and nothing came back. Blindly sending it again
+  // is exactly the move that publishes a duplicate, so stop here and let
+  // the user look — freezeMessage() below tells them what to look for.
+  // Two more silent attempts, which is what this used to do, is two more
+  // chances to create a copy.
+  // Guarded on `ambiguous` too, so the flag can never override a verdict
+  // the server actually gave us. A caller cannot produce that combination
+  // today — axios only reports a timeout when no response arrived — but a
+  // policy function should not depend on its caller's discipline.
+  if (timedOut && ambiguous) {
+    return { freeze: true, reason: 'exhausted', ambiguous: true, attemptsAfter };
+  }
 
   if (attemptsAfter >= MAX_SYNC_ATTEMPTS) {
     return { freeze: true, reason: 'exhausted', ambiguous, attemptsAfter };

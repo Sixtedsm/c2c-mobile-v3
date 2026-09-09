@@ -363,25 +363,41 @@ export default {
 
       promise.catch((error) => {
         this.saving = false;
-        // Network error fallback: if we lost connection mid-save when creating
-        // an outing, queue it instead of dropping the user's work on the floor.
-        if (
-          this.mode === 'add' &&
-          this.documentType === 'outing' &&
-          this.$offline &&
-          !error?.response &&
-          !navigator.onLine
-        ) {
-          this.$offline.queueOuting(this.document).then(() => {
-            this.modified = false;
-            toast({
-              message: this.$gettext('Network lost — your outing was saved locally and will sync later.'),
-              type: 'is-warning',
-              position: 'center',
-              duration: 5000,
+        // Transport failure fallback: queue the outing instead of dropping
+        // the user's work on the floor.
+        //
+        // This used to also require !navigator.onLine, and that flag lies —
+        // src/js/vue-plugins/offline.js documents at length why it has its
+        // own reachability probe instead. A captive portal, a dead cell in a
+        // valley, a server that never answers: navigator.onLine happily says
+        // true through all of them. The outing then stayed in memory only,
+        // and the trace behind it died with the tab.
+        //
+        // The absence of a response is the real signal, and it is sufficient:
+        // if the request never reached a server there is nothing to conflict
+        // with, and queuing is always the safer half of the trade.
+        if (this.mode === 'add' && this.documentType === 'outing' && this.$offline && !error?.response) {
+          this.$offline
+            .queueOuting(this.document)
+            .then(() => {
+              this.modified = false;
+              toast({
+                message: this.$gettext('Network lost — your outing was saved locally and will sync later.'),
+                type: 'is-warning',
+                position: 'center',
+                duration: 5000,
+              });
+              this.$router.push({ name: 'offline' });
+            })
+            .catch(() => {
+              // Queuing itself failed — a full store, most likely. Say so
+              // rather than let a success toast cover a lost outing.
+              toast({
+                message: this.$gettext('Could not save your outing locally. Please try again.'),
+                type: 'is-danger',
+                position: 'center',
+              });
             });
-            this.$router.push({ name: 'offline' });
-          });
           return;
         }
         const data = error?.response?.data;

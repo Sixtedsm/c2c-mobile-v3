@@ -39,11 +39,19 @@ ApiData.prototype.catch = function (callback) {
   return this;
 };
 
+// No request to the wiki API is legitimately slower than this. Without a
+// timeout a hung POST hangs forever — the offline sync pass stays open
+// behind it, and when it finally rejects it carries no response, i.e. the
+// one failure class where we cannot tell whether the outing was created.
+// Failing fast is what makes that class rare enough to handle honestly.
+const REQUEST_TIMEOUT_MS = 60 * 1000;
+
 const BaseApi = function (apiUrl) {
   this.axios = axios.create({
     // axios instances shares same common headers. this trick fix this.
     headers: { common: {} },
     baseURL: apiUrl,
+    timeout: REQUEST_TIMEOUT_MS,
   });
 };
 

@@ -158,9 +158,19 @@
                    screen; the browser drops it the moment the phone is
                    locked. Saying "screen stays on" and nothing else left
                    the user to guess about the case that matters. -->
+              <!-- One sentence per platform, saying what that platform
+                   can actually keep. The single generic warning that used
+                   to be here was true on neither. -->
               <span class="start-outing-wakelock">
                 <br />
-                <template v-if="$outingSession.keepAliveActive">
+                <template v-if="$outingSession.platform.strategy === 'screen-on'">
+                  {{
+                    $gettext(
+                      'Sur iPhone, l’enregistrement s’arrête si l’écran se verrouille : gardez-le allumé avec le mode ci-dessous.'
+                    )
+                  }}
+                </template>
+                <template v-else-if="$outingSession.keepAliveActive">
                   {{ $gettext('Enregistrement maintenu écran éteint. Vous pouvez ranger le téléphone.') }}
                 </template>
                 <template v-else>
@@ -181,6 +191,16 @@
             </template>
           </p>
         </div>
+
+        <button
+          v-if="$outingSession.gpsTracking && $outingSession.platform.strategy === 'screen-on'"
+          type="button"
+          class="start-outing-link is-resume"
+          @click="enterScreenOnMode"
+        >
+          <fa-icon icon="moon" />
+          <span>&nbsp;{{ $gettext('Mode écran allumé (poche)') }}</span>
+        </button>
 
         <hr />
 
@@ -574,6 +594,14 @@ export default {
           ? this.$gettext('Maintien en arrière-plan réactivé. Vous pouvez ranger le téléphone.')
           : this.$gettext('Le maintien en arrière-plan reste indisponible. Gardez l’application à l’écran.'),
       });
+    },
+
+    // The iPhone equivalent of pocketing the phone: a black screen that
+    // is technically still on, so the page is never suspended, and that
+    // a thigh cannot press anything through.
+    enterScreenOnMode() {
+      this.$outingSession.setScreenOnMode(true);
+      this.showMenu = false;
     },
 
     resumeOuting() {

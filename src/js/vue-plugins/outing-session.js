@@ -13,6 +13,7 @@
 // runs as a plain Vue 2 plugin on the V3 shell.
 
 import * as backgroundAudio from '@/pwa/background-audio';
+import { describePlatform, SCREEN_ON } from '@/pwa/platform-capabilities';
 import { createTraceMetrics, isUsableFix } from '@/pwa/trace-metrics';
 import { splitOnGaps } from '@/pwa/trace-segments';
 import {
@@ -233,6 +234,15 @@ export default function install(Vue) {
         // running; it will not survive the screen going off until the user
         // taps once.
         keepAliveBlocked: false,
+        // Which background strategy this device can actually honour, and
+        // therefore what the app is allowed to promise. See
+        // src/pwa/platform-capabilities.js — the two platforms differ in
+        // kind, not in degree, and pretending otherwise is what produced
+        // a warning that was true nowhere.
+        platform: describePlatform(),
+        // The user has put the app into the black full-screen hold that
+        // keeps an iPhone's screen technically on at almost no cost.
+        screenOnMode: false,
         // Screen Wake Lock sentinel held while recording. Without it
         // the phone locks after ~30 s and the page is frozen, which is
         // what turned a 1 h run into 3 recorded points.
@@ -770,6 +780,14 @@ export default function install(Vue) {
       // See src/pwa/background-audio.js for why this takes the shape it
       // does, and for what it costs.
       async startKeepAlive() {
+        if (!this.platform.usesBackgroundAudio) {
+          // iOS suspends the process when the screen locks, audio or no
+          // audio. The clip would not extend the recording by a second,
+          // and it would put a pause button on the lock screen. The wake
+          // lock and the screen-on hold are the levers here instead.
+          this.keepAliveActive = false;
+          return;
+        }
         const token = this.nextKeepAliveToken();
         const ok = await backgroundAudio.start({
           // The lock-screen media control is not a "stop my outing"
@@ -817,6 +835,10 @@ export default function install(Vue) {
       // Called on returning to the foreground: report what is true now
       // rather than what we hoped, and try to restart if the OS cut it.
       async refreshKeepAlive() {
+        if (!this.platform.usesBackgroundAudio) {
+          this.keepAliveActive = false;
+          return;
+        }
         if (backgroundAudio.isActive()) {
           this.keepAliveActive = true;
           return;
@@ -997,6 +1019,20 @@ export default function install(Vue) {
         } catch {
           /* Safari: no Permissions API for geolocation. */
         }
+      },
+
+      // Turn the black full-screen hold on or off.
+      //
+      // The Apple answer to a phone in a pocket: the screen stays
+      // technically on — so the page is never suspended — while showing
+      // almost nothing, which on an OLED panel costs very little. It is
+      // also what stops a pocket from tapping the interface.
+      //
+      // Called from a tap, so this is a good moment to (re)take the wake
+      // lock: browsers drop it whenever the page is hidden.
+      setScreenOnMode(active) {
+        this.screenOnMode = !!active && this.platform.strategy === SCREEN_ON;
+        if (this.screenOnMode) this.acquireWakeLock();
       },
 
       // Apply a new sampling interval to a running recording.

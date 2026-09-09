@@ -857,18 +857,20 @@ export default function install(Vue) {
             message: `Seules les 20 premières photos ont été mises en file (sur ${photos.length}). Ajoutez les autres directement sur le site après publication.`,
           });
         }
-        const entry = await store.enqueuePendingOuting({
-          payload: document,
-          title: document?.locales?.[0]?.title || this.$gettext?.('Untitled') || 'Untitled',
-          photos: photoList,
-          // Terrain-first flow (#Loïc feedback 2026-09): the user can
-          // save a sortie offline without picking a real itinéraire
-          // (the API refuses that). Those items stay in the queue and
-          // are skipped by syncPendingOutings until the user opens
-          // OfflineView and completes the association from there.
-          needsRouteAssoc: !!needsRouteAssoc,
-          routeNote: typeof routeNote === 'string' ? routeNote.trim() : '',
-        });
+        const entry = await this.withQueueLock(() =>
+          store.enqueuePendingOuting({
+            payload: document,
+            title: document?.locales?.[0]?.title || this.$gettext?.('Untitled') || 'Untitled',
+            photos: photoList,
+            // Terrain-first flow (#Loïc feedback 2026-09): the user can
+            // save a sortie offline without picking a real itinéraire
+            // (the API refuses that). Those items stay in the queue and
+            // are skipped by syncPendingOutings until the user opens
+            // OfflineView and completes the association from there.
+            needsRouteAssoc: !!needsRouteAssoc,
+            routeNote: typeof routeNote === 'string' ? routeNote.trim() : '',
+          })
+        );
         this.pendingOutings = await store.listPendingOutings();
         return entry;
       },
@@ -949,6 +951,45 @@ export default function install(Vue) {
         return this.runGuardedSync();
       },
 
+      // Serialise a queue mutation against the sync pass and against the
+      // other tabs.
+      //
+      // Every mutation here is a read-modify-write of one array holding
+      // the whole queue, and until now only the sync pass took the lock.
+      // So an outing queued while a pass was running was appended to a
+      // list that pass was about to overwrite — the freshly recorded
+      // trace vanished, silently, at the exact moment the network came
+      // back and the user thought they were safe.
+      //
+      // Waits rather than skipping (no ifAvailable): a sync pass may be
+      // skipped and retried later, but a save may not.
+      async withQueueLock(run) {
+        if (!navigator.locks?.request) return run();
+        return navigator.locks.request(SYNC_LOCK_NAME, run);
+      },
+
+      // Persist the outcome for exactly one queued outing, merged into
+      // whatever is on disk at this instant.
+      //
+      // The pass used to accumulate a list and write it once at the end,
+      // which cost twice: anything queued meanwhile was overwritten, and
+      // a tab killed after a successful POST left the published outing
+      // still on disk, to be published again on the next reconnect.
+      // Committing per item makes both windows one item wide.
+      async commitPendingDecision(id, decided) {
+        const current = await store.listPendingOutings();
+        const next = [];
+        for (const entry of current) {
+          if (entry.id !== id) {
+            next.push(entry);
+          } else if (decided) {
+            next.push(decided);
+          }
+        }
+        await store.replacePendingOutings(next);
+        this.pendingOutings = next;
+      },
+
       async runGuardedSync() {
         if (this.syncing) {
           return;
@@ -991,7 +1032,6 @@ export default function install(Vue) {
         if (!queue.length) {
           return;
         }
-        const remaining = [];
         let published = 0;
         let newConflicts = 0;
         for (const item of queue) {
@@ -1000,8 +1040,8 @@ export default function install(Vue) {
           // them (retry / discard) via the OfflineView UI. Prevents an
           // auto-retry storm from re-triggering the same 409 on every
           // reconnect.
+          // Nothing to write: the item is unchanged on disk.
           if (item.conflict) {
-            remaining.push(item);
             continue;
           }
           // Items saved with the "à compléter plus tard" flow have no
@@ -1010,7 +1050,6 @@ export default function install(Vue) {
           // "Renseigner l'itinéraire" action that clears the flag
           // and re-triggers this loop.
           if (item.needsRouteAssoc) {
-            remaining.push(item);
             continue;
           }
           // Preserve uploaded image ids across retries — if photos were
@@ -1045,13 +1084,17 @@ export default function install(Vue) {
             }
             const response = await c2c.outing.create(payload);
             if (!response?.data?.document_id) {
-              remaining.push({
+              await this.commitPendingDecision(item.id, {
                 ...item,
                 attempts: item.attempts + 1,
                 lastError: 'no-id',
                 uploadedImageIds,
               });
             } else {
+              // Dropped from disk before the next POST, not after the
+              // whole pass: a tab killed in between would otherwise
+              // publish this outing a second time.
+              await this.commitPendingDecision(item.id, null);
               published += 1;
             }
           } catch (error) {
@@ -1074,7 +1117,11 @@ export default function install(Vue) {
             // permanently invalid payload into a failure toast on every
             // reconnect, and turned a lost response into a second copy
             // of the outing on the user account. See sync-policy.js.
-            const verdict = classifyFailure(status, item.attempts);
+            // axios reports a timeout as ECONNABORTED: the body was sent
+            // and the answer never arrived, which is the case that must
+            // not be retried blind.
+            const timedOut = error?.code === 'ECONNABORTED';
+            const verdict = classifyFailure(status, item.attempts, { timedOut });
             const next = {
               ...item,
               attempts: verdict.attemptsAfter,
@@ -1097,11 +1144,10 @@ export default function install(Vue) {
               next.ambiguous = verdict.ambiguous;
               newConflicts += 1;
             }
-            remaining.push(next);
+            await this.commitPendingDecision(item.id, next);
           }
         }
-        await store.replacePendingOutings(remaining);
-        this.pendingOutings = remaining;
+        this.pendingOutings = await store.listPendingOutings();
 
         // Toast feedback (#21). Auto-sync runs silently in the background
         // — without a notification, users have no idea their outings made

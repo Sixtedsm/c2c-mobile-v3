@@ -86,3 +86,43 @@ describe('a lost response is flagged as unknown, never silently republished', ()
     expect(freezeMessage('invalid', false)).toMatch(/refusée/);
   });
 });
+
+// A request that was sent and never answered is not the same failure as
+// one that never left the phone, and treating them alike is how a single
+// outing became two on someone's account.
+describe('a request that timed out is not retried blind', () => {
+  it('freezes on the first timeout instead of trying twice more', () => {
+    const verdict = classifyFailure(undefined, 0, { timedOut: true });
+    expect(verdict.freeze).toBe(true);
+    expect(verdict.ambiguous).toBe(true);
+    // Two more silent attempts, which is what this used to do, is two
+    // more chances to create a copy.
+    expect(verdict.attemptsAfter).toBe(1);
+  });
+
+  it('still asks the user to check before republishing', () => {
+    const verdict = classifyFailure(undefined, 0, { timedOut: true });
+    expect(freezeMessage(verdict.reason, verdict.ambiguous)).toMatch(/deux fois/);
+  });
+
+  it('keeps retrying a connection that never reached the server', () => {
+    // A refused connection in a valley committed nothing, so retrying is
+    // safe — and the offline queue exists precisely for that case.
+    const verdict = classifyFailure(undefined, 0, { timedOut: false });
+    expect(verdict.freeze).toBe(false);
+    expect(verdict.attemptsAfter).toBe(1);
+  });
+
+  it('leaves every status-bearing verdict alone', () => {
+    // A timeout carries no status, so the flag must not change how a
+    // server answer is judged.
+    expect(classifyFailure(409, 0, { timedOut: true }).reason).toBe('conflict');
+    expect(classifyFailure(400, 0, { timedOut: true }).reason).toBe('invalid');
+    expect(classifyFailure(429, 0, { timedOut: true }).freeze).toBe(false);
+  });
+
+  it('defaults to the previous behaviour when the caller says nothing', () => {
+    expect(classifyFailure(undefined, 0)).toEqual(classifyFailure(undefined, 0, { timedOut: false }));
+    expect(classifyFailure(undefined, MAX_SYNC_ATTEMPTS - 1).freeze).toBe(true);
+  });
+});
