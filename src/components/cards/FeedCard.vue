@@ -12,7 +12,7 @@
     </card-row>
 
     <card-row v-if="images.length">
-      <gallery :images="images" />
+      <gallery :images="images" :more-document="item.more_images ? item.document : null" />
     </card-row>
 
     <div class="row">

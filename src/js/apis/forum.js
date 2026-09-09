@@ -119,8 +119,38 @@ Forum.prototype.getTagTopics = function (tag) {
 // All categories, subcategories included. Discourse returns a flat
 // list; the tree is reconstructed via `parent_category_id` in the
 // components that need it.
+// The category list is fetched by nearly every forum screen, and opening
+// a discussion waited on it: the topic view asks for the topic and the
+// categories in one Promise.all, so the slower of the two set the delay
+// before anything appeared (feedback Sixte, 2026-09-09 — "chargement long
+// lors de l'ouverture d'une discussion").
+//
+// Categories change a few times a year. Holding the resolved ApiData for
+// ten minutes turns every screen after the first into no request at all;
+// awaiting an already-resolved promise resolves on the next microtask.
+let categoriesCache = null;
+let categoriesCachedAt = 0;
+const CATEGORIES_TTL_MS = 10 * 60 * 1000;
+
 Forum.prototype.getCategories = function () {
-  return this.get('/categories.json?include_subcategories=true');
+  const now = Date.now();
+  if (categoriesCache && now - categoriesCachedAt < CATEGORIES_TTL_MS) {
+    return categoriesCache;
+  }
+  const result = this.get('/categories.json?include_subcategories=true');
+  categoriesCache = result;
+  categoriesCachedAt = now;
+  // A failure must not be remembered as the answer for ten minutes: a
+  // topic opened in a tunnel would then show no category for as long as
+  // the cache held, even once the network came back.
+  if (result && result.promise_ && typeof result.promise_.catch === 'function') {
+    result.promise_.catch(() => {
+      if (categoriesCache === result) {
+        categoriesCache = null;
+      }
+    });
+  }
+  return result;
 };
 
 // Topics inside a category (with pagination page 0..N).
