@@ -123,6 +123,17 @@
             <fa-icon icon="triangle-exclamation" />
             &nbsp;{{ $gettext('Maintien en arrière-plan à réactiver : touchez ici avant de ranger le téléphone.') }}
           </button>
+          <!-- The Apple half of the same sentence: there is no audio to
+               restart, so the actionable thing is the screen-on hold. -->
+          <button
+            v-else-if="$outingSession.platform.strategy === 'screen-on'"
+            type="button"
+            class="button is-small is-warning start-outing-keepalive-retry"
+            @click="enterScreenOnMode"
+          >
+            <fa-icon icon="moon" />
+            &nbsp;{{ $gettext('Repassez en mode écran allumé avant de ranger le téléphone.') }}
+          </button>
           <div class="start-outing-interrupted-actions">
             <button type="button" class="button is-small is-text" @click="$outingSession.dismissInterruption()">
               {{ $gettext('J’ai compris') }}

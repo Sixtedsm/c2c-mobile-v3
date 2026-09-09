@@ -611,7 +611,13 @@ export default function install(Vue) {
         this.autoResumed = true;
         // The audio cannot restart without a gesture; say so rather than
         // let the user pocket a phone that will suspend the page again.
-        this.keepAliveBlocked = true;
+        //
+        // Only where there is an audio keep-alive to restart. On Apple
+        // there is none by design, and raising the flag there would put
+        // up a "touchez ici" button that can never succeed — a button
+        // that cannot work is worse than no button. That platform is
+        // pointed at the screen-on hold instead.
+        this.keepAliveBlocked = this.platform.usesBackgroundAudio;
         this.gpsTracking = true;
       },
 
@@ -676,6 +682,9 @@ export default function install(Vue) {
         const previousTraceId = this.traceId;
         this._traceGeneration = (this._traceGeneration || 0) + 1;
         this._traceDirty = false;
+        // A watch deferred by a hydration that this generation retires
+        // must not be started by it later.
+        this._watchPendingHydration = false;
         if (this._traceTimer) {
           window.clearTimeout(this._traceTimer);
           this._traceTimer = null;

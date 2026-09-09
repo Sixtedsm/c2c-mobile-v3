@@ -291,3 +291,25 @@ describe('the flag is cleared when the user takes charge', () => {
     expect(s.keepAliveBlocked).toBe(false);
   });
 });
+
+describe('the retry offered matches what the platform can do', () => {
+  it('does not offer to restart an audio keep-alive that does not exist on Apple', async () => {
+    // navigator.standalone existing at all is what marks WebKit on
+    // iOS/iPadOS, where the silent clip is deliberately never started.
+    Object.defineProperty(navigator, 'standalone', { configurable: true, value: true });
+    await seedInterruptedSession();
+
+    const s = mount();
+    await s.whenTraceReady();
+    await flush();
+
+    expect(s.platform.usesBackgroundAudio).toBe(false);
+    expect(s.autoResumed).toBe(true);
+    // Raising the flag here would put up a "touchez ici" button whose
+    // handler returns false every time — worse than no button. The UI
+    // points at the screen-on hold instead.
+    expect(s.keepAliveBlocked).toBe(false);
+
+    delete navigator.standalone;
+  });
+});
