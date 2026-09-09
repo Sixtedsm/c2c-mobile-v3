@@ -49,9 +49,9 @@
 import { haversine } from '@/pwa/haversine';
 
 // Beyond this the receiver is telling us it does not know where it is: a
-// 100 m "fix" is a cell-tower guess. Generous on purpose — a couloir or
-// dense forest legitimately degrades accuracy, and rejecting those would
-// leave a hole in the trace.
+// 50 m "fix" is barely a position and a worse one is a cell-tower guess.
+// Generous on purpose — a couloir or dense forest legitimately degrades
+// accuracy, and rejecting those would leave a hole in the trace.
 export const MAX_ACCURACY_M = 50;
 
 // 108 km/h: above any ski descent, far below the hundreds of metres per

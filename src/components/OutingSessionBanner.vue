@@ -97,6 +97,7 @@ export default {
       if (this.$outingSession.geoError) return this.$gettext('GPS bloqué');
       if (this.$outingSession.gpsSilent) return this.$gettext('Aucun point reçu');
       if (this.$outingSession.recordingInterrupted) return this.$gettext('Enregistrement interrompu');
+      if (this.$outingSession.autoResumed) return this.$gettext('Enregistrement repris');
       if (this.$outingSession.paused) return this.$gettext('Sortie en pause');
       return this.$gettext('Sortie en cours');
     },

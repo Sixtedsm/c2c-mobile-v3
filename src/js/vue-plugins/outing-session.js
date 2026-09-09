@@ -13,7 +13,6 @@
 // runs as a plain Vue 2 plugin on the V3 shell.
 
 import * as backgroundAudio from '@/pwa/background-audio';
-import { haversine } from '@/pwa/haversine';
 import { createTraceMetrics, isUsableFix } from '@/pwa/trace-metrics';
 import { splitOnGaps } from '@/pwa/trace-segments';
 import {
@@ -36,7 +35,9 @@ const SNAPSHOT_SCHEMA = 2;
 // need the growing debounce the whole-blob write did.
 const TRACE_FLUSH_MS = 2000;
 const DEFAULT_TRACK_INTERVAL_MS = 5000; // fallback if $appSettings hasn't loaded yet
-const MIN_DISTANCE_M = 3; // ignore jitter under 3m (urban canyon GPS noise)
+// About 28 h at the 5 s setting, a week at 30 s. A recording nobody
+// stopped must not be allowed to fill the store.
+export const MAX_TRACE_POINTS = 20000;
 const MAX_STALE_MS = 48 * 3600 * 1000; // drop sessions older than 48h
 // A live watch on a phone in a pocket still delivers a fix every few
 // seconds. Going a full minute without one means the watch is dead —
@@ -210,12 +211,28 @@ export default function install(Vue) {
         // IndexedDB is unusable. Recording still works; it is the old
         // path, with its old limits, and the UI says so.
         legacyTrace: !!snap && snap.schema !== SNAPSHOT_SCHEMA && Array.isArray(snap.positions),
-        // 'quota' | 'blocked' | null. Nothing about a full or refused
-        // store may be silent — see persist() above.
-        storageError: null,
+        // 'quota' | 'blocked' | null, one per store. Kept apart because
+        // they fail independently: localStorage can be full while
+        // IndexedDB is fine, and a successful metadata write must not
+        // report that the trace is safe. Read through storageError.
+        metadataStorageError: null,
+        traceStorageError: null,
         // Whether the browser agreed to make this origin non-evictable.
         // Advisory: nothing is gated on it.
         storagePersisted: null,
+        // The cap has been reached and positions are no longer being
+        // appended. Surfaced, never silent: see the watch callback.
+        traceFull: false,
+        // The app re-armed the recording by itself after the phone killed
+        // it, rather than waiting behind a menu the user had no reason to
+        // open. Carries the "you lost a stretch" meaning from that point
+        // on, since the watcher clears recordingInterrupted.
+        autoResumed: false,
+        // ...and the silent audio could not follow, because the autoplay
+        // policy needs a gesture and a reload is not one. The recording is
+        // running; it will not survive the screen going off until the user
+        // taps once.
+        keepAliveBlocked: false,
         // Screen Wake Lock sentinel held while recording. Without it
         // the phone locks after ~30 s and the page is frozen, which is
         // what turned a 1 h run into 3 recorded points.
@@ -246,6 +263,14 @@ export default function install(Vue) {
       // one of them, so the walk really did happen every five seconds.
       // On a ten-hour outing that is tens of millions of point visits for
       // a number that changed by one step.
+      // Whichever store is in trouble, the trace first: it is the one
+      // whose failure loses the recording. Two fields rather than one,
+      // because a successful metadata write must not be able to report
+      // that the trace is safe.
+      storageError() {
+        return this.traceStorageError || this.metadataStorageError;
+      },
+
       tracedDistanceMeters() {
         return this.traceMetricsSnapshot.distance;
       },
@@ -402,7 +427,7 @@ export default function install(Vue) {
 
     methods: {
       snapshot() {
-        this.storageError = persist(this.$data);
+        this.metadataStorageError = persist(this.$data);
       },
 
       // Write now and cancel anything pending, so a queued timer cannot
@@ -412,7 +437,7 @@ export default function install(Vue) {
           clearTimeout(this._persistTimer);
           this._persistTimer = null;
         }
-        this.storageError = persist(this.$data);
+        this.metadataStorageError = persist(this.$data);
       },
 
       // Advance the running totals over whatever is new, then persist.
@@ -483,10 +508,10 @@ export default function install(Vue) {
           // exists.
           if (generation === this._traceGeneration) {
             this._flushedCount = flushed;
-            if (this.storageError) this.storageError = null;
+            this.traceStorageError = null;
           }
         } catch (err) {
-          this.storageError = classifyStorageError(err);
+          this.traceStorageError = classifyStorageError(err);
         } finally {
           this._traceWriting = false;
           if (this._traceDirty) {
@@ -531,7 +556,7 @@ export default function install(Vue) {
           // not at all, and keep the points in the blob so a reload
           // still finds them.
           if (generation === this._traceGeneration) {
-            this.storageError = classifyStorageError(err);
+            this.traceStorageError = classifyStorageError(err);
             this.legacyTrace = true;
           }
         } finally {
@@ -541,8 +566,50 @@ export default function install(Vue) {
               this._watchPendingHydration = false;
               this.startGpsWatch();
             }
+            await this.maybeAutoResume();
           }
         }
+      },
+
+      // Pick the recording back up after the phone killed the app.
+      //
+      // The old behaviour was to come back with the GPS off and a warning
+      // in a dropdown — deliberately, so as not to drain a battery the
+      // user had not re-authorised. But the user did authorise it: they
+      // started the recording, and the OS ended it against their will.
+      // Leaving it off turns a system hiccup into permanent data loss,
+      // and Gilles walked seven hours without ever seeing the warning.
+      //
+      // Deliberately after hydration: _gapPending is only armed when the
+      // trace already has points, so resuming first would splice the
+      // walk back to the car onto the trace as if it had been recorded.
+      async maybeAutoResume() {
+        if (!this.sessionActive) return;
+        // Never against an explicit choice. A pause is the user saying
+        // stop; only an interruption is the phone saying it.
+        if (this.paused) return;
+        if (!this.recordingInterrupted) return;
+
+        // Re-arming into a refused permission would only re-prompt, and
+        // 'unknown' has to proceed — Safari has no answer to give here.
+        if ((await this.queryGeoPermission()) === 'denied') {
+          this.geoPermission = 'denied';
+          this.geoError = { code: 1 };
+          return;
+        }
+
+        this.autoResumed = true;
+        // The audio cannot restart without a gesture; say so rather than
+        // let the user pocket a phone that will suspend the page again.
+        this.keepAliveBlocked = true;
+        this.gpsTracking = true;
+      },
+
+      // The gesture the autoplay policy wanted. Called from a tap.
+      async retryKeepAlive() {
+        await this.startKeepAlive();
+        if (this.keepAliveActive) this.keepAliveBlocked = false;
+        return this.keepAliveActive;
       },
 
       // For the one consumer that must not read a half-loaded trace.
@@ -558,7 +625,7 @@ export default function install(Vue) {
         );
         this._persistTimer = window.setTimeout(() => {
           this._persistTimer = null;
-          this.storageError = persist(this.$data);
+          this.metadataStorageError = persist(this.$data);
         }, delay);
       },
 
@@ -580,7 +647,12 @@ export default function install(Vue) {
         this.traceId = newTraceId();
         this._flushedCount = 0;
         this.legacyTrace = false;
-        this.storageError = null;
+        this.metadataStorageError = null;
+        this.traceStorageError = null;
+        this.traceFull = false;
+        this.autoResumed = false;
+        this.keepAliveBlocked = false;
+        this._lastFixT = 0;
         // A brand-new trace has nothing to load.
         this.traceReady = true;
         this.gpsTracking = !!track;
@@ -618,6 +690,8 @@ export default function install(Vue) {
       // user may be back at the car and about to fill the form.
       dismissInterruption() {
         this.recordingInterrupted = false;
+        this.autoResumed = false;
+        this.keepAliveBlocked = false;
       },
 
       // Pick the outing back up. The next recorded point is flagged so
@@ -625,6 +699,10 @@ export default function install(Vue) {
       // tracedDistanceMeters.
       resume() {
         if (!this.sessionActive) return;
+        // A deliberate resume supersedes the automatic one, gesture and
+        // all — so the keep-alive gets its chance in the same tap.
+        this.autoResumed = false;
+        this.keepAliveBlocked = false;
         if (this.paused) {
           this.pausedMs += Math.max(0, Date.now() - (this.pausedAt ?? Date.now()));
           this.pausedAt = null;
@@ -656,6 +734,8 @@ export default function install(Vue) {
         this.pausedAt = null;
         this.pausedMs = 0;
         this.recordingInterrupted = false;
+        this.autoResumed = false;
+        this.keepAliveBlocked = false;
         this._gapPending = false;
       },
 
@@ -825,6 +905,33 @@ export default function install(Vue) {
         }
       },
 
+      // A usable, strictly increasing timestamp for a fix.
+      //
+      // pos.timestamp is the receiver's clock, and it is not guaranteed
+      // monotonic. A backwards jump used to do two things at once: freeze
+      // the sampler — the throttle compares against it, and a negative
+      // delta never clears, so every subsequent fix was dropped until the
+      // clock caught up — and stop trace-metrics' window from ever
+      // evicting, so the smoothing window grew without bound for the rest
+      // of the segment.
+      //
+      // Only monotonicity is enforced, not agreement with the wall clock.
+      // A receiver whose clock sits in the wrong era is a nuisance in the
+      // GPX metadata and nothing more: every other reader of that field takes a
+      // difference, and differences do not care about the offset. An
+      // era check here would instead reject a perfectly consistent trace
+      // and collapse it onto Date.now(), which — every fix landing in the
+      // same millisecond — is the one input that really does destroy it.
+      normaliseFixTime(raw) {
+        let now = Number.isFinite(raw) && raw > (this._lastFixT || 0) ? raw : Date.now();
+        // Never behind the trace itself: two points sharing a timestamp,
+        // or going backwards, break every duration the app computes.
+        const lastT = this.positions[this.positions.length - 1]?.t;
+        if (Number.isFinite(lastT) && now <= lastT) now = lastT + 1;
+        this._lastFixT = now;
+        return now;
+      },
+
       // How long since the browser last handed us a position; Infinity
       // when tracking has never produced one.
       //
@@ -923,10 +1030,20 @@ export default function install(Vue) {
         this.startWatchdog();
         this.watchId = navigator.geolocation.watchPosition(
           (pos) => {
-            const now = pos.timestamp || Date.now();
-            // Record liveness before any throttling, so a stationary
-            // user does not look like a dead watch to the watchdog.
-            this.lastFixAt = now;
+            // Two clocks, deliberately kept apart.
+            //
+            // Liveness is wall-clock, always. The watchdog and the UI
+            // compare it against Date.now(), so taking it from the
+            // receiver — as this used to — meant a phone whose clock was
+            // off by a year reported an age of a year, and the watchdog
+            // tore the watch down every thirty seconds for the whole
+            // outing, chasing a drought that did not exist.
+            this.lastFixAt = Date.now();
+            // Trace time is the receiver's, and only ever read as a
+            // difference: the smoothing windows, the speed gate, the
+            // recorded duration. A consistent offset is harmless there;
+            // going backwards is not. See normaliseFixTime().
+            const now = this.normaliseFixTime(pos.timestamp);
             this.gpsSilent = false;
             this.geoError = null;
             if (typeof document !== 'undefined' && document.hidden) {
@@ -953,23 +1070,47 @@ export default function install(Vue) {
               t: now,
             };
             this.currentPosition = sample;
-            const last = this.positions[this.positions.length - 1];
-            if (!last || haversine(last, sample) >= MIN_DISTANCE_M) {
-              // The flag lands on the first point actually recorded after
-              // the break, not merely the first fix: standing still on
-              // resume keeps it pending until the user moves, which is
-              // where the discontinuity really is.
-              if (this._gapPending && last) {
-                sample.gap = true;
-              }
-              this._gapPending = false;
-              // push, not [...positions, sample]: the spread reallocated
-              // the whole array on every fix, which is O(n²) over a long
-              // outing (~6.5M element copies on a 5 h trace). Vue 2
-              // intercepts push, so reactivity still fires.
-              this.positions.push(sample);
-              this._lastSampleTime = now;
+            // Advanced for every accepted fix, kept or not, so the trace
+            // is uniform in time.
+            //
+            // There used to be a 3 m step filter here as well, and it did
+            // more harm than the noise it removed. It is asymmetric — it
+            // keeps excursions over 3 m and drops everything under, so it
+            // selects noise rather than rejecting it. It is dependent on
+            // the sampling rate, in exactly the direction the metrics'
+            // rate-independence is built to avoid: at 30 s a walking step
+            // never trips it, at 5 s in a steep couloir it drops most of
+            // the real climb. And because the throttle only advanced when
+            // a point was kept, the sampling was least uniform precisely
+            // where uniformity matters most. Filtering belongs downstream,
+            // in trace-metrics.js, which smooths over a window in seconds,
+            // weights each fix by its reported accuracy, gates on speed
+            // and only counts steps over 14 m — and whose calibration was
+            // fitted on unfiltered traces in the first place.
+            this._lastSampleTime = now;
+
+            if (this.positions.length >= MAX_TRACE_POINTS) {
+              // Stop appending; never drop the head. Rogner la tête would
+              // silently rewrite length_total and height_diff_up on an
+              // outing the user thinks is fully recorded, whereas
+              // refusing new points is a failure they can see and act on.
+              // Liveness above keeps updating, so the watchdog stays alive.
+              this.traceFull = true;
+              return;
             }
+
+            const last = this.positions[this.positions.length - 1];
+            // The flag lands on the first point actually recorded after
+            // the break, not merely the first fix.
+            if (this._gapPending && last) {
+              sample.gap = true;
+            }
+            this._gapPending = false;
+            // push, not [...positions, sample]: the spread reallocated
+            // the whole array on every fix, which is O(n²) over a long
+            // outing (~6.5M element copies on a 5 h trace). Vue 2
+            // intercepts push, so reactivity still fires.
+            this.positions.push(sample);
           },
           (err) => {
             this.geoError = err;
@@ -997,6 +1138,7 @@ export default function install(Vue) {
         const previousTraceId = this.newTraceGeneration();
         this.positions = [];
         this._flushedCount = 0;
+        this.traceFull = false;
         this.traceId = this.sessionActive ? newTraceId() : null;
         this.snapshot();
         if (previousTraceId) deleteTrace(previousTraceId).catch(() => {});

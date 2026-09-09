@@ -81,6 +81,15 @@
           &nbsp;{{ geoErrorMessage }}
         </p>
 
+        <!-- The trace has reached its ceiling. Refusing new points is a
+             failure the user can see and act on; trimming the oldest ones
+             would silently rewrite the distance and the dénivelé of an
+             outing they believe is fully recorded. -->
+        <p v-else-if="$outingSession.traceFull" class="start-outing-alert is-warning">
+          <fa-icon icon="triangle-exclamation" />
+          &nbsp;{{ traceFullLabel }}
+        </p>
+
         <!-- Recording, but nothing arriving. Distinct from an error: the
              watch is alive and the sky is not. Worth saying, because a
              point counter that has stopped moving is only visible to
@@ -89,6 +98,37 @@
           <fa-icon icon="triangle-exclamation" />
           &nbsp;{{ silenceLabel }}
         </p>
+
+        <!-- The recording came back on its own. Said plainly, and without
+             overselling it: re-arming the watch helps if the page is
+             alive, and does nothing if the OS is about to freeze it
+             again. The stretch walked in between is genuinely gone. -->
+        <div v-if="$outingSession.autoResumed" class="start-outing-interrupted">
+          <p>
+            <fa-icon icon="rotate" />
+            &nbsp;{{
+              $gettext(
+                'L’application avait été fermée par le téléphone. L’enregistrement a repris tout seul — la portion parcourue entre-temps est perdue.'
+              )
+            }}
+          </p>
+          <!-- A button, because the tap IS the fix: the autoplay policy
+               needs a gesture and a reload is not one. -->
+          <button
+            v-if="$outingSession.keepAliveBlocked"
+            type="button"
+            class="button is-small is-warning start-outing-keepalive-retry"
+            @click="retryKeepAlive"
+          >
+            <fa-icon icon="triangle-exclamation" />
+            &nbsp;{{ $gettext('Maintien en arrière-plan à réactiver : touchez ici avant de ranger le téléphone.') }}
+          </button>
+          <div class="start-outing-interrupted-actions">
+            <button type="button" class="button is-small is-text" @click="$outingSession.dismissInterruption()">
+              {{ $gettext('J’ai compris') }}
+            </button>
+          </div>
+        </div>
 
         <div class="start-outing-menu-row">
           <label class="start-outing-toggle">
@@ -371,6 +411,13 @@ export default {
       return elevation(this.$outingSession.elevationGainMeters, this.$appSettings?.units);
     },
 
+    traceFullLabel() {
+      return this.$gettext('Trace au maximum ({n} points) : les positions ne sont plus enregistrées.').replace(
+        '{n}',
+        this.$outingSession.positions.length
+      );
+    },
+
     // Two different failures behind one flag, and the difference is what
     // the user can do about it: free some room, or use another browser.
     storageMessage() {
@@ -511,6 +558,21 @@ export default {
         position: 'bottom-center',
         duration: 4500,
         message: this.$gettext('Sortie en pause. Le temps et la distance ne comptent plus jusqu’à la reprise.'),
+      });
+    },
+
+    // The gesture the browser was waiting for. Reports back either way:
+    // a silent failure here would leave the user pocketing a phone that
+    // is about to suspend the page.
+    async retryKeepAlive() {
+      const ok = await this.$outingSession.retryKeepAlive();
+      toast({
+        type: ok ? 'is-success' : 'is-warning',
+        position: 'bottom-center',
+        duration: 4500,
+        message: ok
+          ? this.$gettext('Maintien en arrière-plan réactivé. Vous pouvez ranger le téléphone.')
+          : this.$gettext('Le maintien en arrière-plan reste indisponible. Gardez l’application à l’écran.'),
       });
     },
 
@@ -708,6 +770,17 @@ export default {
   background: rgba(229, 69, 69, 0.1);
   font-size: 0.82rem;
   line-height: 1.35;
+}
+
+.start-outing-keepalive-retry {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  white-space: normal;
+  height: auto;
+  text-align: left;
+  line-height: 1.3;
+  padding: 0.4rem 0.5rem;
 }
 
 .start-outing-interrupted-actions {

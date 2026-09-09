@@ -78,7 +78,7 @@ describe('a slow approach is not filtered away', () => {
   it('keeps 2 km/h, where the fix-to-fix step is under the noise floor', () => {
     // The failure that would matter most: filtering hard enough to erase
     // real walking. At 2 km/h each fix advances 2.78 m, well under the
-    // 10 m step floor — only the smoothing makes this measurable.
+    // 14 m step floor — only the smoothing makes this measurable.
     const { distance } = computeTraceMetrics(trace({ fixes: 240, metresPerFix: 2.78 }));
     expect(distance).toBeGreaterThan(500);
     expect(distance).toBeLessThan(800);
