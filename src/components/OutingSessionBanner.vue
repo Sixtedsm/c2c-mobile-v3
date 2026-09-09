@@ -20,7 +20,7 @@
            asked what it was for and why it had an arrow (mail
            2026-09-04). "Voir le topo" answers both at once. -->
       <span class="outing-session-banner-go">
-        {{ $gettext('Voir le topo') }}
+        {{ $gettext('Voir la trace') }}
         <fa-icon icon="chevron-right" />
       </span>
     </button>
@@ -170,18 +170,12 @@ export default {
       }
     },
     goToTopo() {
-      if (!this.topoRef) return;
-      this.$router
-        .push({
-          name: this.topoRef.type,
-          params: {
-            id: String(this.topoRef.id),
-            lang: this.topoRef.lang,
-          },
-        })
-        .catch(() => {
-          /* NavigationDuplicated is benign */
-        });
+      // The live map, not the topo: someone tapping a "sortie en cours"
+      // badge is asking what the recording is doing, and the topo page
+      // answers a different question. It is one tap from there.
+      this.$router.push({ name: 'outing-live' }).catch(() => {
+        /* NavigationDuplicated is benign */
+      });
     },
   },
 };

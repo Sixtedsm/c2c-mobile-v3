@@ -33,7 +33,7 @@ src/
 | Plugin           | Exposes             | Owns                                                                  |
 | ---------------- | ------------------- | --------------------------------------------------------------------- |
 | `offline`        | `vm.$offline`       | Saved docs, folders, day-packs, pending outings, sync loop, PWA badge |
-| `outing-session` | `vm.$outingSession` | Live outing state, GPS watch (batter-guarded), positions, GPX export  |
+| `outing-session` | `vm.$outingSession` | Live outing state, GPS watch, trace (IndexedDB), metrics, GPX export  |
 | `app-settings`   | `vm.$appSettings`   | Dark theme + text-size prefs (persisted in localStorage)              |
 | `screen`         | `vm.$screen`        | Responsive breakpoints (V1)                                           |
 
@@ -110,12 +110,31 @@ User taps "Démarrer la sortie"
    → localStorage snapshot on every change
 
 Tracking:
-   watchPosition() at ~5 s, jitter-filtered at 3 m, altitude → gain/loss
+   watchPosition(), one point per configured interval (5/15/30 s),
+   uniform in time. Fixes worse than 50 m accuracy are dropped; nothing
+   else is filtered at capture — smoothing, the speed gate and the 14 m
+   step floor all live in src/pwa/trace-metrics.js, and its calibration
+   was fitted on unfiltered traces.
+   Points go to IndexedDB in 200-point chunks (src/pwa/trace-store.js);
+   localStorage keeps only the session metadata, because setItem is
+   synchronous and survives the OS killing the tab.
+   Hard ceiling at 20 000 points: appending stops and says so rather than
+   trimming the head, which would rewrite the published figures.
 
 Tab hidden (phone locked, browser backgrounded):
-   → wasTrackingBeforeHide=true, gpsTracking=false (battery guard)
-Tab visible again:
-   → gpsTracking=true (restore user intent)
+   → the watch is deliberately NOT stopped. A "battery guard" used to
+     flip gpsTracking off on every hide, which is what turned a 1 h run
+     into 3 recorded points (2026-09-02).
+   → Android: a silent audio clip keeps the page from being frozen.
+     iOS: the process is suspended whatever we do, so the app offers a
+     black "écran allumé" hold instead. See src/pwa/platform-capabilities.js.
+   → the watchdog rebuilds a watch that stopped delivering, and no longer
+     erases the evidence of the drought while doing it.
+
+App killed and reopened mid-recording:
+   → the trace is read back from IndexedDB, then recording re-arms itself
+     (never against an explicit pause, never before the trace is back —
+     the discontinuity flag needs the existing points to be armed).
 
 User taps "Arrêter":
    → 3 choices modal:

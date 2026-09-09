@@ -11,6 +11,7 @@ import constants from '@/js/constants';
 // so the initial JS bundle stops dragging the cold start.
 import DocumentsView from '@/views//documents/DocumentsView';
 import MoreView from '@/views/MoreView';
+import OutingLiveView from '@/views/OutingLiveView';
 import OutingView from '@/views/document/OutingView';
 import RouteView from '@/views/document/RouteView';
 import WaypointView from '@/views/document/WaypointView';
@@ -140,6 +141,9 @@ const routes = [
   { path: '/sophie-picture-contest/:year(\\d+)?', name: 'sophie-picture-contest', component: SophiePictureContestView },
   { path: '/offline', name: 'offline', component: OfflineView },
   { path: '/more', name: 'more', component: MoreView },
+  // CDC §2.6 — the trace being drawn is the only proof of recording a
+  // user can get without opening a menu.
+  { path: '/sortie-en-cours', name: 'outing-live', component: OutingLiveView },
   { path: '/me', name: 'me', component: MeView },
   { path: '/app-settings', name: 'app-settings', component: AppSettingsView },
 

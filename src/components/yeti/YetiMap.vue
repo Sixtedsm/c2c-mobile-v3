@@ -136,6 +136,12 @@ export default {
     this.map.on('pointermove', this.onMapPointerMove);
     this.geolocation.on('change:position', this.setCenterOnGeoLocation);
   },
+  beforeDestroy() {
+    // The component had no teardown at all: leaving the Yeti page while
+    // the crosshair was still waiting for a first fix left the watch
+    // running forever.
+    this.geolocation?.setTracking(false);
+  },
   methods: {
     getExtent(projection) {
       let extent = this.view.calculateExtent(this.map.getSize() || null);

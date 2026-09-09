@@ -216,6 +216,11 @@
           <span>{{ $gettext('Mettre en pause') }}</span>
         </button>
 
+        <button type="button" class="start-outing-link" @click="goToLiveMap">
+          <fa-icon icon="map" />
+          &nbsp;{{ $gettext('Voir la trace sur la carte') }}
+        </button>
+
         <button v-if="$outingSession.positions.length > 0" type="button" class="start-outing-link" @click="exportGpx">
           <fa-icon icon="download" />
           &nbsp;{{ $gettext('Exporter la trace GPX') }}
@@ -602,6 +607,13 @@ export default {
     enterScreenOnMode() {
       this.$outingSession.setScreenOnMode(true);
       this.showMenu = false;
+    },
+
+    goToLiveMap() {
+      this.showMenu = false;
+      this.$router.push({ name: 'outing-live' }).catch(() => {
+        /* NavigationDuplicated is benign */
+      });
     },
 
     resumeOuting() {
