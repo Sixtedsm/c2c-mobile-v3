@@ -301,4 +301,28 @@ export default function install(Vue) {
 
   Vue.prototype.$language = languageVm;
   Vue.prototype.$gettext = languageVm.gettext.bind(languageVm);
+
+  // Fill the %{placeholders} of a translated string.
+  //
+  // Four places in the forum already called this — it is the standard
+  // vue-gettext companion to $gettext — and it had never been defined.
+  // Every one of them threw during render, and a render that throws
+  // leaves the previous DOM in place: the component's state was correct,
+  // the screen kept showing whatever was there before. On a discussion
+  // that meant the loading spinner, forever.
+  //
+  // Only some discussions were affected, which is what made it look like
+  // a network problem: the call sits inside "Charger les %{n} messages
+  // suivants", so it renders only when a topic has more posts than the
+  // twenty Discourse hydrates. Short discussions opened fine; long ones
+  // never opened at all (Sixte, 2026-09-10).
+  //
+  // Missing keys are left as they are rather than blanked: a visible
+  // %{n} says something is wrong, an empty space hides it.
+  Vue.prototype.$gettextInterpolate = function (msgid, context = {}) {
+    if (typeof msgid !== 'string') return '';
+    return msgid.replace(/%\{(\w+)\}/g, (match, key) =>
+      Object.prototype.hasOwnProperty.call(context, key) ? String(context[key]) : match
+    );
+  };
 }
