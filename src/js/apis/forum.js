@@ -34,7 +34,17 @@ Forum.prototype.getTopic = function (topicId, postNumber) {
   if (postNumber) {
     return this.get('/t/' + topicId + '/' + postNumber + '.json');
   }
-  return this.get('/t/title/' + topicId + '.json');
+  // /t/<id>.json, not /t/title/<id>.json.
+  //
+  // The "title" placeholder was a way of addressing a topic without
+  // knowing its slug — and Discourse answers it with a 301 to the
+  // canonical slug URL. So every topic opened paid two sequential round
+  // trips to the forum instead of one, on a connection that is often a
+  // phone on a mountain road. Verified against the live forum: the two
+  // responses are byte-for-byte the same 43 keys; the redirect buys
+  // nothing at all. This is the "chargement long lors de l'ouverture
+  // d'une discussion" reported by Sixte (2026-09-09).
+  return this.get('/t/' + topicId + '.json');
 };
 
 Forum.prototype.getPostsRange = function (topicId, postIds) {

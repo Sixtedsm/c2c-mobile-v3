@@ -51,7 +51,11 @@
       <div v-if="loading" class="ft-loading"><fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}</div>
 
       <div v-else-if="error" class="ft-error">
-        {{ $gettext('Sujet introuvable.') }}
+        <p>{{ errorLabel }}</p>
+        <button type="button" class="button is-small is-primary ft-error-retry" @click="load">
+          <fa-icon icon="rotate" />
+          &nbsp;{{ $gettext('Réessayer') }}
+        </button>
       </div>
 
       <template v-else>
@@ -347,6 +351,29 @@ import { plainTitle } from '@/pwa/cooked-html-parser';
 // server-hydrated slice, keeps the visual rhythm predictable.
 const LOAD_MORE_BATCH = 20;
 
+// A discussion has to finish loading one way or another.
+//
+// Twenty seconds is far more than the forum needs on a working
+// connection and far less than a reader will stare at a spinner.
+const LOAD_TIMEOUT_MS = 20000;
+
+// Reject if the promise has not settled in time. The underlying request
+// is left to finish on its own — aborting it buys nothing here, and the
+// browser will drop it with the page.
+function withDeadline(promise, ms) {
+  let timer = null;
+  const deadline = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const err = new Error('topic load timed out');
+      err.name = 'TopicLoadTimeout';
+      reject(err);
+    }, ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 export default {
   name: 'ForumTopicView',
 
@@ -357,6 +384,10 @@ export default {
       topic: null,
       categories: [],
       loading: true,
+      // Tells "the forum did not answer in time" apart from "this topic
+      // does not exist" — different sentences, and only one of them is
+      // worth retrying.
+      timedOut: false,
       error: false,
       // Reply editor
       showReply: false,
@@ -408,6 +439,14 @@ export default {
   },
 
   computed: {
+    // Two different failures, two different sentences — and only one of
+    // them is the reader's fault to wait out.
+    errorLabel() {
+      return this.timedOut
+        ? this.$gettext('Le forum ne répond pas. Vérifiez votre connexion, puis réessayez.')
+        : this.$gettext('Sujet introuvable.');
+    },
+
     title() {
       return plainTitle(this.topic?.fancy_title, this.topic?.title);
     },
@@ -645,16 +684,31 @@ export default {
     async load() {
       this.loading = true;
       this.error = false;
+      this.timedOut = false;
       this.likeOverlay = {};
       this.bookmarkedId = null;
       this.editingPostId = null;
       try {
-        const [topicRes, catRes] = await Promise.all([
-          forum.getTopic(this.$route.params.id).promise_,
-          forum.getCategories().promise_,
-        ]);
+        // Bounded on purpose. A spinner with no end is the worst thing
+        // this screen can show: it tells the reader nothing, and it hides
+        // whatever actually went wrong. Reported as "ça charge à l'infini"
+        // (Sixte, 2026-09-09). The forum is a third-party service on the
+        // far side of a mountain connection — it is allowed to be slow,
+        // but not allowed to leave the app with no way out.
+        //
+        // The categories are raced separately and never block the topic:
+        // they only decorate the header with a pill, and waiting on them
+        // to show a discussion is the wrong trade.
+        const topicRes = await withDeadline(forum.getTopic(this.$route.params.id).promise_, LOAD_TIMEOUT_MS);
+        forum
+          .getCategories()
+          .promise_.then((catRes) => {
+            this.categories = catRes?.data?.category_list?.categories || [];
+          })
+          .catch(() => {
+            /* The pill is decoration; its absence is not a failure. */
+          });
         this.topic = topicRes?.data;
-        this.categories = catRes?.data?.category_list?.categories || [];
         // Bootstrap the bookmark id from whatever Discourse handed us
         // on the topic payload so the star icon renders in the
         // correct state.
@@ -669,6 +723,7 @@ export default {
         }
       } catch (e) {
         this.error = true;
+        this.timedOut = e && e.name === 'TopicLoadTimeout';
       } finally {
         this.loading = false;
       }
@@ -1714,10 +1769,12 @@ export default {
 .ft-error {
   padding: 0.75rem;
   font-size: 0.85rem;
-  color: #6b6b6b;
-}
-.ft-error {
   color: #b91c1c;
+  text-align: center;
+}
+
+.ft-error-retry {
+  margin-top: 0.6rem;
 }
 </style>
 
