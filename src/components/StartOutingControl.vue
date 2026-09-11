@@ -779,6 +779,15 @@ export default {
 }
 
 .start-outing-btn-active {
+  // The control that matters once the outing has started: it is the only
+  // way to the pause and to "Arrêter la sortie". It stayed at ~28 px tall
+  // after the start button was enlarged — "les boutons pour démarrer et
+  // arrêter sont un peu petits" (Loïc_P, forum 2026-09-08). 44 px is the
+  // usual floor for a touch target, and it is a floor for a bare thumb:
+  // with gloves on a ridge it is the minimum, not the comfort.
+  min-height: 44px;
+  padding: 0.55rem 1rem;
+  font-size: 0.95rem;
   background: #f0f4f8;
   color: #4a4a4a;
   border: 1px solid rgba(0, 0, 0, 0.1);
@@ -924,13 +933,19 @@ export default {
 }
 
 .start-outing-link {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   width: 100%;
   text-align: left;
-  padding: 0.45rem 0.4rem;
+  // Same floor as the pill: "Arrêter la sortie…" lives in this list, and
+  // it was a 30 px line between two others — easy to miss, easy to hit the
+  // neighbour instead.
+  min-height: 44px;
+  padding: 0.5rem 0.5rem;
   background: transparent;
   border: none;
-  font-size: 0.85rem;
+  font-size: 0.92rem;
   color: #4a4a4a;
   cursor: pointer;
   border-radius: 4px;

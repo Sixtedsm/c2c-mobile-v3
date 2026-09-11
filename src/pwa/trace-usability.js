@@ -50,3 +50,23 @@ export function summariseTrace(positions, { distanceMeters = 0, elapsedMs = 0 } 
 
   return { points, recordedMs, coverage, usable: reason === null, reason };
 }
+
+// What the outing form may take from a trace, given its summary.
+//
+// The first version of this guard was all-or-nothing, and that was wrong
+// for one of its three cases. Noise — a handful of fixes, or a recorder
+// left running at a standstill — deserves neither a drawn line nor a
+// figure. But a *partial* recording is real ground, walked and recorded;
+// only not all of the outing. Throwing its geometry away because its
+// distance is not the outing's distance punished the part that was right
+// to protect the part that was wrong — and it is exactly the recording an
+// app killed mid-outing leaves behind: "elle n'a pas gardé la trace GPS"
+// (Loic_P, forum 2026-09-08).
+//
+// So a partial trace is drawn, and its figures are withheld.
+export function traceUse(summary) {
+  if (!summary) return { geometry: false, figures: false };
+  if (summary.usable) return { geometry: true, figures: true };
+  if (summary.reason === 'partial') return { geometry: true, figures: false };
+  return { geometry: false, figures: false };
+}

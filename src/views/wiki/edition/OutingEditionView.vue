@@ -339,7 +339,7 @@ import c2c from '@/js/apis/c2c';
 import ol from '@/js/libs/ol';
 import { elapsedMs, formatDuration } from '@/pwa/elapsed-label';
 import { splitOnGaps } from '@/pwa/trace-segments';
-import { summariseTrace } from '@/pwa/trace-usability';
+import { summariseTrace, traceUse } from '@/pwa/trace-usability';
 
 export default {
   components: { CotometerWindow, OutingPreviewModal },
@@ -438,7 +438,7 @@ export default {
               'L’enregistrement n’a mesuré aucun déplacement : le téléphone est resté sur place. Les chiffres de l’itinéraire ont été repris à la place.'
             ),
         partial: this.$gettext(
-          'L’enregistrement n’a tourné que {duration} sur la durée de la sortie. Sa distance n’est pas celle de la sortie, elle n’a pas été reprise.'
+          'L’enregistrement n’a tourné que {duration} sur la durée de la sortie. La trace est dessinée sur la carte, mais sa distance et ses dénivelés ne sont pas ceux de la sortie : ils n’ont pas été repris.'
         ),
       }[summary.reason];
 
@@ -619,7 +619,10 @@ export default {
         elapsedMs: elapsedMs(session.startedAt, Date.now(), session.pausedMs, session.pausedAt),
       });
       this.traceSummary = summary;
-      if (!summary.usable) return;
+      // Geometry and figures are separate decisions — see traceUse(). A
+      // partial recording keeps its drawn line and loses only its totals.
+      const use = traceUse(summary);
+      if (!use.geometry) return;
 
       // GPS trace in EPSG:3857 (C2C's storage projection), split at the
       // recording breaks: a point flagged `gap` opens a new segment.
@@ -650,6 +653,11 @@ export default {
           coordinates: drawable,
         });
       }
+
+      // A partial trace stops here: drawn, but its distance is not the
+      // outing's distance, and the itinéraire's figures are the better
+      // guess for the fields the user will check anyway.
+      if (!use.figures) return;
 
       // Auto-computed metrics from the trace — round to integers, the
       // API stores meters as ints anyway.

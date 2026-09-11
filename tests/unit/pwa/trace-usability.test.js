@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { MIN_COVERAGE, MIN_DISTANCE_M, MIN_POINTS, summariseTrace } from '@/pwa/trace-usability';
+import { MIN_COVERAGE, MIN_DISTANCE_M, MIN_POINTS, summariseTrace, traceUse } from '@/pwa/trace-usability';
 
 // A trace of `n` points, one every 5 s, starting at t0.
 const trace = (n, t0 = 0, step = 5000) =>
@@ -77,5 +77,36 @@ describe('summariseTrace', () => {
   it('treats an empty trace as unusable rather than throwing', () => {
     expect(summariseTrace([], {}).usable).toBe(false);
     expect(summariseTrace(undefined, {}).points).toBe(0);
+  });
+});
+
+// Geometry and figures are two decisions, not one. The guard used to drop
+// both for any unusable trace — including a partial one, which is real
+// ground recorded before the phone killed the app. Its drawn line was
+// thrown away along with the totals it could not vouch for.
+describe('traceUse', () => {
+  it('takes everything from a trace that describes the outing', () => {
+    const summary = summariseTrace(trace(720), { distanceMeters: 5000, elapsedMs: HOUR });
+    expect(traceUse(summary)).toEqual({ geometry: true, figures: true });
+  });
+
+  it('keeps the drawn line of a partial recording, and only the line', () => {
+    const summary = summariseTrace(trace(240), { distanceMeters: 1500, elapsedMs: 7 * HOUR });
+    expect(summary.reason).toBe('partial');
+    expect(traceUse(summary)).toEqual({ geometry: true, figures: false });
+  });
+
+  it('drops a recorder left running at a standstill entirely', () => {
+    const summary = summariseTrace(trace(40), { distanceMeters: 15, elapsedMs: 7 * HOUR });
+    expect(traceUse(summary)).toEqual({ geometry: false, figures: false });
+  });
+
+  it('drops a handful of fixes entirely', () => {
+    const summary = summariseTrace(trace(MIN_POINTS - 1), { distanceMeters: 5000, elapsedMs: HOUR });
+    expect(traceUse(summary)).toEqual({ geometry: false, figures: false });
+  });
+
+  it('is safe without a summary', () => {
+    expect(traceUse(null)).toEqual({ geometry: false, figures: false });
   });
 });
