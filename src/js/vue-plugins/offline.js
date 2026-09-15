@@ -9,6 +9,7 @@ import { probeApiAccess } from '@/pwa/api-access';
 import { extractEmbeddedImageIds, extractImageUrlsFromCooked } from '@/pwa/cooked-html-parser';
 import * as store from '@/pwa/offline-store';
 import { classifyFailure } from '@/pwa/sync-policy';
+import { requestPersistentStorage } from '@/pwa/trace-store';
 
 // Name of the cross-tab Web Lock guarding the publish pass.
 const SYNC_LOCK_NAME = 'c2c-v3-sync-pending-outings';
@@ -589,6 +590,9 @@ export default function install(Vue) {
           // online later must not turn into an "Untitled" row.
           await store.saveDocument({ type, id, lang, data, meta: buildMeta(data, lang), folderId, mode });
           if (mode === store.OFFLINE_MODE) {
+            // A topo carried for the mountain is exactly what must not be
+            // evicted. See queueOuting for why this is asked here too.
+            requestPersistentStorage();
             // Mark the download open before fetching a single asset. If the
             // app dies here — tunnel, killed tab, closed lid — the entry
             // stays open and "Mes topos" says so, which is exactly what
@@ -895,6 +899,13 @@ export default function install(Vue) {
       },
 
       async queueOuting(document, { photos = [], needsRouteAssoc = false, routeNote = '' } = {}) {
+        // Ask the browser not to evict this origin, from the tap that saved
+        // the outing. Only starting a GPS recording used to ask, so an outing
+        // written up by hand without a network — photos included — waited in
+        // a "best-effort" bucket that Safari and Chrome may empty under
+        // storage pressure (WebKit storage policy: only persistent mode is
+        // excluded from eviction). Advisory: nothing waits on the answer.
+        requestPersistentStorage();
         // Photos are stored as raw File/Blob in IndexedDB (idb-keyval
         // handles Blobs natively — no base64 blow-up). They're uploaded
         // + associated to the outing at sync time; see syncPendingOutings.
