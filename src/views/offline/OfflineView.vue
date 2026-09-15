@@ -82,6 +82,10 @@
               <fa-icon icon="link" />
               &nbsp;{{ $gettext('Renseigner l’itinéraire') }}
             </button>
+            <button class="button is-small" :disabled="$offline.syncing" @click="editPending(item)">
+              <fa-icon icon="pen-to-square" />
+              &nbsp;{{ $gettext('Modifier') }}
+            </button>
             <button class="button is-small is-text" @click="discardPending(item.id)">
               <fa-icon icon="trash" />
               &nbsp;{{ $gettext('Abandonner') }}
@@ -126,6 +130,10 @@
                 <fa-icon icon="rotate" />
                 &nbsp;{{ $gettext('Réessayer') }}
               </button>
+              <button class="button is-small" :disabled="$offline.syncing" @click="editPending(item)">
+                <fa-icon icon="pen-to-square" />
+                &nbsp;{{ $gettext('Modifier') }}
+              </button>
               <button class="button is-small" @click="exportConflict(item)">
                 <fa-icon icon="download" />
                 &nbsp;{{ $gettext('Exporter JSON') }}
@@ -136,14 +144,19 @@
               </button>
             </div>
           </div>
-          <button
-            v-else-if="!item.needsRouteAssoc"
-            class="button is-small is-text pending-outing-discard"
-            :title="$gettext('Discard this pending outing')"
-            @click="discardPending(item.id)"
-          >
-            <fa-icon icon="trash" />
-          </button>
+          <div v-else-if="!item.needsRouteAssoc" class="pending-outing-actions">
+            <button class="button is-small" :disabled="$offline.syncing" @click="editPending(item)">
+              <fa-icon icon="pen-to-square" />
+              &nbsp;{{ $gettext('Modifier') }}
+            </button>
+            <button
+              class="button is-small is-text pending-outing-discard"
+              :title="$gettext('Discard this pending outing')"
+              @click="discardPending(item.id)"
+            >
+              <fa-icon icon="trash" />
+            </button>
+          </div>
         </li>
       </ul>
     </section>
@@ -808,6 +821,14 @@ export default {
       this.$offline.exportPendingOutingAsJson(item);
     },
 
+    // Finish a queued outing before publishing it. The edition form opens
+    // on the queued item, and saving there updates it in place — no second
+    // copy, no publish. Disabled during a pass, which may be publishing it.
+    editPending(item) {
+      const lang = item.payload?.locales?.[0]?.lang || this.$user.lang || 'fr';
+      this.$router.push({ name: 'outing-add', params: { lang }, query: { draft: item.id } });
+    },
+
     // ── "Renseigner l'itinéraire" flow ─────────────────────────
     // Opens the modal for a given pending outing (queued via the
     // terrain fallback with just a text note). Resets the search
@@ -1232,6 +1253,13 @@ export default {
 
 .pending-outing-discard {
   flex: 0 0 auto;
+}
+
+.pending-outing-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .pending-outing-conflict {

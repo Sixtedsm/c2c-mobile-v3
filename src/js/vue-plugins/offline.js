@@ -5,6 +5,7 @@ import config from '@/js/config';
 import { getImageUrl } from '@/js/image-urls';
 import ol from '@/js/libs/ol';
 import uploadFile from '@/js/upload-file';
+import { probeApiAccess } from '@/pwa/api-access';
 import { extractEmbeddedImageIds, extractImageUrlsFromCooked } from '@/pwa/cooked-html-parser';
 import * as store from '@/pwa/offline-store';
 import { classifyFailure } from '@/pwa/sync-policy';
@@ -341,6 +342,11 @@ export default function install(Vue) {
         pendingOutings: [],
         downloading: new Set(),
         syncing: false,
+        // Whether the Camptocamp API accepts requests from this app:
+        // 'unknown' until asked, then 'ok' | 'refused' | 'offline'. See
+        // src/pwa/api-access.js — "Network Error" alone cannot tell a
+        // phone without signal from an API that refuses this origin.
+        apiAccess: 'unknown',
         // Timers used by the connectivity verifier — kept on the
         // instance so we can cancel them on teardown / re-entry.
         offlineDebounceT: null,
@@ -503,6 +509,25 @@ export default function install(Vue) {
           this.offlineRecheckT = null;
           if (!this.online) this.verifyConnectivity({ trigger: 'recheck' });
         }, 15000);
+      },
+
+      // Ask the API whether it will talk to this app. Callers asking at
+      // the same moment share one probe (a page whose requests all failed
+      // asks once per request); nothing is cached beyond that, because
+      // the answer decides whether a publish is attempted and an
+      // allowlist can change between two taps.
+      checkApiAccess() {
+        if (!this._apiAccessCheck) {
+          this._apiAccessCheck = probeApiAccess(config.urls.api)
+            .then((verdict) => {
+              this.apiAccess = verdict;
+              return verdict;
+            })
+            .finally(() => {
+              this._apiAccessCheck = null;
+            });
+        }
+        return this._apiAccessCheck;
       },
 
       async refresh() {
@@ -902,6 +927,46 @@ export default function install(Vue) {
         return entry;
       },
 
+      // One queued outing, read from disk rather than from the in-memory
+      // list, which is not loaded yet when the form is the first page the
+      // app opens. Null when it is gone — published or discarded meanwhile.
+      async getPendingOuting(id) {
+        const queue = await store.listPendingOutings();
+        return queue.find((item) => item.id === id) || null;
+      },
+
+      // Replace the content of an outing still waiting to be published.
+      //
+      // Editing used to mean saving again, and saving again queued a
+      // second outing next to the first: two publishes of one trip. This
+      // changes the item in place, under the same lock as the sync pass,
+      // and never creates one — if a pass published the outing while the
+      // form was open, it returns null and the caller says so.
+      //
+      // Only the content changes. Photos, the queue date, uploaded image
+      // ids and a frozen state stay as they were: an item frozen as
+      // ambiguous may already be online, and only "Réessayer", which says
+      // so, may send it again.
+      async updatePendingOuting(id, payload) {
+        const updated = await this.withQueueLock(async () => {
+          const queue = await store.listPendingOutings();
+          const current = queue.find((item) => item.id === id);
+          if (!current) return null;
+          const hasRoutes = (payload?.associations?.routes || []).length > 0;
+          const next = {
+            ...current,
+            payload,
+            title: payload?.locales?.[0]?.title || this.$gettext?.('Untitled') || 'Untitled',
+            updatedAt: Date.now(),
+            needsRouteAssoc: Boolean(current.needsRouteAssoc) && !hasRoutes,
+          };
+          await store.replacePendingOutings(queue.map((item) => (item.id === id ? next : item)));
+          return next;
+        });
+        this.pendingOutings = await store.listPendingOutings();
+        return updated;
+      },
+
       // Called by OfflineView after the user picked a real itinéraire
       // for a pending outing that had been queued with only a text
       // note. Merges the chosen routes into the payload, clears the
@@ -966,6 +1031,12 @@ export default function install(Vue) {
         if (this.syncing || !this.online) {
           return;
         }
+        // Outside the lock on purpose: the probe can take seconds, and
+        // queueOuting waits on that lock — a save must never wait on a
+        // network check. runGuardedSync still claims the pass atomically.
+        if (!(await this.readyToAttempt())) {
+          return;
+        }
         if (navigator.locks?.request) {
           return navigator.locks.request(SYNC_LOCK_NAME, { ifAvailable: true }, async (lock) => {
             // Held by another tab: it is publishing the same queue right
@@ -976,6 +1047,64 @@ export default function install(Vue) {
         }
         // No Web Locks (older Safari): the in-tab guard is all there is.
         return this.runGuardedSync();
+      },
+
+      // Whether a pass is worth starting, decided before any attempt is
+      // spent.
+      //
+      // Every failed publish counts towards freezing the outing, and a
+      // freeze is how a queued outing ends up marked "impossible de savoir
+      // si elle a été publiée". Since 2026-09-13 the API answers this app
+      // with a refusal the browser reports as "Network Error": a few taps
+      // on "Synchroniser" froze outings that had never left the phone,
+      // behind a "Synchronisation interrompue" that explained nothing. So
+      // ask first, spend nothing, and say what is actually wrong.
+      async readyToAttempt() {
+        let queue;
+        try {
+          queue = await store.listPendingOutings();
+        } catch {
+          // An unreadable queue is the guarded pass's to report: it
+          // already turns that into a message and releases `syncing`.
+          return true;
+        }
+        if (!queue.some((item) => !item.conflict && !item.needsRouteAssoc)) {
+          return false;
+        }
+        // Signed out, every publish comes back 403 and spends an attempt.
+        // Only a known sign-out stops the pass; an unknown state is left
+        // to the server.
+        if (this.$user && this.$user.isLogged === false) {
+          toast({
+            type: 'is-warning',
+            position: 'bottom-center',
+            duration: 6000,
+            message: 'Connectez-vous pour publier vos sorties. Elles restent enregistrées sur le téléphone.',
+          });
+          return false;
+        }
+        const access = await this.checkApiAccess();
+        if (access === 'refused') {
+          toast({
+            type: 'is-danger',
+            position: 'bottom-center',
+            duration: 8000,
+            message:
+              'Camptocamp refuse pour l’instant les envois depuis cette version de l’application. Rien n’a été envoyé : vos sorties restent enregistrées sur le téléphone.',
+          });
+          return false;
+        }
+        if (access === 'offline') {
+          toast({
+            type: 'is-warning',
+            position: 'bottom-center',
+            duration: 5000,
+            message:
+              'Camptocamp est injoignable pour le moment. Vos sorties restent enregistrées sur le téléphone ; réessayez plus tard.',
+          });
+          return false;
+        }
+        return true;
       },
 
       // Serialise a queue mutation against the sync pass and against the
@@ -1060,6 +1189,18 @@ export default function install(Vue) {
           return;
         }
         let published = 0;
+        // Items this pass attempted and did not publish. Counted rather
+        // than collected: decisions are committed item by item
+        // (commitPendingDecision), so there is no list left to measure.
+        //
+        // Measuring that list is precisely what broke. When the pass moved
+        // to per-item commits (2026-09-09), `const remaining = []` went and
+        // one `remaining.length` stayed behind. It threw a ReferenceError at
+        // the end of every pass — successful publishes included — and
+        // runGuardedSync turned it into "Synchronisation interrompue",
+        // hiding the real error of every item behind it. ESLint's no-undef
+        // was not enabled; it is now.
+        let failed = 0;
         let newConflicts = 0;
         for (const item of queue) {
           // Items previously flagged as conflicting stay in the queue
@@ -1117,6 +1258,7 @@ export default function install(Vue) {
                 lastError: 'no-id',
                 uploadedImageIds,
               });
+              failed += 1;
             } else {
               // Dropped from disk before the next POST, not after the
               // whole pass: a tab killed in between would otherwise
@@ -1172,6 +1314,7 @@ export default function install(Vue) {
               newConflicts += 1;
             }
             await this.commitPendingDecision(item.id, next);
+            failed += 1;
           }
         }
         this.pendingOutings = await store.listPendingOutings();
@@ -1186,7 +1329,7 @@ export default function install(Vue) {
             message: published === 1 ? `1 sortie publiée en ligne.` : `${published} sorties publiées en ligne.`,
           });
         }
-        if (remaining.length && published === 0 && queue.length) {
+        if (failed > 0 && published === 0) {
           // Every attempt failed — surface it so the user can act (likely
           // a server-side validation issue or auth expiry).
           toast({

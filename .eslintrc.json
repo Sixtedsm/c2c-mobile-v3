@@ -1,7 +1,9 @@
 {
   "root": true,
   "env": {
-    "node": true
+    "node": true,
+    "browser": true,
+    "es2021": true
   },
   "extends": [
     "plugin:vue/recommended",
@@ -11,7 +13,12 @@
   ],
   "reportUnusedDisableDirectives": true,
   "rules": {
-    "prettier/prettier": ["warn", { "endOfLine": "auto" }],
+    "prettier/prettier": [
+      "warn",
+      {
+        "endOfLine": "auto"
+      }
+    ],
     "no-unused-vars": "warn",
     "no-console": "warn",
     "vue/no-v-html": "off",
@@ -27,8 +34,15 @@
     "camelcase": "off",
     "import/order": [
       "error",
-      { "newlines-between": "always", "alphabetize": { "order": "asc", "caseInsensitive": false } }
-    ]
+      {
+        "newlines-between": "always",
+        "alphabetize": {
+          "order": "asc",
+          "caseInsensitive": false
+        }
+      }
+    ],
+    "no-undef": "error"
   },
   "settings": {
     "import/resolver": {
@@ -45,5 +59,8 @@
   },
   "parserOptions": {
     "parser": "@babel/eslint-parser"
+  },
+  "globals": {
+    "CAMPTOCAMP_CONFIG": "readonly"
   }
 }

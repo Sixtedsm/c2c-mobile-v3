@@ -7,17 +7,24 @@ import { register } from 'register-service-worker';
 // geolocation machinery behind it) into the entry chunk just to ask one
 // question.
 const SESSION_STORAGE_KEY = 'v3.outingSession';
+// Mirrors MAX_STALE_MS in src/js/vue-plugins/outing-session.js.
+const MAX_STALE_MS = 48 * 3600 * 1000;
 const SESSION_RECHECK_MS = 30 * 1000;
 
 function outingInProgress() {
+  // Same reading as the session plugin's loadSnapshot(): a blob it would
+  // discard is not an outing in progress. This used to trust any
+  // `sessionActive` and treat an unreadable blob as a recording, so a
+  // phone with a forgotten session deferred every update — and every fix
+  // — for as long as the blob stayed there.
   try {
     const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
     if (!raw) return false;
-    return !!JSON.parse(raw).sessionActive;
+    const session = JSON.parse(raw);
+    if (!session?.sessionActive) return false;
+    return !(session.startedAt && Date.now() - session.startedAt > MAX_STALE_MS);
   } catch {
-    // Unreadable state is not a reason to reload on top of a user who
-    // may be recording. Err towards leaving the page alone.
-    return true;
+    return false;
   }
 }
 

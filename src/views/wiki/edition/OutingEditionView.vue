@@ -1,5 +1,19 @@
 <template>
-  <edition-container v-if="document" :mode="mode" :document="document" :is-loading="saving" @save="save">
+  <edition-container
+    v-if="document"
+    :mode="mode"
+    :document="document"
+    :is-loading="saving || hydratingTrace"
+    @save="save"
+  >
+    <div v-if="draftId" class="notification is-info is-light outing-draft-notice">
+      {{
+        $gettext(
+          'Vous modifiez une sortie enregistrée sur le téléphone, pas encore publiée. « Enregistrer » met à jour cette sortie ; publiez-la ensuite depuis « Mes topos ».'
+        )
+      }}
+    </div>
+
     <form-section
       :title="$gettext('general informations')"
       :sub-title="$gettext('Main informations about your outing')"
@@ -320,6 +334,20 @@
         <fa-icon icon="eye" />
         &nbsp;{{ $gettext('Prévisualiser la sortie') }}
       </button>
+      <template v-if="mode === 'add' && !draftId">
+        <button
+          type="button"
+          class="button is-fullwidth outing-keep-local-btn"
+          :class="{ 'is-loading': saving }"
+          :disabled="hydratingTrace"
+          @click="saveWithoutPublishing"
+        >
+          {{ $gettext('Enregistrer sans publier') }}
+        </button>
+        <p class="help outing-keep-local-help">
+          {{ $gettext('La sortie reste sur le téléphone : vous la compléterez et la publierez depuis « Mes topos ».') }}
+        </p>
+      </template>
     </div>
 
     <outing-preview-modal v-if="document" ref="previewModal" :document="document" :lang="previewLang" />
@@ -346,20 +374,25 @@ export default {
 
   mixins: [documentEditionViewMixin],
 
-  // The mixin's beforeRouteLeave runs first (Vue Router 3 chains
-  // guards from mixins and components via the `created` merge
-  // strategy). If the user cancels the confirm-on-unsaved-changes
-  // there, this guard is skipped — session stays intact. If the mixin
-  // lets navigation through with `modified: false` (only happens on a
-  // successful save — the mixin flips it in both the online create
-  // and the offline queue `.then` callbacks), we consume the session
-  // so the "Sortie en cours" banner disappears.
+  // Consume the recording once the outing is kept — and only then.
   //
-  // Preferred over a watch on `modified` because watchers fire
-  // asynchronously and the router transition can tear the component
-  // down before the watcher runs.
+  // The mixin's beforeRouteLeave runs first (Vue Router 3 chains guards
+  // from mixins and components). If the user cancels its confirm, this
+  // guard is skipped and the session stays intact.
+  //
+  // This used to test `!modified`, read as "saved". But `modified` is
+  // also false for as long as a new form waits for its associations — up
+  // to the request timeout on a weak connection. Leaving the form in that
+  // window (back button, a tap on the bottom bar) stopped the session and
+  // deleted the recorded trace from the phone. `saved` is set only by the
+  // paths that actually kept the outing.
+  //
+  // A guard rather than a watch: watchers fire asynchronously and the
+  // router transition can tear the component down before one runs.
   beforeRouteLeave(to, from, next) {
-    if (this.mode === 'add' && !this.modified && this.$outingSession?.sessionActive) {
+    // A form opened on a queued outing (draftId) does not own the recording
+    // in progress: saving that draft must leave a new outing's trace alone.
+    if (this.mode === 'add' && this.saved && !this.draftId && this.$outingSession?.sessionActive) {
       this.$outingSession.stop();
     }
     next();
@@ -384,6 +417,9 @@ export default {
       // in have to say where they come from, because the user is the
       // only one who can tell a good recording from a bad one.
       traceSummary: null,
+      // True while the recorded trace is read back before being put into
+      // the form. Both save buttons wait on it.
+      hydratingTrace: false,
     };
   },
 
@@ -532,13 +568,45 @@ export default {
       this.$refs.previewModal?.show();
     },
 
+    afterDocumentCreated() {
+      this.hydrateTraceOnce();
+    },
+
     async afterLoad() {
       this.showBothDates = this.document.date_start !== this.document.date_end;
-      // The trace comes back from IndexedDB asynchronously. Every other
-      // reader can render a moment of zero and correct itself; this one
-      // writes length_total and the published geometry, so it waits.
-      // Never rejects.
-      await this.$outingSession?.whenTraceReady();
+      // Normally done already by afterDocumentCreated(); a no-op then.
+      await this.hydrateTraceOnce();
+    },
+
+    // Put the recorded trace into the form as soon as the form exists, and
+    // once per document.
+    //
+    // It used to wait for afterLoad(), which the mixin calls only after
+    // every association lookup has settled — up to the request timeout on
+    // a weak connection, or while the API refuses the app. Until then the
+    // form had no trace and a working "Save": saving in that window kept
+    // an outing without its geometry, and leaving it lost the trace (see
+    // beforeRouteLeave).
+    //
+    // The trace comes back from IndexedDB asynchronously. Every other
+    // reader can render a moment of zero and correct itself; this one
+    // writes length_total and the published geometry, so it waits, and
+    // the save buttons wait with it. Never rejects.
+    async hydrateTraceOnce() {
+      const document = this.document;
+      if (!document || this.mode !== 'add' || this.draftId) return;
+      if (this.traceHydratedFor === document) return;
+      if (!this.$outingSession?.sessionActive) return;
+      // Non-reactive on purpose: identity of the document it was done for.
+      this.traceHydratedFor = document;
+      this.hydratingTrace = true;
+      try {
+        await this.$outingSession.whenTraceReady();
+      } finally {
+        this.hydratingTrace = false;
+      }
+      // Another form was loaded while the trace was read.
+      if (this.document !== document) return;
       this.hydrateFromOutingSession();
     },
 
@@ -745,6 +813,7 @@ export default {
           needsRouteAssoc: true,
           routeNote: note,
         });
+        this.saved = true;
         this.modified = false;
         toast({
           type: 'is-success',
@@ -1064,5 +1133,14 @@ html[data-theme='dark'] {
   .incomplete-draft-sub {
     color: #d5c5a5;
   }
+}
+
+.outing-keep-local-btn {
+  margin-top: 0.5rem;
+}
+
+.outing-keep-local-help {
+  margin-top: 0.3rem;
+  color: #6b6b6b;
 }
 </style>

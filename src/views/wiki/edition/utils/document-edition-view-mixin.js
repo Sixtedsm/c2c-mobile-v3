@@ -39,6 +39,13 @@ export default {
       fields: null, // keep fields here to set them reactive
       saving: false,
       modified: false,
+      // Set once the document is kept somewhere — published, or queued on
+      // the phone. Not the same as `!modified`, which only says whether
+      // leaving should ask first, and which is also false for the whole
+      // time a new form waits for its associations to load.
+      saved: false,
+      // Id of the queued outing this form edits (?draft=<id>), or null.
+      draftId: null,
     };
   },
 
@@ -102,6 +109,8 @@ export default {
     load() {
       this.fields = constants.objectDefinitions[this.documentType].fields;
       this.cleanErrors();
+      this.saved = false;
+      this.draftId = null;
       this.latitude = null;
       this.longitude = null;
 
@@ -134,8 +143,19 @@ export default {
         // resolved — meaning a single stalled or failed request would leave
         // the user staring at a blank page when tapping "+ outing". Render
         // first, enrich associations as they arrive: this is the robust path.
+        if (this.documentType === 'outing' && this.$route.query.draft && this.$offline) {
+          this.promise = {};
+          this.loadDraft(String(this.$route.query.draft));
+          return;
+        }
+
         const document = this.$documentUtils.buildDocument(this.documentType, this.lang);
         this.promise = { data: document, loading: 0 };
+        // The document exists from here on, but afterLoad() only runs once
+        // every association lookup below has settled — up to the request
+        // timeout on a weak connection. What must not wait that long (the
+        // recorded GPS trace) hooks in here.
+        this.afterDocumentCreated();
 
         let pending = 0;
         const settleOne = () => {
@@ -213,6 +233,36 @@ export default {
       }
     },
 
+    // Open an outing still waiting in the queue, to finish it before it is
+    // published (?draft=<id>, from « Mes topos »).
+    async loadDraft(id) {
+      let item = null;
+      try {
+        item = await this.$offline.getPendingOuting(id);
+      } catch {
+        /* unreadable queue: handled as a missing item below */
+      }
+      // Another page was opened while the queue was read.
+      if (String(this.$route.query.draft) !== id) return;
+      if (!item) {
+        toast({
+          message: this.$gettext('Cette sortie n’est plus en attente : elle a été publiée ou supprimée entre-temps.'),
+          type: 'is-warning',
+          position: 'center',
+          duration: 6000,
+        });
+        this.$router.replace({ name: 'offline' });
+        return;
+      }
+      // Fields added to buildDocument since the outing was queued get
+      // their defaults; everything the user wrote comes from the queue.
+      const document = Object.assign(this.$documentUtils.buildDocument(this.documentType, this.lang), item.payload);
+      this.draftId = item.id;
+      this.promise = { data: document, loading: 0 };
+      this.modified = true;
+      this.afterLoad();
+    },
+
     // Offline fallback for ?r=<id> / ?w=<id> / ?u=<id> preselection in
     // create mode. If the C2C API isn't reachable but the doc is in the
     // user's offline cache, build an association entry from the cached
@@ -261,6 +311,8 @@ export default {
       this.latitude = Math.round(coords[1] * 1000000) / 1000000;
     },
 
+    afterDocumentCreated() {},
+
     afterLoad() {},
 
     beforeSave() {},
@@ -292,7 +344,9 @@ export default {
       return false;
     },
 
-    save(comment) {
+    // The checks every save path shares. False when the form must not be
+    // saved as it stands.
+    canSave() {
       if (this.lang === 'eu' && !this.$user.isModerator) {
         toast({
           message: this.$gettext(
@@ -301,44 +355,119 @@ export default {
           type: 'is-danger',
           position: 'center',
         });
-        return;
+        return false;
       }
 
       this.beforeSave(); // allow each view to handle some specific cases
 
       this.computeErrors();
 
-      if (this.displayErrors(false)) {
+      return !this.displayErrors(false);
+    },
+
+    // Keep a new outing on the phone instead of publishing it, then show
+    // the queue. Every path that cannot or should not publish ends here,
+    // so the outing — and the GPS trace inside it — is kept the same way
+    // whatever the reason.
+    keepOutingLocally(message, type = 'is-success') {
+      this.saving = true;
+      return this.$offline
+        .queueOuting(this.document)
+        .then(() => {
+          this.saved = true;
+          this.modified = false;
+          toast({ message, type, position: 'center', duration: 6000 });
+          this.$router.push({ name: 'offline' });
+        })
+        .catch(() => {
+          // Queuing itself failed — a full store, most likely. Say so
+          // rather than let a success toast cover a lost outing.
+          toast({
+            message: this.$gettext('Could not save your outing locally. Please try again.'),
+            type: 'is-danger',
+            position: 'center',
+          });
+        })
+        .finally(() => {
+          this.saving = false;
+        });
+    },
+
+    // « Enregistrer sans publier »: the outing goes to the queue even with
+    // a connection, to be finished and published from « Mes topos ». How
+    // moderators write trip reports — save at the car, write it up at
+    // home, publish once it reads right.
+    saveWithoutPublishing() {
+      if (!this.canSave()) return;
+      this.keepOutingLocally(
+        this.$gettext(
+          'Sortie enregistrée sur le téléphone, sans être publiée. Modifiez-la ou publiez-la depuis « Mes topos ».'
+        )
+      );
+    },
+
+    // Saving a form opened on a queued outing updates that item in place.
+    // It never queues a second copy and never publishes: publishing stays
+    // the explicit step in « Mes topos ».
+    async saveDraft() {
+      this.saving = true;
+      try {
+        const updated = await this.$offline.updatePendingOuting(this.draftId, this.document);
+        if (!updated) {
+          toast({
+            message: this.$gettext(
+              'Cette sortie n’est plus en attente : elle a été publiée ou supprimée entre-temps. Vos modifications ne sont pas enregistrées ; copiez-les avant de quitter la page.'
+            ),
+            type: 'is-danger',
+            position: 'center',
+            duration: 8000,
+          });
+          return;
+        }
+        this.saved = true;
+        this.modified = false;
+        toast({
+          message: this.$gettext(
+            'Sortie mise à jour sur le téléphone. Publiez-la depuis « Mes topos » quand elle est prête.'
+          ),
+          type: 'is-success',
+          position: 'center',
+          duration: 5000,
+        });
+        this.$router.push({ name: 'offline' });
+      } catch {
+        toast({
+          message: this.$gettext('Could not save your outing locally. Please try again.'),
+          type: 'is-danger',
+          position: 'center',
+        });
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    save(comment) {
+      if (!this.canSave()) {
         return;
       }
 
-      // Offline create-outing path: if the user is creating a new outing while
-      // disconnected, queue it locally; the $offline plugin will retry the POST
-      // automatically when the device comes back online. The behaviour is
-      // limited to outings on purpose (other doc types are wiki-style edits
-      // that we do not want to silently defer).
-      if (this.mode === 'add' && this.documentType === 'outing' && this.$offline && !this.$offline.online) {
-        this.saving = true;
-        this.$offline
-          .queueOuting(this.document)
-          .then(() => {
-            this.modified = false;
-            toast({
-              message: this.$gettext('Outing saved locally — it will be published when you are back online.'),
-              type: 'is-success',
-              position: 'center',
-              duration: 5000,
-            });
-            this.$router.push({ name: 'offline' });
-          })
-          .catch(() => {
-            this.saving = false;
-            toast({
-              message: this.$gettext('Could not save your outing locally. Please try again.'),
-              type: 'is-danger',
-              position: 'center',
-            });
-          });
+      if (this.draftId) {
+        this.saveDraft();
+        return;
+      }
+
+      const queueable = this.mode === 'add' && this.documentType === 'outing' && Boolean(this.$offline);
+
+      // Offline create-outing path: a new outing created while disconnected
+      // is kept on the phone, and published from « Mes topos » once the
+      // connection is back. Limited to outings on purpose (other doc types
+      // are wiki-style edits that we do not want to silently defer).
+      if (queueable && !this.$offline.online) {
+        this.keepOutingLocally(
+          this.$gettext(
+            'Sortie enregistrée sur le téléphone. Publiez-la depuis « Mes topos » une fois la connexion revenue.'
+          )
+        );
         this.afterSave();
         return;
       }
@@ -349,11 +478,13 @@ export default {
 
       if (this.mode === 'edit') {
         promise = c2c[this.documentType].save(this.document, comment).then(() => {
+          this.saved = true;
           this.modified = false;
           this.goToDocument(this.document.document_id);
         });
       } else {
         promise = c2c[this.documentType].create(this.document).then((response) => {
+          this.saved = true;
           this.modified = false;
           this.goToDocument(response.data.document_id);
         });
@@ -376,28 +507,29 @@ export default {
         // The absence of a response is the real signal, and it is sufficient:
         // if the request never reached a server there is nothing to conflict
         // with, and queuing is always the safer half of the trade.
-        if (this.mode === 'add' && this.documentType === 'outing' && this.$offline && !error?.response) {
-          this.$offline
-            .queueOuting(this.document)
-            .then(() => {
-              this.modified = false;
-              toast({
-                message: this.$gettext('Network lost — your outing was saved locally and will sync later.'),
-                type: 'is-warning',
-                position: 'center',
-                duration: 5000,
-              });
-              this.$router.push({ name: 'offline' });
-            })
-            .catch(() => {
-              // Queuing itself failed — a full store, most likely. Say so
-              // rather than let a success toast cover a lost outing.
-              toast({
-                message: this.$gettext('Could not save your outing locally. Please try again.'),
-                type: 'is-danger',
-                position: 'center',
-              });
-            });
+        if (queueable && !error?.response) {
+          this.keepOutingLocally(
+            this.$gettext(
+              'Connexion perdue : la sortie est enregistrée sur le téléphone. Publiez-la depuis « Mes topos » une fois la connexion revenue.'
+            ),
+            'is-warning'
+          );
+          return;
+        }
+        // A refused session is not a refused outing. The API answers 401
+        // once the token has died (403 once the app has signed out), and
+        // this used to fall through to a generic error while the
+        // interceptor signed the user out and took them away from the form:
+        // the outing was neither published nor kept. Keep it here; the
+        // interceptor decides about the session on its own.
+        const status = error?.response?.status;
+        if (queueable && (status === 401 || (status === 403 && !this.$user.isLogged))) {
+          this.keepOutingLocally(
+            this.$gettext(
+              'Votre session a expiré : la sortie est enregistrée sur le téléphone. Reconnectez-vous, puis publiez-la depuis « Mes topos ».'
+            ),
+            'is-warning'
+          );
           return;
         }
         const data = error?.response?.data;

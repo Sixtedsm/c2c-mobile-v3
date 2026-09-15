@@ -1,6 +1,10 @@
+import axios from 'axios';
+import { toast } from 'bulma-toast';
+
 import c2c from '@/js/apis/c2c';
 import trackingService from '@/js/apis/tracking-service';
 import config from '@/js/config';
+import { createExpiredTokenHandler, verifySession } from '@/js/session-guard';
 import router from '@/js/vue-plugins/router';
 
 export default function install(Vue) {
@@ -148,33 +152,44 @@ export default function install(Vue) {
         trackingService.setAuthorizationToken(this.token);
       },
 
+      // A 401 is a claim that the session is dead, and it is checked before
+      // anyone is signed out — see src/js/session-guard.js.
+      //
+      // This used to sign out on any 401 and push to the login page from
+      // wherever the user was. On an outing form that meant an error, a
+      // signed-out user, and an outing neither published nor kept.
       installExpiredTokenInterceptor() {
-        // Task 13: when the server rejects an authenticated request with
-        // 401, the local token is no longer valid — invalidated by a
-        // password change, role revoked, account banned, or simply the
-        // server-side session expired earlier than our `expire` timestamp.
-        // Sign the user out locally and bounce them to the login page so
-        // they can re-auth, with the current path stored for redirect.
+        const handle = createExpiredTokenHandler({
+          getToken: () => this.token,
+          // Plain axios on purpose: c2c.axios would bring a dead token back
+          // into this very interceptor.
+          verify: (token) => verifySession(token, { apiBase: config.urls.api, get: axios.get }),
+          signout: () => this.signout(),
+          getCurrentRoute: () => router.currentRoute,
+          redirectToLogin: (route) => {
+            const current = route?.fullPath;
+            const pushed = router.push({
+              name: 'auth',
+              query: current && current !== '/' ? { redirect: current } : undefined,
+            });
+            pushed?.catch?.(() => {});
+          },
+          notifySignedOut: (route) => {
+            toast({
+              type: 'is-warning',
+              position: 'bottom-center',
+              duration: 10000,
+              message:
+                route?.name === 'outing-add'
+                  ? 'Votre session a expiré. Rien n’est perdu : enregistrez la sortie, elle sera gardée sur le téléphone et vous la publierez après reconnexion.'
+                  : 'Votre session a expiré. Votre saisie est toujours là : copiez-la avant de vous reconnecter.',
+            });
+          },
+        });
         c2c.axios.interceptors.response.use(
           (response) => response,
           (error) => {
-            const status = error?.response?.status;
-            const requestUrl = error?.config?.url || '';
-            // Only react when we actually thought we were logged in. Don't
-            // react on the login endpoint itself (bad credentials would
-            // otherwise auto-redirect to /auth in a loop).
-            const looksLikeLoginCall = /\/users\/(login|register|validate_)/.test(requestUrl);
-            if (status === 401 && this.isLogged && !looksLikeLoginCall) {
-              this.signout();
-              const current = router.currentRoute?.fullPath;
-              const isOnAuth = router.currentRoute?.name === 'auth';
-              if (!isOnAuth) {
-                router.push({
-                  name: 'auth',
-                  query: current && current !== '/' ? { redirect: current } : undefined,
-                });
-              }
-            }
+            handle(error).catch(() => {});
             return Promise.reject(error);
           }
         );

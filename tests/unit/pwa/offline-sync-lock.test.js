@@ -29,6 +29,11 @@ vi.mock('@/js/config', () => ({
 // bulma-toast renders into the DOM; we only care that it doesn't throw.
 vi.mock('bulma-toast', () => ({ toast: vi.fn() }));
 
+// The sync pass asks whether the API will accept this app before spending
+// an attempt (src/pwa/api-access.js). These tests are about what happens
+// once it does, so the probe answers 'ok' unless a test says otherwise.
+vi.mock('@/pwa/api-access', () => ({ probeApiAccess: vi.fn(async () => 'ok') }));
+
 // Everything the sync path reads/writes on disk.
 vi.mock('@/pwa/offline-store', () => ({
   listDocuments: vi.fn(async () => []),
