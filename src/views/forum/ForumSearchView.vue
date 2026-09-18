@@ -119,6 +119,28 @@
 import TopicRow from '@/components/forum/TopicRow.vue';
 import forum from '@/js/apis/forum';
 
+// The last results, kept while the reader opens one of them.
+//
+// Coming back from a topic used to start from nothing: a new request, a
+// spinner, and the list back at its top — App.vue restores the scroll
+// position right after the route changes, when there was no list yet to
+// land on. The reader lost their place among the results. The same query
+// now renders its last list at once, so the position is restored where
+// they left it. Kept ten minutes, then searched again.
+const RESULTS_TTL_MS = 10 * 60 * 1000;
+const SEARCH_KEYS = ['q', 'cat', 'user', 'after', 'before'];
+let lastResults = null;
+
+function searchKey(query) {
+  return JSON.stringify(SEARCH_KEYS.map((k) => (query && query[k]) || ''));
+}
+
+function cachedResults(query) {
+  if (!lastResults || lastResults.key !== searchKey(query)) return null;
+  if (Date.now() - lastResults.at > RESULTS_TTL_MS) return null;
+  return lastResults.results;
+}
+
 export default {
   name: 'ForumSearchView',
 
@@ -127,7 +149,7 @@ export default {
   data() {
     return {
       query: this.$route.query.q || '',
-      results: [],
+      results: cachedResults(this.$route.query) || [],
       categories: [],
       searching: false,
       error: false,
@@ -180,9 +202,14 @@ export default {
         this.categories = res?.data?.category_list?.categories || [];
       })
       .catch(() => {});
-    // Auto-focus for immediate typing.
-    this.$nextTick(() => this.$refs.searchInput?.focus?.());
-    if (this.query.trim()) this.runSearch(false);
+    if (!this.query.trim()) {
+      // Focus for immediate typing — but not when coming back to results:
+      // the keyboard would open over the list the reader came back for.
+      this.$nextTick(() => this.$refs.searchInput?.focus?.());
+    } else if (!this.results.length) {
+      // Only a query without kept results goes to the network.
+      this.runSearch(false);
+    }
   },
 
   beforeDestroy() {
@@ -246,6 +273,7 @@ export default {
           if (first?.user_id != null) t.first_poster_user = usersById[first.user_id] || null;
         });
         this.results = topics;
+        lastResults = { key: searchKey(query), at: Date.now(), results: topics };
       } catch {
         this.error = true;
         this.results = [];

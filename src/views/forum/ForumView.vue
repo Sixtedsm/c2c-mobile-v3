@@ -3,10 +3,12 @@
     <div class="container">
       <h1 class="title is-5 forum-title">{{ $gettext('Forum') }}</h1>
 
-      <!-- Search: hits Discourse /search.json on submit and lands the
-           user on the search results section below. Keeps the query
-           in-view so they can refine. -->
-      <form class="forum-search" @submit.prevent="runSearch">
+      <!-- Search: opens the forum search page with the query. The results
+           used to be drawn here, held only in this page's memory: opening
+           one and coming back with the arrow landed on an empty forum
+           home, the query and the results gone (Sixte, 2026-09-18). The
+           search page keeps both in its URL. -->
+      <form class="forum-search" @submit.prevent="openSearch">
         <fa-icon icon="magnifying-glass" class="forum-search-icon" />
         <input
           v-model="searchQuery"
@@ -15,213 +17,196 @@
           :placeholder="$gettext('Rechercher dans le forum…')"
           :aria-label="$gettext('Rechercher dans le forum')"
         />
-        <button v-if="searchQuery" type="button" class="forum-search-clear" @click="clearSearch">
+        <button v-if="searchQuery" type="button" class="forum-search-clear" @click="searchQuery = ''">
           <fa-icon icon="xmark" />
         </button>
       </form>
 
-      <!-- Search results — displayed when a query is active. -->
-      <section v-if="searchActive" class="forum-block">
-        <h2 class="forum-block-title">
-          <fa-icon icon="magnifying-glass" />
-          &nbsp;{{ $gettext('Résultats de recherche') }}
-        </h2>
-        <div v-if="searching" class="forum-loading"><fa-icon icon="spinner" spin /> {{ $gettext('Recherche…') }}</div>
-        <ul v-else-if="searchResults.length" class="forum-list">
-          <li v-for="t in searchResults" :key="t.id">
-            <topic-row :topic="t" :categories="categories" />
-          </li>
-        </ul>
-        <p v-else class="forum-empty">{{ $gettext('Aucun résultat pour cette recherche.') }}</p>
-      </section>
-
-      <template v-else>
-        <!-- Feed first. The list of recent discussions is what a forum
+      <!-- Feed first. The list of recent discussions is what a forum
              is opened for; "Mes discussions", the pinned announcements
              and the category tree are all navigation around it, and
              they pushed it below the fold (feedback gilles74, forum
              2026-09-08). -->
-        <!-- Feed: Latest vs Top over a period. Two tabs; Top opens a
+      <!-- Feed: Latest vs Top over a period. Two tabs; Top opens a
              sub-selector for the time window (mensuel / hebdo / …).
              All endpoints are public — no cookie needed. -->
-        <section class="forum-block">
-          <h2 class="forum-block-title">
-            <fa-icon icon="clock-rotate-left" />
-            &nbsp;{{ feedTitle }}
-          </h2>
+      <section class="forum-block">
+        <h2 class="forum-block-title">
+          <fa-icon icon="clock-rotate-left" />
+          &nbsp;{{ feedTitle }}
+        </h2>
 
-          <div class="forum-tabs" role="tablist">
-            <button
-              type="button"
-              class="forum-tab"
-              :class="{ 'is-active': feedTab === 'latest' }"
-              role="tab"
-              :aria-selected="feedTab === 'latest' ? 'true' : 'false'"
-              @click="switchFeed('latest')"
-            >
-              {{ $gettext('Récentes') }}
-            </button>
-            <button
-              type="button"
-              class="forum-tab"
-              :class="{ 'is-active': feedTab === 'top' }"
-              role="tab"
-              :aria-selected="feedTab === 'top' ? 'true' : 'false'"
-              @click="switchFeed('top')"
-            >
-              {{ $gettext('Populaires') }}
-            </button>
-            <!-- Personal feeds. Both filters are enabled on
+        <div class="forum-tabs" role="tablist">
+          <button
+            type="button"
+            class="forum-tab"
+            :class="{ 'is-active': feedTab === 'latest' }"
+            role="tab"
+            :aria-selected="feedTab === 'latest' ? 'true' : 'false'"
+            @click="switchFeed('latest')"
+          >
+            {{ $gettext('Récentes') }}
+          </button>
+          <button
+            type="button"
+            class="forum-tab"
+            :class="{ 'is-active': feedTab === 'top' }"
+            role="tab"
+            :aria-selected="feedTab === 'top' ? 'true' : 'false'"
+            @click="switchFeed('top')"
+          >
+            {{ $gettext('Populaires') }}
+          </button>
+          <!-- Personal feeds. Both filters are enabled on
                  forum.camptocamp.org; they are per-user, so they need the
                  Discourse session cookie and only make sense once signed
                  in. -->
-            <button
-              v-if="$user.isLogged"
-              type="button"
-              class="forum-tab"
-              :class="{ 'is-active': feedTab === 'unread' }"
-              role="tab"
-              :aria-selected="feedTab === 'unread' ? 'true' : 'false'"
-              @click="switchFeed('unread')"
-            >
-              {{ $gettext('Non lus') }}
-            </button>
-            <button
-              v-if="$user.isLogged"
-              type="button"
-              class="forum-tab"
-              :class="{ 'is-active': feedTab === 'new' }"
-              role="tab"
-              :aria-selected="feedTab === 'new' ? 'true' : 'false'"
-              @click="switchFeed('new')"
-            >
-              {{ $gettext('Nouveaux') }}
-            </button>
-          </div>
+          <button
+            v-if="$user.isLogged"
+            type="button"
+            class="forum-tab"
+            :class="{ 'is-active': feedTab === 'unread' }"
+            role="tab"
+            :aria-selected="feedTab === 'unread' ? 'true' : 'false'"
+            @click="switchFeed('unread')"
+          >
+            {{ $gettext('Non lus') }}
+          </button>
+          <button
+            v-if="$user.isLogged"
+            type="button"
+            class="forum-tab"
+            :class="{ 'is-active': feedTab === 'new' }"
+            role="tab"
+            :aria-selected="feedTab === 'new' ? 'true' : 'false'"
+            @click="switchFeed('new')"
+          >
+            {{ $gettext('Nouveaux') }}
+          </button>
+        </div>
 
-          <div v-if="feedTab === 'top'" class="forum-period">
-            <label
-              v-for="p in periods"
-              :key="p.value"
-              class="forum-period-pill"
-              :class="{ 'is-active': topPeriod === p.value }"
-            >
-              <input v-model="topPeriod" type="radio" name="topPeriod" :value="p.value" @change="loadTop" />
-              <span>{{ p.label }}</span>
-            </label>
-          </div>
+        <div v-if="feedTab === 'top'" class="forum-period">
+          <label
+            v-for="p in periods"
+            :key="p.value"
+            class="forum-period-pill"
+            :class="{ 'is-active': topPeriod === p.value }"
+          >
+            <input v-model="topPeriod" type="radio" name="topPeriod" :value="p.value" @change="loadTop" />
+            <span>{{ p.label }}</span>
+          </label>
+        </div>
 
-          <div v-if="loadingFeed" class="forum-loading">
-            <fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}
-          </div>
-          <div v-else-if="feedNeedsLogin" class="forum-notice">
-            {{
-              $gettext(
-                'Vos sujets non lus et nouveaux sont suivis par le forum Discourse et requièrent une session sur forum.camptocamp.org qui n’est pas encore partagée avec l’application. Cette fonctionnalité arrive bientôt.'
-              )
-            }}
-          </div>
-          <div v-else-if="feedError" class="forum-error">
-            {{ $gettext('Impossible de joindre le forum.') }}
-          </div>
-          <ul v-else-if="feedTopics.length" class="forum-list">
-            <li v-for="t in feedTopics" :key="t.id">
-              <topic-row :topic="t" :categories="categories" />
-            </li>
-          </ul>
-          <p v-else class="forum-empty">
-            {{ emptyFeedLabel }}
-          </p>
-        </section>
-        <!-- User-specific block: current logged-in user's own topics.
+        <div v-if="loadingFeed" class="forum-loading">
+          <fa-icon icon="spinner" spin /> {{ $gettext('Chargement…') }}
+        </div>
+        <div v-else-if="feedNeedsLogin" class="forum-notice">
+          {{
+            $gettext(
+              'Vos sujets non lus et nouveaux sont suivis par le forum Discourse et requièrent une session sur forum.camptocamp.org qui n’est pas encore partagée avec l’application. Cette fonctionnalité arrive bientôt.'
+            )
+          }}
+        </div>
+        <div v-else-if="feedError" class="forum-error">
+          {{ $gettext('Impossible de joindre le forum.') }}
+        </div>
+        <ul v-else-if="feedTopics.length" class="forum-list">
+          <li v-for="t in feedTopics" :key="t.id">
+            <topic-row :topic="t" :categories="categories" />
+          </li>
+        </ul>
+        <p v-else class="forum-empty">
+          {{ emptyFeedLabel }}
+        </p>
+      </section>
+      <!-- User-specific block: current logged-in user's own topics.
              Shown at the top so it acts as a quick way back to a
              discussion the user opened. Skipped when the user has no
              Discourse username on file. -->
-        <section v-if="myTopics.length" class="forum-block">
-          <h2 class="forum-block-title">
-            <fa-icon icon="user" />
-            &nbsp;{{ $gettext('Mes discussions') }}
-          </h2>
-          <ul class="forum-list">
-            <li v-for="t in myTopics.slice(0, 3)" :key="t.id">
-              <topic-row :topic="t" :categories="categories" />
-            </li>
-          </ul>
-          <p v-if="myTopicsUsername" class="forum-block-more">
-            <router-link :to="{ name: 'forum-user', params: { username: myTopicsUsername } }">
-              {{ $gettext('Voir tout mon profil forum') }} →
-            </router-link>
-          </p>
-        </section>
+      <section v-if="myTopics.length" class="forum-block">
+        <h2 class="forum-block-title">
+          <fa-icon icon="user" />
+          &nbsp;{{ $gettext('Mes discussions') }}
+        </h2>
+        <ul class="forum-list">
+          <li v-for="t in myTopics.slice(0, 3)" :key="t.id">
+            <topic-row :topic="t" :categories="categories" />
+          </li>
+        </ul>
+        <p v-if="myTopicsUsername" class="forum-block-more">
+          <router-link :to="{ name: 'forum-user', params: { username: myTopicsUsername } }">
+            {{ $gettext('Voir tout mon profil forum') }} →
+          </router-link>
+        </p>
+      </section>
 
-        <!-- Pinned topics: Discourse marks topics as pinned or
+      <!-- Pinned topics: Discourse marks topics as pinned or
              pinned_globally. Show them prominently — that's where
              announcements live. -->
-        <section v-if="pinnedTopics.length" class="forum-block">
-          <h2 class="forum-block-title">
-            <fa-icon icon="thumbtack" />
-            &nbsp;{{ $gettext('Épinglés') }}
-          </h2>
-          <ul class="forum-list">
-            <li v-for="t in pinnedTopics.slice(0, 5)" :key="t.id">
-              <topic-row :topic="t" :categories="categories" />
-            </li>
-          </ul>
-        </section>
+      <section v-if="pinnedTopics.length" class="forum-block">
+        <h2 class="forum-block-title">
+          <fa-icon icon="thumbtack" />
+          &nbsp;{{ $gettext('Épinglés') }}
+        </h2>
+        <ul class="forum-list">
+          <li v-for="t in pinnedTopics.slice(0, 5)" :key="t.id">
+            <topic-row :topic="t" :categories="categories" />
+          </li>
+        </ul>
+      </section>
 
-        <!-- Category tree — parent categories with their children
+      <!-- Category tree — parent categories with their children
              indented underneath. Two-level Discourse hierarchy is
              enough (no grand-children in the c2c forum).  -->
-        <section v-if="categoryTree.length" class="forum-block">
-          <h2 class="forum-block-title">
-            <fa-icon icon="folder" />
-            &nbsp;{{ $gettext('Catégories') }}
-          </h2>
-          <ul class="forum-cat-tree">
-            <li v-for="parent in categoryTree" :key="parent.id" class="forum-cat-node">
-              <router-link
-                :to="{ name: 'forum-category', params: { slug: parent.slug, id: parent.id } }"
-                class="forum-cat-link"
-                :style="{ borderLeftColor: '#' + (parent.color || 'aaaaaa') }"
-              >
-                <span class="forum-cat-name">{{ parent.name }}</span>
-                <span class="forum-cat-count">{{ parent.topic_count }}</span>
-              </router-link>
-              <ul v-if="parent.children.length" class="forum-cat-children">
-                <li v-for="child in parent.children" :key="child.id">
-                  <router-link
-                    :to="{ name: 'forum-category', params: { slug: child.slug, id: child.id } }"
-                    class="forum-cat-link is-child"
-                    :style="{ borderLeftColor: '#' + (child.color || 'aaaaaa') }"
-                  >
-                    <span class="forum-cat-name">{{ child.name }}</span>
-                    <span class="forum-cat-count">{{ child.topic_count }}</span>
-                  </router-link>
-                </li>
-              </ul>
-            </li>
-          </ul>
-        </section>
+      <section v-if="categoryTree.length" class="forum-block">
+        <h2 class="forum-block-title">
+          <fa-icon icon="folder" />
+          &nbsp;{{ $gettext('Catégories') }}
+        </h2>
+        <ul class="forum-cat-tree">
+          <li v-for="parent in categoryTree" :key="parent.id" class="forum-cat-node">
+            <router-link
+              :to="{ name: 'forum-category', params: { slug: parent.slug, id: parent.id } }"
+              class="forum-cat-link"
+              :style="{ borderLeftColor: '#' + (parent.color || 'aaaaaa') }"
+            >
+              <span class="forum-cat-name">{{ parent.name }}</span>
+              <span class="forum-cat-count">{{ parent.topic_count }}</span>
+            </router-link>
+            <ul v-if="parent.children.length" class="forum-cat-children">
+              <li v-for="child in parent.children" :key="child.id">
+                <router-link
+                  :to="{ name: 'forum-category', params: { slug: child.slug, id: child.id } }"
+                  class="forum-cat-link is-child"
+                  :style="{ borderLeftColor: '#' + (child.color || 'aaaaaa') }"
+                >
+                  <span class="forum-cat-name">{{ child.name }}</span>
+                  <span class="forum-cat-count">{{ child.topic_count }}</span>
+                </router-link>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </section>
 
-        <!-- Popular tags — public endpoint. Tap a tag to browse the
+      <!-- Popular tags — public endpoint. Tap a tag to browse the
              topics carrying it. Cap the display to top-N so this
              block doesn't push the feed off screen on mobile. -->
-        <section v-if="topTags.length" class="forum-block">
-          <h2 class="forum-block-title">
-            <fa-icon icon="tag" />
-            &nbsp;{{ $gettext('Étiquettes populaires') }}
-          </h2>
-          <ul class="forum-tags">
-            <li v-for="tag in topTags" :key="tag.name || tag.id" class="forum-tag-item">
-              <router-link :to="{ name: 'forum-tag', params: { tag: tag.name || tag.id } }" class="forum-tag-pill">
-                <fa-icon icon="tag" />
-                <span>{{ tag.name || tag.id }}</span>
-                <span v-if="tag.count" class="forum-tag-count">{{ tag.count }}</span>
-              </router-link>
-            </li>
-          </ul>
-        </section>
-      </template>
+      <section v-if="topTags.length" class="forum-block">
+        <h2 class="forum-block-title">
+          <fa-icon icon="tag" />
+          &nbsp;{{ $gettext('Étiquettes populaires') }}
+        </h2>
+        <ul class="forum-tags">
+          <li v-for="tag in topTags" :key="tag.name || tag.id" class="forum-tag-item">
+            <router-link :to="{ name: 'forum-tag', params: { tag: tag.name || tag.id } }" class="forum-tag-pill">
+              <fa-icon icon="tag" />
+              <span>{{ tag.name || tag.id }}</span>
+              <span v-if="tag.count" class="forum-tag-count">{{ tag.count }}</span>
+            </router-link>
+          </li>
+        </ul>
+      </section>
     </div>
 
     <!-- Floating action button to compose a new topic. Discourse-
@@ -244,8 +229,7 @@
 // Home of the in-app forum. Loads categories (for the tree + tag
 // resolution), latest topics (for the feed and pinned split), and,
 // when the current user has a Discourse username on file, their own
-// topics. Search runs on submit against /search.json and replaces
-// the feed until cleared.
+// topics. The search bar hands its query to the forum search page.
 
 import TopicRow from '@/components/forum/TopicRow.vue';
 import forum from '@/js/apis/forum';
@@ -274,11 +258,7 @@ export default {
       feedTab: 'latest',
       topPeriod: 'monthly',
       topTags: [],
-      // Search
       searchQuery: '',
-      searchActive: false,
-      searching: false,
-      searchResults: [],
     };
   },
 
@@ -469,42 +449,10 @@ export default {
       }
     },
 
-    async runSearch() {
+    openSearch() {
       const q = this.searchQuery.trim();
-      if (!q) {
-        this.clearSearch();
-        return;
-      }
-      this.searchActive = true;
-      this.searching = true;
-      try {
-        const res = await forum.search(q).promise_;
-        // /search.json returns `topics` (topic metadata) and `posts`
-        // (matching post excerpts). For a mobile-first UI we surface
-        // topics only — tapping a topic lands on its posts anyway.
-        const topics = res?.data?.topics || [];
-        // Merge user data (users[] on the search payload) so
-        // TopicRow can render the poster avatar.
-        const usersById = {};
-        (res?.data?.users || []).forEach((u) => {
-          if (u.id != null) usersById[u.id] = u;
-        });
-        topics.forEach((t) => {
-          const first = t.posters?.[0];
-          if (first?.user_id != null) t.first_poster_user = usersById[first.user_id] || null;
-        });
-        this.searchResults = topics;
-      } catch {
-        this.searchResults = [];
-      } finally {
-        this.searching = false;
-      }
-    },
-
-    clearSearch() {
-      this.searchQuery = '';
-      this.searchActive = false;
-      this.searchResults = [];
+      if (!q) return;
+      this.$router.push({ name: 'forum-search', query: { q } });
     },
   },
 };
