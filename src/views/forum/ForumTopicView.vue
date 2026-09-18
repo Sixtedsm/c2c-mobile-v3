@@ -59,112 +59,113 @@
       </div>
 
       <template v-else>
-        <article
-          v-for="post in visiblePosts"
-          :key="post.id"
-          class="ft-post"
-          :class="{ 'is-op': post.post_number === 1 }"
-        >
-          <header class="ft-post-header">
-            <user-avatar :user="postUser(post)" :size="48" />
-            <div class="ft-post-meta">
-              <span class="ft-post-author">
-                <router-link
-                  v-if="post.username"
-                  :to="{ name: 'forum-user', params: { username: post.username } }"
-                  class="ft-post-author-link"
-                >
-                  {{ post.name || post.username }}
-                </router-link>
-                <span v-else>{{ post.name || $gettext('Anonyme') }}</span>
-                <span v-if="post.moderator || post.admin" class="ft-post-badge">
-                  {{ post.admin ? $gettext('Admin') : $gettext('Modérateur') }}
+        <template v-for="post in visiblePosts">
+          <article :key="post.id" class="ft-post" :class="{ 'is-op': post.post_number === 1 }">
+            <header class="ft-post-header">
+              <user-avatar :user="postUser(post)" :size="48" />
+              <div class="ft-post-meta">
+                <span class="ft-post-author">
+                  <router-link
+                    v-if="post.username"
+                    :to="{ name: 'forum-user', params: { username: post.username } }"
+                    class="ft-post-author-link"
+                  >
+                    {{ post.name || post.username }}
+                  </router-link>
+                  <span v-else>{{ post.name || $gettext('Anonyme') }}</span>
+                  <span v-if="post.moderator || post.admin" class="ft-post-badge">
+                    {{ post.admin ? $gettext('Admin') : $gettext('Modérateur') }}
+                  </span>
                 </span>
-              </span>
-              <time class="ft-post-date">#{{ post.post_number }} · {{ formatDate(post.created_at) }}</time>
-            </div>
-          </header>
-          <!-- Inline edit editor for a post, shown in place of the
+                <time class="ft-post-date">#{{ post.post_number }} · {{ formatDate(post.created_at) }}</time>
+              </div>
+            </header>
+            <!-- Inline edit editor for a post, shown in place of the
                rendered `cooked` HTML when the user is editing one of
                their own messages. Uses the same ReplyEditor as the
                reply flow / new-topic flow so formatting stays
                consistent. -->
-          <div v-if="editingPostId === post.id" class="ft-post-edit">
-            <reply-editor
-              v-model="editRaw"
-              :placeholder="$gettext('Contenu du message…')"
-              :disabled="savingEdit"
-              rows="6"
-            />
-            <div class="ft-reply-actions">
-              <button type="button" class="button is-text is-small" :disabled="savingEdit" @click="cancelEdit">
-                {{ $gettext('Annuler') }}
+            <div v-if="editingPostId === post.id" class="ft-post-edit">
+              <reply-editor
+                v-model="editRaw"
+                :placeholder="$gettext('Contenu du message…')"
+                :disabled="savingEdit"
+                rows="6"
+              />
+              <div class="ft-reply-actions">
+                <button type="button" class="button is-text is-small" :disabled="savingEdit" @click="cancelEdit">
+                  {{ $gettext('Annuler') }}
+                </button>
+                <button
+                  type="button"
+                  class="button is-primary is-small"
+                  :disabled="savingEdit || !editRaw.trim()"
+                  @click="saveEdit(post)"
+                >
+                  <fa-icon :icon="savingEdit ? 'spinner' : 'check'" :spin="savingEdit" />
+                  &nbsp;{{ savingEdit ? $gettext('Enregistrement…') : $gettext('Enregistrer') }}
+                </button>
+              </div>
+            </div>
+            <div v-else class="ft-post-body prose" v-html="post.cooked" />
+            <footer v-if="editingPostId !== post.id" class="ft-post-actions">
+              <button
+                type="button"
+                class="ft-post-action"
+                :class="{ 'is-liked': isLiked(post) }"
+                :disabled="likePending === post.id"
+                :title="isLiked(post) ? $gettext('Retirer le J’aime') : $gettext('J’aime ce message')"
+                @click="toggleLike(post)"
+              >
+                <fa-icon :icon="isLiked(post) ? 'heart' : ['far', 'heart']" />
+                <span v-if="post.reply_count || likeCount(post)">
+                  &nbsp;{{ likeCount(post) || post.reply_count }}
+                </span>
               </button>
               <button
                 type="button"
-                class="button is-primary is-small"
-                :disabled="savingEdit || !editRaw.trim()"
-                @click="saveEdit(post)"
+                class="ft-post-action"
+                :title="$gettext('Répondre à ce message')"
+                @click="startReplyTo(post)"
               >
-                <fa-icon :icon="savingEdit ? 'spinner' : 'check'" :spin="savingEdit" />
-                &nbsp;{{ savingEdit ? $gettext('Enregistrement…') : $gettext('Enregistrer') }}
+                <fa-icon icon="reply" />
+                &nbsp;{{ $gettext('Répondre') }}
               </button>
-            </div>
-          </div>
-          <div v-else class="ft-post-body prose" v-html="post.cooked" />
-          <footer v-if="editingPostId !== post.id" class="ft-post-actions">
-            <button
-              type="button"
-              class="ft-post-action"
-              :class="{ 'is-liked': isLiked(post) }"
-              :disabled="likePending === post.id"
-              :title="isLiked(post) ? $gettext('Retirer le J’aime') : $gettext('J’aime ce message')"
-              @click="toggleLike(post)"
-            >
-              <fa-icon :icon="isLiked(post) ? 'heart' : ['far', 'heart']" />
-              <span v-if="post.reply_count || likeCount(post)"> &nbsp;{{ likeCount(post) || post.reply_count }} </span>
-            </button>
-            <button
-              type="button"
-              class="ft-post-action"
-              :title="$gettext('Répondre à ce message')"
-              @click="startReplyTo(post)"
-            >
-              <fa-icon icon="reply" />
-              &nbsp;{{ $gettext('Répondre') }}
-            </button>
-            <button
-              v-if="canEditPost(post)"
-              type="button"
-              class="ft-post-action"
-              :title="$gettext('Modifier votre message')"
-              @click="startEdit(post)"
-            >
-              <fa-icon icon="pen" />
-              &nbsp;{{ $gettext('Modifier') }}
-            </button>
-          </footer>
-        </article>
+              <button
+                v-if="canEditPost(post)"
+                type="button"
+                class="ft-post-action"
+                :title="$gettext('Modifier votre message')"
+                @click="startEdit(post)"
+              >
+                <fa-icon icon="pen" />
+                &nbsp;{{ $gettext('Modifier') }}
+              </button>
+            </footer>
+          </article>
 
-        <!-- Load more: Discourse's post_stream.stream is the full
-             ordered list of post ids in the topic. When our visible
-             posts are fewer than the stream, we fetch the next batch
-             (up to LOAD_MORE_BATCH ids at a time) via
+          <!-- Load more, placed where the loaded posts stop: after the first
+             block, or — once "Aller au dernier message" has loaded the
+             tail — in the gap between the two. Discourse's
+             post_stream.stream is the full ordered list of post ids; the
+             missing ones are fetched LOAD_MORE_BATCH at a time via
              /t/:id/posts.json. -->
-        <button
-          v-if="canLoadMorePosts"
-          type="button"
-          class="button is-text ft-load-more"
-          :disabled="loadingMore"
-          @click="loadMorePosts"
-        >
-          <fa-icon :icon="loadingMore ? 'spinner' : 'chevron-down'" :spin="loadingMore" />
-          &nbsp;{{
-            loadingMore
-              ? $gettext('Chargement…')
-              : $gettextInterpolate($gettext('Charger les %{n} messages suivants'), { n: remainingPostCount })
-          }}
-        </button>
+          <button
+            v-if="post.id === gapAfterPostId"
+            :key="'more-' + post.id"
+            type="button"
+            class="button is-text ft-load-more"
+            :disabled="loadingMore"
+            @click="loadMorePosts"
+          >
+            <fa-icon :icon="loadingMore ? 'spinner' : 'chevron-down'" :spin="loadingMore" />
+            &nbsp;{{
+              loadingMore
+                ? $gettext('Chargement…')
+                : $gettextInterpolate($gettext('Charger les %{n} messages suivants'), { n: nextBatchCount })
+            }}
+          </button>
+        </template>
 
         <!-- Inline reply editor: POST directly to Discourse. Session
              cookie required; if it's missing, we surface the SSO link
@@ -318,14 +319,30 @@
         <div
           v-if="progressVisible && totalPostsCount > 1"
           class="ft-progress-floating"
+          :class="{ 'is-beside-jump': jumpToEndVisible }"
           :aria-hidden="progressVisible ? 'false' : 'true'"
         >
-          <span class="ft-progress-count">{{ currentPostNumber }} / {{ totalPostsCount }}</span>
+          <span class="ft-progress-count">{{ currentPosition }} / {{ totalPostsCount }}</span>
           <span class="ft-progress-bar">
             <span class="ft-progress-fill" :style="{ width: currentProgressPercent + '%' }"></span>
           </span>
         </div>
       </transition>
+
+      <!-- "Aller au dernier message" — for threads too long to scroll
+           to the end by hand. Only shown while the end is far away (or
+           not loaded yet), so a short thread keeps its plain layout. -->
+      <button
+        v-if="jumpToEndVisible"
+        type="button"
+        class="ft-jump-end"
+        :disabled="jumpingToEnd"
+        :title="$gettext('Aller au dernier message')"
+        :aria-label="$gettext('Aller au dernier message')"
+        @click="jumpToEnd"
+      >
+        <fa-icon :icon="jumpingToEnd ? 'spinner' : 'arrow-down'" :spin="jumpingToEnd" />
+      </button>
     </div>
   </section>
 </template>
@@ -350,6 +367,10 @@ import { plainTitle } from '@/pwa/cooked-html-parser';
 // Discourse recommends batches of 20 — matches the size of the initial
 // server-hydrated slice, keeps the visual rhythm predictable.
 const LOAD_MORE_BATCH = 20;
+// How long "Aller au dernier message" keeps the last post in place while
+// the images above it finish loading. See scrollToLastPost().
+const FOLLOW_END_MS = 5000;
+const READER_TAKES_OVER = ['pointerdown', 'wheel', 'keydown'];
 
 // A discussion has to finish loading one way or another.
 //
@@ -431,10 +452,15 @@ export default {
       flagging: null,
       // Floating "N/N" progress pill — visible only while the user
       // is scrolling, hides itself 1.2 s after the last scroll event.
-      // currentPostNumber tracks which hydrated post is currently
+      // currentPosition tracks which hydrated post is currently
       // near the top of the reading area (viewport / 3 anchor line).
       progressVisible: false,
-      currentPostNumber: 1,
+      currentPosition: 1,
+      // More than a screen and a half of thread still below the reader.
+      // Measured on scroll (see updateFarFromEnd), not computed: it
+      // depends on rendered heights, which Vue does not track.
+      farFromEnd: false,
+      jumpingToEnd: false,
     };
   },
 
@@ -459,6 +485,12 @@ export default {
     postStream() {
       return this.topic?.post_stream?.stream || [];
     },
+    // Post id → position in the thread (1-based), for the progress pill.
+    streamPositions() {
+      const positions = new Map();
+      this.postStream.forEach((id, i) => positions.set(id, i + 1));
+      return positions;
+    },
     // Only posts we actually have full data for — sorted by
     // post_number to stay in thread order.
     visiblePosts() {
@@ -473,6 +505,37 @@ export default {
     },
     canLoadMorePosts() {
       return this.remainingPostCount > 0;
+    },
+    // What one tap on "Charger les messages suivants" actually loads. The
+    // label used to announce every remaining post — "Charger les 280
+    // messages suivants" — and then load twenty.
+    nextBatchCount() {
+      return Math.min(LOAD_MORE_BATCH, this.remainingPostCount);
+    },
+    // The last post shown before the first one not loaded yet: where the
+    // "load more" button belongs. At the end of the first block until
+    // the tail is loaded, in the middle of the thread after that. Null
+    // when every post is loaded.
+    gapAfterPostId() {
+      if (!this.canLoadMorePosts) return null;
+      const have = new Set(this.hydratedPosts.map((p) => p.id));
+      const firstMissing = this.postStream.findIndex((id) => !have.has(id));
+      if (firstMissing > 0) return this.postStream[firstMissing - 1];
+      const last = this.visiblePosts[this.visiblePosts.length - 1];
+      return last ? last.id : null;
+    },
+    lastPostLoaded() {
+      const stream = this.postStream;
+      if (!stream.length) return true;
+      const lastId = stream[stream.length - 1];
+      return this.hydratedPosts.some((p) => p.id === lastId);
+    },
+    // Hidden while writing: over the keyboard, a floating button covers
+    // the text being typed.
+    jumpToEndVisible() {
+      if (this.loading || this.error || this.totalPostsCount < 2) return false;
+      if (this.showReply || this.editingPostId !== null) return false;
+      return this.farFromEnd || !this.lastPostLoaded;
     },
 
     topicCategory() {
@@ -634,7 +697,7 @@ export default {
     },
     currentProgressPercent() {
       if (!this.totalPostsCount) return 0;
-      return Math.min(100, Math.round((this.currentPostNumber / this.totalPostsCount) * 100));
+      return Math.min(100, Math.round((this.currentPosition / this.totalPostsCount) * 100));
     },
   },
 
@@ -646,6 +709,10 @@ export default {
     // so the cached NodeList the scroll handler reads must be dropped.
     'visiblePosts.length'() {
       this.invalidateScrollCache();
+      this.$nextTick(this.updateFarFromEnd);
+    },
+    loading(isLoading) {
+      if (!isLoading) this.$nextTick(this.updateFarFromEnd);
     },
   },
 
@@ -678,6 +745,7 @@ export default {
       window.removeEventListener('resize', this._resizeHandler);
     }
     if (this._progressHideT) window.clearTimeout(this._progressHideT);
+    this.stopFollowingEnd();
   },
 
   methods: {
@@ -688,6 +756,7 @@ export default {
       this.likeOverlay = {};
       this.bookmarkedId = null;
       this.editingPostId = null;
+      this.stopFollowingEnd();
       try {
         // Bounded on purpose. A spinner with no end is the worst thing
         // this screen can show: it tells the reader nothing, and it hides
@@ -950,10 +1019,14 @@ export default {
         else break;
       }
       const post = this.visiblePosts[idx];
-      const next = post?.post_number || idx + 1;
+      // The position in the thread, not post_number: deleted posts leave
+      // holes in the numbering, so a 5 260-message thread ends on #5960
+      // and the pill read "5958 / 5260". The stream lists the posts that
+      // still exist.
+      const next = (post && this.streamPositions.get(post.id)) || post?.post_number || idx + 1;
       // Guard the assignment: scrolling within one post would otherwise
       // re-trigger the watcher chain 60 times a second for no change.
-      if (next !== this.currentPostNumber) this.currentPostNumber = next;
+      if (next !== this.currentPosition) this.currentPosition = next;
     },
 
     // Scroll fires 60-120 times a second on mobile. Coalesce to one
@@ -966,6 +1039,7 @@ export default {
         window.requestAnimationFrame(() => {
           this._rafPending = false;
           this.updateCurrentPost();
+          this.updateFarFromEnd();
         });
       }
       if (this._progressHideT) window.clearTimeout(this._progressHideT);
@@ -1039,6 +1113,88 @@ export default {
       } finally {
         this.savingEdit = false;
       }
+    },
+
+    // ---- "Aller au dernier message" -------------------------------
+
+    updateFarFromEnd() {
+      const target = this._scrollTarget === window ? document.scrollingElement : this._scrollTarget;
+      if (!target || !target.clientHeight) return;
+      const below = target.scrollHeight - target.scrollTop - target.clientHeight;
+      const far = below > target.clientHeight * 1.5;
+      if (far !== this.farFromEnd) this.farFromEnd = far;
+    },
+
+    // A long thread opens on its first posts and grows twenty at a time,
+    // so reaching the end of a 300-message discussion meant fifteen taps
+    // and a lot of scrolling on a phone. This loads only the last batch,
+    // leaves "Charger les messages suivants" in the gap it opens, and
+    // scrolls to the last post.
+    async jumpToEnd() {
+      if (this.jumpingToEnd) return;
+      if (!this.lastPostLoaded) {
+        const topicId = this.topic?.id;
+        this.jumpingToEnd = true;
+        try {
+          const have = new Set(this.hydratedPosts.map((p) => p.id));
+          const tail = this.postStream.filter((id) => !have.has(id)).slice(-LOAD_MORE_BATCH);
+          const res = await forum.getPostsRange(this.$route.params.id, tail).promise_;
+          // Another topic was opened while the tail was on its way.
+          if (this.topic?.id !== topicId) return;
+          const more = res?.data?.post_stream?.posts || [];
+          this.topic = {
+            ...this.topic,
+            post_stream: { ...this.topic.post_stream, posts: [...this.hydratedPosts, ...more] },
+          };
+          await this.$nextTick();
+        } catch {
+          toast({
+            type: 'is-warning',
+            position: 'bottom-center',
+            message: this.$gettext('Impossible de charger les derniers messages.'),
+          });
+          return;
+        } finally {
+          this.jumpingToEnd = false;
+        }
+      }
+      this.scrollToLastPost();
+    },
+
+    // Scroll to the last post, and stay there while the thread settles.
+    //
+    // The posts above it keep growing after the jump: images load (lazily,
+    // as they come near the screen) and link previews expand, and each one
+    // pushes the last post further down. A single scroll lands short of it
+    // — 1 280 px short, measured on a 5 000-message thread. So the position
+    // is re-applied whenever the thread changes size, for a few seconds,
+    // and never against the reader: their first touch, wheel or key hands
+    // the scroll back to them. Instant rather than smooth for the same
+    // reason: a smooth scroll aims at where the post was when it started.
+    scrollToLastPost() {
+      this.stopFollowingEnd();
+      const align = () => {
+        const nodes = this.$el ? this.$el.querySelectorAll('.ft-post') : null;
+        const last = nodes && nodes[nodes.length - 1];
+        if (last) last.scrollIntoView({ block: 'start' });
+      };
+      align();
+      if (typeof ResizeObserver !== 'function' || !this.$el) return;
+      const observer = new ResizeObserver(align);
+      observer.observe(this.$el);
+      const release = () => this.stopFollowingEnd();
+      READER_TAKES_OVER.forEach((type) => window.addEventListener(type, release, { capture: true, passive: true }));
+      const timer = window.setTimeout(release, FOLLOW_END_MS);
+      this._followEnd = { observer, release, timer };
+    },
+
+    stopFollowingEnd() {
+      const follow = this._followEnd;
+      if (!follow) return;
+      this._followEnd = null;
+      follow.observer.disconnect();
+      window.clearTimeout(follow.timer);
+      READER_TAKES_OVER.forEach((type) => window.removeEventListener(type, follow.release, true));
     },
 
     async loadMorePosts() {
@@ -1738,6 +1894,40 @@ export default {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-align: center;
+}
+// Room for the jump button, which takes the pill's corner.
+.ft-progress-floating.is-beside-jump {
+  right: calc(1rem + 52px + 0.5rem);
+}
+// Same size, colour and corner as the forum's "+" (ForumView .forum-fab),
+// which this screen does not have.
+.ft-jump-end {
+  position: fixed;
+  right: 1rem;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  z-index: 27;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  background: #ff9933;
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+
+  &:hover,
+  &:focus {
+    background: #e6791f;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.85;
+  }
 }
 .ft-progress-count {
   line-height: 1.1;
