@@ -126,3 +126,33 @@ describe('a request that timed out is not retried blind', () => {
     expect(classifyFailure(undefined, MAX_SYNC_ATTEMPTS - 1).freeze).toBe(true);
   });
 });
+
+// Camptocamp itself can be down: in September 2026 its API served a
+// maintenance page, on and off, for days. Three taps on "Publier
+// maintenant" during such a stretch used to exhaust an outing's budget
+// and freeze it as "plusieurs tentatives ont échoué" — a queued outing
+// punished for an outage it had no part in.
+describe('a site that is down is not the outing’s fault', () => {
+  it('spends no attempt on 502, 503, 504 or 429', () => {
+    for (const status of [502, 503, 504, 429]) {
+      const verdict = classifyFailure(status, 2);
+      expect(verdict.attemptsAfter).toBe(2);
+      expect(verdict.freeze).toBe(false);
+    }
+  });
+
+  it('never freezes an outing, however long the outage lasts', () => {
+    let attempts = 0;
+    for (let i = 0; i < 10; i++) {
+      const verdict = classifyFailure(503, attempts);
+      expect(verdict.freeze).toBe(false);
+      attempts = verdict.attemptsAfter;
+    }
+    expect(attempts).toBe(0);
+  });
+
+  it('still counts a genuine server error', () => {
+    expect(classifyFailure(500, 0).attemptsAfter).toBe(1);
+    expect(classifyFailure(500, MAX_SYNC_ATTEMPTS - 1).freeze).toBe(true);
+  });
+});

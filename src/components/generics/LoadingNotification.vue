@@ -51,6 +51,16 @@ export default {
           );
         }
       }
+      // A 5xx is the site, not the reader: "Request failed with status
+      // code 503" is the axios sentence, and it told a user nothing for
+      // days while api.camptocamp.org was serving a maintenance page
+      // (septembre 2026).
+      const status = error?.response?.status;
+      if (status === 429 || status >= 500) {
+        return this.$gettext(
+          'Camptocamp est momentanément indisponible (maintenance ou serveur surchargé). Réessayez dans quelques minutes. Les topos enregistrés hors ligne restent consultables dans « Mes topos ».'
+        );
+      }
       return error?.message;
     },
   },

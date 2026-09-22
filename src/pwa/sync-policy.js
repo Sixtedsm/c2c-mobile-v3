@@ -22,9 +22,20 @@
 export const MAX_SYNC_ATTEMPTS = 3;
 
 // Statuses worth another try even though the server answered: the
-// session can be renewed, a timeout or a rate limit passes, and a 5xx is
-// the server's problem rather than the payload's.
+// session can be renewed and a timeout passes.
 const RETRYABLE_STATUSES = new Set([401, 403, 408, 429]);
+
+// The server is up but not serving: maintenance, restart, overload, rate
+// limit. These say nothing about the outing, so they must not spend one
+// of its three attempts — otherwise three taps on « Publier maintenant »
+// during an outage freeze an outing the API never looked at. It happened:
+// api.camptocamp.org served a maintenance page on and off for several
+// days in September 2026.
+const UNAVAILABLE_STATUSES = new Set([429, 502, 503, 504]);
+
+export function isServerUnavailable(status) {
+  return UNAVAILABLE_STATUSES.has(status);
+}
 
 // `attempts` is the count *before* this failure.
 //
@@ -40,6 +51,11 @@ export function classifyFailure(status, attempts, { timedOut = false } = {}) {
   if (status === 409) {
     // A referenced document moved under us. Only the user can decide.
     return { freeze: true, reason: 'conflict', ambiguous: false, attemptsAfter };
+  }
+
+  // Nothing to decide: the site is down, the outing is untouched.
+  if (isServerUnavailable(status)) {
+    return { freeze: false, reason: null, ambiguous: false, attemptsAfter: attempts };
   }
 
   const clientError = typeof status === 'number' && status >= 400 && status < 500;

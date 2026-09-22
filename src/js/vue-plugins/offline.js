@@ -8,7 +8,7 @@ import uploadFile from '@/js/upload-file';
 import { probeApiAccess } from '@/pwa/api-access';
 import { extractEmbeddedImageIds, extractImageUrlsFromCooked } from '@/pwa/cooked-html-parser';
 import * as store from '@/pwa/offline-store';
-import { classifyFailure } from '@/pwa/sync-policy';
+import { classifyFailure, isServerUnavailable } from '@/pwa/sync-policy';
 import { requestPersistentStorage } from '@/pwa/trace-store';
 
 // Name of the cross-tab Web Lock guarding the publish pass.
@@ -1212,6 +1212,9 @@ export default function install(Vue) {
         // hiding the real error of every item behind it. ESLint's no-undef
         // was not enabled; it is now.
         let failed = 0;
+        // Failures that are the site's, not the outing's: nothing the user
+        // can fix, and a different sentence to say so.
+        let unavailable = 0;
         let newConflicts = 0;
         for (const item of queue) {
           // Items previously flagged as conflicting stay in the queue
@@ -1301,6 +1304,7 @@ export default function install(Vue) {
             // and the answer never arrived, which is the case that must
             // not be retried blind.
             const timedOut = error?.code === 'ECONNABORTED';
+            if (isServerUnavailable(status)) unavailable += 1;
             const verdict = classifyFailure(status, item.attempts, { timedOut });
             const next = {
               ...item,
@@ -1342,11 +1346,16 @@ export default function install(Vue) {
         }
         if (failed > 0 && published === 0) {
           // Every attempt failed — surface it so the user can act (likely
-          // a server-side validation issue or auth expiry).
+          // a server-side validation issue or auth expiry), unless the site
+          // itself was down, which is not something to act on.
+          const allUnavailable = unavailable === failed;
           toast({
             type: 'is-warning',
             position: 'bottom-center',
-            message: `Échec de la synchronisation. Ouvrez « Mes topos » pour réessayer.`,
+            duration: allUnavailable ? 6000 : undefined,
+            message: allUnavailable
+              ? `Camptocamp est momentanément indisponible (maintenance ou serveur surchargé). Vos sorties restent en attente : réessayez plus tard.`
+              : `Échec de la synchronisation. Ouvrez « Mes topos » pour réessayer.`,
           });
         }
         if (newConflicts > 0) {
