@@ -93,10 +93,6 @@ export async function getDocument(type, id, lang) {
   return isOfflineEntry(entry) ? entry.data : null;
 }
 
-export async function hasDocument(type, id, lang) {
-  return (await get(docKey(type, id, lang))) !== undefined;
-}
-
 export async function deleteDocument(type, id, lang) {
   await del(docKey(type, id, lang));
 }

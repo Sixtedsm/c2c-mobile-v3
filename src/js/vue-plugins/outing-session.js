@@ -758,33 +758,6 @@ export default function install(Vue) {
         this._gapPending = false;
       },
 
-      requestCurrentPosition() {
-        return new Promise((resolve, reject) => {
-          if (!navigator.geolocation) {
-            reject(new Error('Geolocation API unavailable'));
-            return;
-          }
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const sample = {
-                lat: pos.coords.latitude,
-                lon: pos.coords.longitude,
-                alt: pos.coords.altitude,
-                accuracy: pos.coords.accuracy,
-                t: pos.timestamp || Date.now(),
-              };
-              this.currentPosition = sample;
-              resolve(sample);
-            },
-            (err) => {
-              this.geoError = err;
-              reject(err);
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
-          );
-        });
-      },
-
       // Ask the OS to keep the page running once the screen goes off.
       // See src/pwa/background-audio.js for why this takes the shape it
       // does, and for what it costs.

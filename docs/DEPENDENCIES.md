@@ -66,7 +66,6 @@ code, inherited from `c2c_ui`, not from what it consumes.
 | `file-saver`                          | 2.0.5     | 2.0.5   | MIT                             |
 | `idb-keyval`                          | 6.2.2     | ^6.2.2  | Apache-2.0                      |
 | `ol`                                  | 10.7.0    | 10.7.0  | BSD-2-Clause                    |
-| `process`                             | 0.11.10   | 0.11.10 | MIT                             |
 | `register-service-worker`             | 1.7.2     | ^1.7.2  | MIT                             |
 | `swiper`                              | 9.4.1     | 9.4.1   | MIT                             |
 | `uqr`                                 | 0.1.2     | 0.1.2   | MIT                             |

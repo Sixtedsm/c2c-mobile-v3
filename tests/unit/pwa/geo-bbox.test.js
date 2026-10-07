@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 
-import { bboxFromLonLatRadius, bboxFromPositions } from '@/pwa/geo-bbox';
+import { bboxFromLonLatRadius } from '@/pwa/geo-bbox';
 
-// Minimal OpenLayers stub — the two helpers only touch `ol.proj.fromLonLat`
+// Minimal OpenLayers stub — the helper only touches `ol.proj.fromLonLat`
 // and `ol.extent.buffer`. Faking them keeps the tests hermetic + fast
 // (the real `ol` module drags in ~2 MB of ES modules).
 const ol = {
@@ -58,37 +58,5 @@ describe('bboxFromLonLatRadius', () => {
 
   it('clamps the cos(lat) divisor to avoid division by zero near the pole', () => {
     expect(() => bboxFromLonLatRadius(ol, 0, 89.99, 10)).not.toThrow();
-  });
-});
-
-describe('bboxFromPositions', () => {
-  it('returns null for empty or missing inputs', () => {
-    expect(bboxFromPositions(ol, [])).toBeNull();
-    expect(bboxFromPositions(ol, null)).toBeNull();
-    expect(bboxFromPositions(ol, undefined)).toBeNull();
-  });
-
-  it('returns a valid bbox for a single-point trace (padded)', () => {
-    const bbox = bboxFromPositions(ol, [{ lat: 45.9, lon: 6.87 }], 500);
-    const [w, s, e, n] = bbox.split(',').map(Number);
-    expect(e).toBeGreaterThan(w);
-    expect(n).toBeGreaterThan(s);
-  });
-
-  it('encloses every point of a multi-point trace', () => {
-    const positions = [
-      { lat: 45.9, lon: 6.87 },
-      { lat: 45.92, lon: 6.9 },
-      { lat: 45.88, lon: 6.85 },
-    ];
-    const [w, s, e, n] = bboxFromPositions(ol, positions, 0).split(',').map(Number);
-    for (const p of positions) {
-      const [x, y] = ol.proj.fromLonLat([p.lon, p.lat]);
-      // Floor rounding can shave ~1 m — allow a 2 m slack.
-      expect(x).toBeGreaterThanOrEqual(w - 2);
-      expect(x).toBeLessThanOrEqual(e + 2);
-      expect(y).toBeGreaterThanOrEqual(s - 2);
-      expect(y).toBeLessThanOrEqual(n + 2);
-    }
   });
 });

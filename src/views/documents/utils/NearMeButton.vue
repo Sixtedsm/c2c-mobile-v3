@@ -128,7 +128,8 @@ export default {
         return;
       }
       try {
-        const bbox = this.computeBbox(position.coords, this.selectedRadius);
+        const { longitude, latitude } = position.coords;
+        const bbox = bboxFromLonLatRadius(ol, longitude, latitude, this.selectedRadius);
         const query = {
           ...this.$route.query,
           bbox,
@@ -160,12 +161,6 @@ export default {
           timeout: 10_000,
         });
       });
-    },
-
-    // Thin wrapper — the actual math lives in @/pwa/geo-bbox so it's
-    // unit-testable without booting Vue or OpenLayers ES modules.
-    computeBbox(coords, radiusKm) {
-      return bboxFromLonLatRadius(ol, coords.longitude, coords.latitude, radiusKm);
     },
   },
 };
