@@ -199,7 +199,7 @@ sync queue locking, GPS tracking across a screen lock, pausing an outing
 and the trace segmentation that feeds the published distance and
 elevation. Each of those has a regression behind it.
 
-Pure helpers (`haversine`, `geo-bbox`, `elapsed-label`,
+Pure helpers (`geo-bbox`, `elapsed-label`,
 `cooked-html-parser`, `markdown-selection`, `trace-segments`) are tested
 directly; the stateful plugins are mounted on a local Vue instance with
 geolocation and IndexedDB stubbed (`fake-indexeddb`, `happy-dom`).

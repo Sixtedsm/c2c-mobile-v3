@@ -1,5 +1,3 @@
-import saveAs from 'file-saver';
-
 export default {
   // from https://github.com/c2corg/v6_ui/blob/c9962a6c3bac0670eab732d563f9f480379f84d1/c2corg_ui/static/js/utils.js#L194
   stringDivider(str, width, spaceReplacer) {
@@ -25,9 +23,13 @@ export default {
 
   download(content, fileName, opt_fileType) {
     const fileType = opt_fileType ?? 'text/plain;charset=utf-8';
-    const blob = new Blob([content], { type: fileType });
-
-    saveAs(blob, fileName);
+    const url = URL.createObjectURL(new Blob([content], { type: fileType }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    // revoked later: some browsers start the download after click() returns
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
 
   // transform a list of c2c object to a CSV content, and download it

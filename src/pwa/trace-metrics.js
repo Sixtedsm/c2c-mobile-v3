@@ -46,7 +46,9 @@
 // Under-reporting a few metres is a far smaller error than inventing
 // kilometres, and it is the trade every serious tracker makes.
 
-import { haversine } from '@/pwa/haversine';
+import { getDistance } from 'ol/sphere';
+
+const metersBetween = (a, b) => getDistance([a.lon, a.lat], [b.lon, b.lat]);
 
 // Beyond this the receiver is telling us it does not know where it is: a
 // 50 m "fix" is barely a position and a worse one is a cell-tower guess.
@@ -176,7 +178,7 @@ export function createTraceMetrics() {
       //    average sideways for the rest of the window.
       if (lastRaw && typeof point.t === 'number' && typeof lastRaw.t === 'number') {
         const seconds = (point.t - lastRaw.t) / 1000;
-        if (seconds > 0 && haversine(lastRaw, point) / seconds > MAX_SPEED_MS) {
+        if (seconds > 0 && metersBetween(lastRaw, point) / seconds > MAX_SPEED_MS) {
           return;
         }
       }
@@ -213,7 +215,7 @@ export function createTraceMetrics() {
       if (!Number.isFinite(smoothed.lat) || !Number.isFinite(smoothed.lon)) return;
 
       if (previous) {
-        const step = haversine(previous, smoothed);
+        const step = metersBetween(previous, smoothed);
         if (step >= MIN_STEP_M) {
           distance += step;
           previous = smoothed;

@@ -63,7 +63,6 @@ code, inherited from `c2c_ui`, not from what it consumes.
 | `core-js`                             | 3.47.0    | 3.47.0  | MIT                             |
 | `d3`                                  | 7.9.0     | 7.9.0   | ISC                             |
 | `dayjs`                               | 1.11.19   | 1.11.19 | MIT                             |
-| `file-saver`                          | 2.0.5     | 2.0.5   | MIT                             |
 | `idb-keyval`                          | 6.2.2     | ^6.2.2  | Apache-2.0                      |
 | `ol`                                  | 10.7.0    | 10.7.0  | BSD-2-Clause                    |
 | `register-service-worker`             | 1.7.2     | ^1.7.2  | MIT                             |
@@ -79,7 +78,6 @@ code, inherited from `c2c_ui`, not from what it consumes.
 | `vue-router`                          | 3.6.5     | 3.6.5   | MIT                             |
 | `vue-slider-component`                | 3.2.24    | 3.2.24  | MIT                             |
 | `vuejs-datepicker`                    | 1.6.2     | 1.6.2   | MIT                             |
-| `zingtouch`                           | 1.0.6     | 1.0.6   | MIT                             |
 
 ## Development dependencies
 

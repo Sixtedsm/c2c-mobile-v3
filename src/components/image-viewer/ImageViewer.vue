@@ -69,7 +69,6 @@
 
 <script>
 import { Keyboard, Navigation, Pagination, Virtual, Zoom } from 'swiper';
-import ZingTouch from 'zingtouch';
 
 import ImageInfo from './ImageInfo';
 
@@ -96,7 +95,6 @@ const exitFullscreen = function () {
 
 export default {
   swiper: null,
-  zt: null,
 
   components: {
     ImageInfo,
@@ -169,19 +167,8 @@ export default {
           // close on mouse wheel
           window.addEventListener('wheel', this.close);
           // close on vertical swipe
-          this.zt = new ZingTouch.Region(this.$refs.swiper);
-          this.zt.bind(this.$refs.swiper, 'swipe', (event) => {
-            const {
-              detail: {
-                data: [{ currentDirection }],
-              },
-            } = event;
-            const isSwipeTop = currentDirection > 60 && currentDirection < 120;
-            const isSwipeBottom = currentDirection > 240 && currentDirection < 300;
-            if (isSwipeTop || isSwipeBottom) {
-              this.close();
-            }
-          });
+          this.$refs.swiper.addEventListener('touchstart', this.onTouchStart);
+          this.$refs.swiper.addEventListener('touchend', this.onTouchEnd);
         });
         if (this.$screen.isMobile) {
           // no idea why toggleButtons is called twice, so we throttle...
@@ -206,11 +193,28 @@ export default {
       // clean handlers
       window.removeEventListener('popstate', this.close);
       window.removeEventListener('wheel', this.close);
-      if (this.zt) {
-        this.zt.unbind(this.$refs.container);
-        this.zt = null;
-      }
+      this.$refs.swiper?.removeEventListener('touchstart', this.onTouchStart);
+      this.$refs.swiper?.removeEventListener('touchend', this.onTouchEnd);
       this.hideButtons = false;
+    },
+
+    onTouchStart(event) {
+      // a second finger means a pinch-zoom, not a swipe
+      const touch = event.touches.length === 1 ? event.touches[0] : null;
+      this.swipeStart = touch && { x: touch.clientX, y: touch.clientY, t: event.timeStamp };
+    },
+
+    onTouchEnd(event) {
+      const start = this.swipeStart;
+      this.swipeStart = null;
+      if (!start || this.$refs.swiper.swiper?.zoom?.scale > 1) return;
+      const touch = event.changedTouches[0];
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      // fast, mostly vertical (within 30° of the vertical axis, like the former ZingTouch setup)
+      if (Math.abs(dy) > 50 && Math.abs(dx) < Math.abs(dy) * 0.58 && event.timeStamp - start.t < 500) {
+        this.close();
+      }
     },
 
     onKeydown(event) {
