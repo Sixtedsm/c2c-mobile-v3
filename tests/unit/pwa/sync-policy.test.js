@@ -83,7 +83,14 @@ describe('a lost response is flagged as unknown, never silently republished', ()
 
   it('does not raise the duplicate warning when the server answered', () => {
     expect(freezeMessage('exhausted', false)).not.toMatch(/deux fois/);
-    expect(freezeMessage('invalid', false)).toMatch(/refusée/);
+    expect(freezeMessage('invalid', false)).toMatch(/refusé/);
+  });
+
+  it('tells how to get a refused outing published', () => {
+    // Editing keeps a frozen item frozen: the message must name both steps.
+    const message = freezeMessage('invalid', false);
+    expect(message).toMatch(/Modifier/);
+    expect(message).toMatch(/Réessayer/);
   });
 });
 

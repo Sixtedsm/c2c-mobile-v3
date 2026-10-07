@@ -95,9 +95,10 @@
                a real diagnostic message rather than the generic "Échec
                de la synchronisation" toast. Common values: 400 (payload
                invalid), 401/403 (session expired), 500 (server), or a
-               network error string. -->
+               network error string. Kept on frozen items too: a refused
+               outing is only fixable if the user sees what was refused. -->
           <p
-            v-if="!item.conflict && item.attempts > 0 && item.lastError"
+            v-if="item.attempts > 0 && item.lastError"
             class="pending-outing-error"
             :title="$gettext('Détail de la dernière erreur API')"
           >
@@ -118,11 +119,17 @@
                live on $offline so future surfaces (a dedicated
                resolution page later, e.g.) reuse the same primitives. -->
           <div v-if="item.conflict" class="pending-outing-conflict">
+            <!-- Only a 409 means a linked document changed. Saying so for
+                 a refused or repeatedly failing outing sent users looking
+                 for an edit that never happened. Items frozen before
+                 freezeReason existed were all 409s. -->
             <p class="pending-outing-conflict-msg">
               {{
-                $gettext(
-                  'Un itinéraire ou point de passage a été modifié depuis votre brouillon. Choisissez comment continuer :'
-                )
+                item.freezeReason === 'conflict' || !item.freezeReason
+                  ? $gettext(
+                      'Un itinéraire ou point de passage a été modifié depuis votre brouillon. Choisissez comment continuer :'
+                    )
+                  : $gettext('Choisissez comment continuer :')
               }}
             </p>
             <div class="pending-outing-conflict-actions">
