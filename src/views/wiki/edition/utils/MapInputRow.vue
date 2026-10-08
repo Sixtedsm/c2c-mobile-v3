@@ -100,6 +100,9 @@ export default {
   },
 
   mounted() {
+    // An outing gets its tracker trace from OutingTracePicker at the top of
+    // the form; the map keeps the file import only.
+    if (this.document.type === 'o') return;
     trackingService.getStatus(this.$user.id).then(
       ({ data }) => {
         if (Object.values(data).includes('configured')) {

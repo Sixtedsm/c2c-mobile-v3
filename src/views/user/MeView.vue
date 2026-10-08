@@ -66,7 +66,11 @@
         <h2 class="section-label">{{ $gettext('Mon compte') }}</h2>
         <ul class="action-grid">
           <li v-for="action in myAccount" :key="action.key">
-            <router-link :to="action.to" class="action-link">
+            <component
+              :is="action.href ? 'a' : 'router-link'"
+              v-bind="action.href ? { href: action.href, target: '_blank', rel: 'noopener' } : { to: action.to }"
+              class="action-link"
+            >
               <span class="action-icon">
                 <custom-icon :name="action.icon" :size="28" />
               </span>
@@ -75,7 +79,7 @@
                 <span class="action-desc">{{ action.desc }}</span>
               </span>
               <fa-icon icon="chevron-right" class="action-chevron" />
-            </router-link>
+            </component>
           </li>
         </ul>
 
@@ -276,7 +280,11 @@ export default {
           label: this.$gettext('Trackers'),
           desc: this.$gettext('Strava, Suunto, Polar, Garmin…'),
           icon: 'gps-pin',
-          to: { name: 'trackers' },
+          // Connecting a tracker goes through each vendor's authorisation
+          // page, which only sends back to camptocamp.org: from the app's
+          // address it cannot work. Back to { name: 'trackers' } once the
+          // app is served from camptocamp.org.
+          href: 'https://www.camptocamp.org/trackers',
         },
       ];
     },

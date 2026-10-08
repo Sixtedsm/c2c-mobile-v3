@@ -15,15 +15,27 @@
             :document-type="documentType"
             :lang="lang"
           />
-          <!-- "Démarrer la sortie" (CDC §2.4): only on route pages,
-               only in the live view. Tracks GPS in the background,
-               offers save-as-draft + GPX export on stop. -->
+          <!-- The app no longer records outings: the trace comes from the
+               user's tracker (see OutingTracePicker). The recording control
+               stays only to finish an outing already started on THIS route
+               with a previous version — with the session's own topoRef, so
+               it never offers to start a new one (which would drop the
+               trace in progress). Removed with the recording code. -->
           <start-outing-control
-            v-if="!isPrintingView && !isDraftView && documentType === 'route'"
-            :topo-ref="{ type: 'route', id: document.document_id, lang: lang }"
+            v-if="!isPrintingView && !isDraftView && documentType === 'route' && sessionOnThisRoute"
+            :topo-ref="$outingSession.topoRef"
             :route="document"
             class="start-outing-header"
           />
+          <add-link
+            v-else-if="!isPrintingView && !isDraftView && documentType === 'route'"
+            document-type="outing"
+            :query="{ r: document.document_id }"
+            class="add-my-outing"
+          >
+            <fa-icon icon="plus" />
+            &nbsp;{{ $gettext('Ajouter ma sortie') }}
+          </add-link>
           <tags-button v-if="!isPrintingView" :document="document" />
 
           <!-- ShareButton uses the Web Share API (native sheet on mobile)
@@ -117,6 +129,18 @@ export default {
       // offline plugin doesn't model them — only hide-show, no logic change.
       return ['article', 'book', 'image', 'outing', 'route', 'waypoint', 'xreport'].includes(this.documentType);
     },
+
+    // An outing started with a previous version, on this very route.
+    sessionOnThisRoute() {
+      const session = this.$outingSession;
+      return Boolean(
+        session &&
+          session.sessionActive &&
+          session.topoRef &&
+          session.topoRef.type === 'route' &&
+          String(session.topoRef.id) === String(this.document.document_id)
+      );
+    },
   },
 };
 </script>
@@ -145,6 +169,28 @@ export default {
 .start-outing-header {
   font-size: 0.9rem;
   vertical-align: middle;
+}
+
+// Where "Démarrer la sortie" was, with the same weight: on a route page,
+// adding one's outing is the main action.
+.button-bar > a.add-my-outing {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.6rem 1.1rem;
+  border-radius: 999px;
+  background: #ff9933;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+
+  &:hover,
+  &:focus {
+    background: #e6791f;
+    color: white;
+  }
 }
 
 .title {

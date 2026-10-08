@@ -35,6 +35,16 @@
         <p class="trace-notice-sub">{{ traceNotice.detail }}</p>
       </div>
 
+      <!-- First, before the date: one tap fills the date, the trace, the
+           distance and the dénivelé, and the routes proposed below are
+           then the ones around the trace. Hidden once the outing has a
+           trace from elsewhere (an imported file, an existing draft); kept
+           after a pick so another line can replace it. -->
+      <outing-trace-picker
+        v-if="mode === 'add' && (!document.geometry.geom_detail || trackerPicked)"
+        @pick="useTrackerActivity"
+      />
+
       <div class="columns">
         <form-field
           class="is-narrow"
@@ -373,6 +383,7 @@ import CotometerWindow from './utils/CotometerWindow';
 import OutingPreviewModal from './utils/OutingPreviewModal';
 import documentEditionViewMixin from './utils/document-edition-view-mixin';
 
+import OutingTracePicker from '@/components/tracking/OutingTracePicker';
 import c2c from '@/js/apis/c2c';
 import ol from '@/js/libs/ol';
 import { elapsedMs, formatDuration } from '@/pwa/elapsed-label';
@@ -380,7 +391,7 @@ import { splitOnGaps } from '@/pwa/trace-segments';
 import { summariseTrace, traceUse } from '@/pwa/trace-usability';
 
 export default {
-  components: { CotometerWindow, OutingPreviewModal },
+  components: { CotometerWindow, OutingPreviewModal, OutingTracePicker },
 
   mixins: [documentEditionViewMixin],
 
@@ -423,6 +434,9 @@ export default {
       savingIncomplete: false,
       // Online, the helper only opens through its link.
       incompleteDraftOpened: false,
+      // The trace on the map came from the tracker picker, which then
+      // stays visible to swap it for another activity.
+      trackerPicked: false,
       // What the GPS recording was worth, and whether its figures were
       // used. Null when the form was not opened from a session. Read by
       // the notice in the "Details" section — the figures the app fills
@@ -587,6 +601,31 @@ export default {
 
     afterDocumentCreated() {
       this.hydrateTraceOnce();
+    },
+
+    // An activity picked from the user's tracker: its trace, its day and
+    // its measured figures. The measured dénivelé replaces the route's
+    // theoretical one; the tracker gives no D−, so that one stays.
+    async useTrackerActivity({ activity, geometry }) {
+      const doc = this.document;
+      this.trackerPicked = true;
+      this.traceSummary = null;
+      if (doc.geometry.geom_detail) {
+        // Back through null so the geom_detail watcher refits the map and
+        // proposes the routes around the new trace, and so the map
+        // recomputes the outing's point from it.
+        doc.geometry.geom = null;
+        doc.geometry.geom_detail = null;
+        await this.$nextTick();
+      }
+      this.$refs.mapInput.setGeometry(geometry);
+      // Local day: an alpine start at 1 a.m. is still that day, not the
+      // previous one in UTC.
+      doc.date_start = this.$dateUtils.toLocalizedString(activity.date, 'YYYY-MM-DD');
+      doc.date_end = doc.date_start;
+      this.showBothDates = false;
+      if (activity.length) doc.length_total = Math.round(activity.length);
+      if (activity.heightDiffUp) doc.height_diff_up = Math.round(activity.heightDiffUp);
     },
 
     async afterLoad() {
