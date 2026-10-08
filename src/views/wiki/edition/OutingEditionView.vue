@@ -1,11 +1,5 @@
 <template>
-  <edition-container
-    v-if="document"
-    :mode="mode"
-    :document="document"
-    :is-loading="saving || hydratingTrace"
-    @save="save"
-  >
+  <edition-container v-if="document" :mode="mode" :document="document" :is-loading="saving" @save="save">
     <div v-if="draftId" class="notification is-info is-light outing-draft-notice">
       {{
         $gettext(
@@ -19,22 +13,6 @@
       :sub-title="$gettext('Main informations about your outing')"
       expanded-on-load
     >
-      <!-- Provenance of the figures the app filled in. Inside the only
-           section that is open on load, and not beside the fields it
-           describes: "Détails" is collapsed, and a warning nobody opens
-           is the same as no warning. The app filling in a distance and a
-           dénivelé without saying so is what let a wrong reading travel
-           all the way to camptocamp.org unnoticed (feedback Gilles, mail
-           2026-09-04). Whether the trace was used or rejected, this says
-           which, and why. -->
-      <div v-if="traceNotice" class="notification trace-notice" :class="traceNotice.level">
-        <p class="trace-notice-title">
-          <fa-icon :icon="traceNotice.icon" />
-          &nbsp;{{ traceNotice.title }}
-        </p>
-        <p class="trace-notice-sub">{{ traceNotice.detail }}</p>
-      </div>
-
       <!-- First, before the date: one tap fills the date, the trace, the
            distance and the dénivelé, and the routes proposed below are
            then the ones around the trace. Hidden once the outing has a
@@ -359,7 +337,6 @@
           type="button"
           class="button is-fullwidth outing-keep-local-btn"
           :class="{ 'is-loading': saving }"
-          :disabled="hydratingTrace"
           @click="saveWithoutPublishing"
         >
           {{ $gettext('Enregistrer sans publier') }}
@@ -385,39 +362,11 @@ import documentEditionViewMixin from './utils/document-edition-view-mixin';
 
 import OutingTracePicker from '@/components/tracking/OutingTracePicker';
 import c2c from '@/js/apis/c2c';
-import ol from '@/js/libs/ol';
-import { elapsedMs, formatDuration } from '@/pwa/elapsed-label';
-import { splitOnGaps } from '@/pwa/trace-segments';
-import { summariseTrace, traceUse } from '@/pwa/trace-usability';
 
 export default {
   components: { CotometerWindow, OutingPreviewModal, OutingTracePicker },
 
   mixins: [documentEditionViewMixin],
-
-  // Consume the recording once the outing is kept — and only then.
-  //
-  // The mixin's beforeRouteLeave runs first (Vue Router 3 chains guards
-  // from mixins and components). If the user cancels its confirm, this
-  // guard is skipped and the session stays intact.
-  //
-  // This used to test `!modified`, read as "saved". But `modified` is
-  // also false for as long as a new form waits for its associations — up
-  // to the request timeout on a weak connection. Leaving the form in that
-  // window (back button, a tap on the bottom bar) stopped the session and
-  // deleted the recorded trace from the phone. `saved` is set only by the
-  // paths that actually kept the outing.
-  //
-  // A guard rather than a watch: watchers fire asynchronously and the
-  // router transition can tear the component down before one runs.
-  beforeRouteLeave(to, from, next) {
-    // A form opened on a queued outing (draftId) does not own the recording
-    // in progress: saving that draft must leave a new outing's trace alone.
-    if (this.mode === 'add' && this.saved && !this.draftId && this.$outingSession?.sessionActive) {
-      this.$outingSession.stop();
-    }
-    next();
-  },
 
   data() {
     return {
@@ -437,84 +386,10 @@ export default {
       // The trace on the map came from the tracker picker, which then
       // stays visible to swap it for another activity.
       trackerPicked: false,
-      // What the GPS recording was worth, and whether its figures were
-      // used. Null when the form was not opened from a session. Read by
-      // the notice in the "Details" section — the figures the app fills
-      // in have to say where they come from, because the user is the
-      // only one who can tell a good recording from a bad one.
-      traceSummary: null,
-      // True while the recorded trace is read back before being put into
-      // the form. Both save buttons wait on it.
-      hydratingTrace: false,
     };
   },
 
   computed: {
-    // One sentence for what the app did with the recording, one for why.
-    // Four cases, and the three failures are the ones that matter: each
-    // says which figures were left for the user to fill, so an empty
-    // dénivelé does not read as an oversight.
-    traceNotice() {
-      const summary = this.traceSummary;
-      if (!summary) return null;
-
-      const points = this.$gettext('{n} points enregistrés').replace('{n}', summary.points);
-      const recorded = formatDuration(summary.recordedMs);
-
-      if (summary.usable) {
-        return {
-          level: 'is-info',
-          icon: 'route',
-          title: this.$gettext('Distance, dénivelés et trace calculés depuis l’enregistrement GPS'),
-          detail: this.$gettext('{points} sur {duration} d’enregistrement. Vérifiez les chiffres avant de publier.')
-            .replace('{points}', points)
-            .replace('{duration}', recorded),
-        };
-      }
-
-      if (summary.points === 0) {
-        return {
-          level: 'is-warning',
-          icon: 'triangle-exclamation',
-          title: this.$gettext('Aucune trace GPS pour cette sortie'),
-          detail: this.$gettext(
-            'L’enregistrement était désactivé. Distance, dénivelés et altitudes ci-dessous viennent de l’itinéraire — corrigez-les si votre sortie en diffère.'
-          ),
-        };
-      }
-
-      // Rounded here because the sentence changes when it lands on zero:
-      // the smoothing in trace-metrics discards pure noise outright, and
-      // "ne couvre que 0 m" reads like a bug rather than a diagnosis.
-      const metres = Math.round(this.$outingSession?.tracedDistanceMeters || 0);
-
-      const detail = {
-        'too-few-points': this.$gettext(
-          '{points} : trop peu pour décrire une sortie. Les chiffres de l’itinéraire ont été repris à la place.'
-        ),
-        'too-short': metres
-          ? this.$gettext(
-              'La trace ne couvre que {distance} m — l’enregistrement a tourné à l’arrêt. Les chiffres de l’itinéraire ont été repris à la place.'
-            )
-          : this.$gettext(
-              'L’enregistrement n’a mesuré aucun déplacement : le téléphone est resté sur place. Les chiffres de l’itinéraire ont été repris à la place.'
-            ),
-        partial: this.$gettext(
-          'L’enregistrement n’a tourné que {duration} sur la durée de la sortie. La trace est dessinée sur la carte, mais sa distance et ses dénivelés ne sont pas ceux de la sortie : ils n’ont pas été repris.'
-        ),
-      }[summary.reason];
-
-      return {
-        level: 'is-warning',
-        icon: 'triangle-exclamation',
-        title: this.$gettext('L’enregistrement GPS n’a pas servi à remplir les chiffres'),
-        detail: (detail || '')
-          .replace('{points}', points)
-          .replace('{distance}', metres)
-          .replace('{duration}', recorded),
-      };
-    },
-
     // The mixin reads the language off the route, which has no lang
     // param on the creation form. Falling back keeps the preview working
     // for a brand-new outing — the case it is most useful in.
@@ -599,17 +474,12 @@ export default {
       this.$refs.previewModal?.show();
     },
 
-    afterDocumentCreated() {
-      this.hydrateTraceOnce();
-    },
-
     // An activity picked from the user's tracker: its trace, its day and
     // its measured figures. The measured dénivelé replaces the route's
     // theoretical one; the tracker gives no D−, so that one stays.
     async useTrackerActivity({ activity, geometry }) {
       const doc = this.document;
       this.trackerPicked = true;
-      this.traceSummary = null;
       if (doc.geometry.geom_detail) {
         // Back through null so the geom_detail watcher refits the map and
         // proposes the routes around the new trace, and so the map
@@ -628,206 +498,8 @@ export default {
       if (activity.heightDiffUp) doc.height_diff_up = Math.round(activity.heightDiffUp);
     },
 
-    async afterLoad() {
+    afterLoad() {
       this.showBothDates = this.document.date_start !== this.document.date_end;
-      // Normally done already by afterDocumentCreated(); a no-op then.
-      await this.hydrateTraceOnce();
-    },
-
-    // Put the recorded trace into the form as soon as the form exists, and
-    // once per document.
-    //
-    // It used to wait for afterLoad(), which the mixin calls only after
-    // every association lookup has settled — up to the request timeout on
-    // a weak connection, or while the API refuses the app. Until then the
-    // form had no trace and a working "Save": saving in that window kept
-    // an outing without its geometry, and leaving it lost the trace (see
-    // beforeRouteLeave).
-    //
-    // The trace comes back from IndexedDB asynchronously. Every other
-    // reader can render a moment of zero and correct itself; this one
-    // writes length_total and the published geometry, so it waits, and
-    // the save buttons wait with it. Never rejects.
-    async hydrateTraceOnce() {
-      const document = this.document;
-      if (!document || this.mode !== 'add' || this.draftId) return;
-      if (this.traceHydratedFor === document) return;
-      if (!this.$outingSession?.sessionActive) return;
-      // Non-reactive on purpose: identity of the document it was done for.
-      this.traceHydratedFor = document;
-      this.hydratingTrace = true;
-      try {
-        await this.$outingSession.whenTraceReady();
-      } finally {
-        this.hydratingTrace = false;
-      }
-      // Another form was loaded while the trace was read.
-      if (this.document !== document) return;
-      this.hydrateFromOutingSession();
-    },
-
-    // Feature parity between offline and online outing creation:
-    // when the user came here from StartOutingControl's "Créer la
-    // sortie" button, hydrate the fresh document with the GPS trace +
-    // auto-computed metrics captured during the session. Everything
-    // else the user fills through the same form as online, so the
-    // resulting outing has the exact same shape and richness.
-    //
-    // Idempotent — only runs when: (a) we're in add mode, (b) a
-    // session is active, (c) the session's topoRef matches the ?r=
-    // query param (so unrelated /outings/add opens don't clobber a
-    // pristine form with a stale trace).
-    hydrateFromOutingSession() {
-      if (this.mode !== 'add') return;
-      const session = this.$outingSession;
-      if (!session?.sessionActive) return;
-      const routeIdParam = this.$route.query.r;
-      if (routeIdParam && session.topoRef?.type === 'route') {
-        if (String(session.topoRef.id) !== String(routeIdParam)) return;
-      }
-
-      // Associate the route the outing was started from.
-      //
-      // Feedback Gilles (forum, sortie réelle): he removed that route
-      // from his saved topos before finishing the form, and the picker
-      // fell back to the bbox list — hundreds of routes, his own no
-      // longer among the offered ones. He asked whether removing a saved
-      // topo could be forbidden while an outing is unfinished.
-      //
-      // Forbidding it treats the symptom. The app already knows which
-      // route this outing came from — the session holds topoRef and the
-      // form receives ?r= — and was only using it as a guard. Ticking it
-      // here removes the need to hunt for it at all, and holds whether or
-      // not the topo is still saved on the device.
-      // Fire-and-forget on purpose: the form must not wait on a network
-      // round trip to appear. Its continuation lands after the block
-      // below, and propagateProperties only fills fields that are still
-      // null — so the figures computed from the trace always win, in
-      // either order. That invariant is what keeps an associated route
-      // from overwriting a measured dénivelé; do not turn these
-      // assignments into unconditional ones without re-checking it.
-      //
-      // Its mirror image is why the trace has to earn the right to write
-      // at all: a figure the trace puts down cannot be corrected by the
-      // route afterwards. See the usability guard below.
-      this.associateSessionRoute();
-
-      // Pre-fill dates from the session start (the user is filling
-      // right after the outing — typical case). Overwrites the
-      // buildDocument default (today) only if there's a startedAt.
-      if (session.startedAt) {
-        const iso = new Date(session.startedAt).toISOString().slice(0, 10);
-        this.document.date_start = iso;
-        this.document.date_end = iso;
-        this.showBothDates = false;
-      }
-
-      // The totals are advanced by a watcher, which Vue batches to the
-      // next tick. This is the one read in the app that turns them into
-      // a published figure, so take the cheap certainty rather than the
-      // race: the call only walks whatever is new, usually nothing.
-      session.syncTraceMetrics?.();
-
-      // Does this recording actually describe the outing? A handful of
-      // fixes taken standing still is a position, not a walk, and writing
-      // its 15 metres into the form does two kinds of damage: it publishes
-      // a false figure, and it fills the field that the itinéraire's own
-      // dénivelé would otherwise have propagated into. See
-      // src/pwa/trace-usability.js — this is Gilles' 0,015 km.
-      //
-      // Computed even for an empty trace, so the notice below can say
-      // "nothing was recorded" rather than leave the blank fields to be
-      // read as an oversight.
-      const summary = summariseTrace(session.positions, {
-        distanceMeters: session.tracedDistanceMeters,
-        elapsedMs: elapsedMs(session.startedAt, Date.now(), session.pausedMs, session.pausedAt),
-      });
-      this.traceSummary = summary;
-      // Geometry and figures are separate decisions — see traceUse(). A
-      // partial recording keeps its drawn line and loses only its totals.
-      const use = traceUse(summary);
-      if (!use.geometry) return;
-
-      // GPS trace in EPSG:3857 (C2C's storage projection), split at the
-      // recording breaks: a point flagged `gap` opens a new segment.
-      //
-      // A single LineString across a pause draws a straight line from
-      // where the user stopped to where they resumed — down the valley
-      // and back up — on the outing published to camptocamp.org. The
-      // published figures already skip that step (see the session's
-      // tracedDistanceMeters); the drawn trace has to agree with them.
-      //
-      // MultiLineString is not a guess here: V1's own track importer
-      // emits one for any multi-segment file (src/js/tcx/TCX.js), so the
-      // API has been storing this shape for years.
-      const segments3857 = splitOnGaps(session.positions).map((seg) =>
-        seg.map((point) => ol.proj.fromLonLat([point.lon, point.lat]))
-      );
-      // A one-point segment is not a line; drop it rather than emit a
-      // degenerate geometry the API would have to reject.
-      const drawable = segments3857.filter((seg) => seg.length > 1);
-      if (drawable.length === 1) {
-        this.document.geometry.geom_detail = JSON.stringify({
-          type: 'LineString',
-          coordinates: drawable[0],
-        });
-      } else if (drawable.length > 1) {
-        this.document.geometry.geom_detail = JSON.stringify({
-          type: 'MultiLineString',
-          coordinates: drawable,
-        });
-      }
-
-      // A partial trace stops here: drawn, but its distance is not the
-      // outing's distance, and the itinéraire's figures are the better
-      // guess for the fields the user will check anyway.
-      if (!use.figures) return;
-
-      // Auto-computed metrics from the trace — round to integers, the
-      // API stores meters as ints anyway.
-      const distance = Math.round(session.tracedDistanceMeters);
-      const gain = Math.round(session.elevationGainMeters);
-      const loss = Math.round(session.elevationLossMeters);
-      if (distance > 0) this.document.length_total = distance;
-      if (gain > 0) this.document.height_diff_up = gain;
-      if (loss > 0) this.document.height_diff_down = loss;
-    },
-
-    // Tick the outing's own route, fetching it from wherever it can be
-    // had: the offline copy first (works with no network), the API
-    // otherwise. Silent when neither is possible — the "compléter plus
-    // tard" path already covers being offline with nothing saved.
-    async associateSessionRoute() {
-      const session = this.$outingSession;
-      const ref = session?.topoRef;
-      if (!ref || ref.type !== 'route') return;
-      // Never fight a choice the user already made.
-      if (this.document.associations.routes.length) return;
-
-      const lang = ref.lang || this.lang || 'fr';
-      let route = null;
-      try {
-        route = await this.$offline?.getDocument(ref.type, ref.id, lang);
-      } catch {
-        /* fall through to the network */
-      }
-      if (!route && this.$offline?.online !== false) {
-        try {
-          const response = await c2c.route.getCooked(ref.id, lang);
-          route = response.data;
-        } catch {
-          /* the bbox picker below stays the fallback */
-        }
-      }
-      if (!route) return;
-      // Re-check: the fetch was awaited, and the user may have ticked
-      // something in the meantime.
-      if (this.document.associations.routes.length) return;
-
-      // Through the V1 handler rather than pushing onto the array, so the
-      // localisation and map-fitting side effects happen exactly as they
-      // do when the box is ticked by hand.
-      this.changeRouteAssociation(true, route);
     },
 
     // Terrain-fallback save path — the user filled the form offline
@@ -1082,34 +754,6 @@ export default {
 // visually as a warning card so the user notices it right below the
 // normal itinéraire pickers. Same orange palette as offline-routes-*
 // so the two offline-mode helpers read as one coherent flow.
-.trace-notice {
-  padding: 0.7rem 0.85rem;
-  margin-bottom: 1rem;
-
-  &.is-info {
-    background: #eef4fa;
-    border: 1px solid rgba(51, 122, 183, 0.35);
-    color: #2b5d86;
-  }
-
-  &.is-warning {
-    background: #fff5e6;
-    border: 1px solid rgba(255, 153, 51, 0.5);
-    color: #a35a00;
-  }
-}
-
-.trace-notice-title {
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.trace-notice-sub {
-  font-size: 0.8rem;
-  line-height: 1.4;
-  margin-top: 0.2rem;
-}
-
 .incomplete-draft-link {
   margin: 0.75rem 0 0;
   font-size: 0.9rem;

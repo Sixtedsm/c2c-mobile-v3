@@ -57,6 +57,7 @@
    élargir progressivement la zone de recherche.
    Le besoin initial d’un curseur de 0 à 6000 km peut être conservé, mais il conviendra de le simplifier ergonomiquement pour éviter une interface trop complexe.
    2.4 Création offline d’une sortie
+   **Révision octobre 2026** : l’enregistrement d’une trace GPS dans l’application est abandonné (une application web ne peut pas garder le GPS actif quand le téléphone met l’onglet en veille). La trace d’une sortie vient du compte Strava, Garmin, Suunto… de l’utilisateur, via le service trackers de camptocamp.org. Les points de ce document qui portent sur l’enregistrement (démarrer / mettre en pause une sortie, fréquence GPS, trace en cours) ne s’appliquent plus.
    La création ou modification d’une sortie est une fonctionnalité prioritaire et doit être placée juste après la consultation offline des itinéraires et points de passage dans la feuille de route.
    L’application doit permettre :
    de démarrer une sortie ;
@@ -101,6 +102,7 @@
    puis création et association de la sortie.
    Cette création d’itinéraire depuis mobile peut cependant être traitée dans un lot ultérieur, afin de ne pas alourdir le MVP.
    2.6 Cartographie et trace GPS
+   **Révision octobre 2026** : pas d’enregistrement GPS dans l’application, voir 2.4.
    L’application doit intégrer une page cartographie permettant :
    de visualiser le trajet en cours ;
    d’afficher la trace GPS ;

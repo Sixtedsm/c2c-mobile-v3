@@ -67,10 +67,6 @@
     <forum-bottom-nav v-if="!isDesktopShell && isForumRoute" />
     <onboarding-tour />
     <pull-to-refresh />
-    <outing-session-banner v-if="!isDesktopShell" />
-    <!-- Above everything, including the modals: it exists to be the only
-         thing on the screen. -->
-    <screen-on-hold />
   </div>
 </template>
 
@@ -79,9 +75,7 @@ import BottomNav from './components/BottomNav.vue';
 import ForumBottomNav from './components/ForumBottomNav.vue';
 import MobileTopBar from './components/MobileTopBar.vue';
 import OnboardingTour from './components/OnboardingTour.vue';
-import OutingSessionBanner from './components/OutingSessionBanner.vue';
 import PullToRefresh from './components/PullToRefresh.vue';
-import ScreenOnHold from './components/ScreenOnHold.vue';
 import AlertWindow from './components/alert-window/AlertWindow';
 import GdprBanner from './components/gdpr/GdprBanner.vue';
 import HelperWindow from './components/helper/HelperWindow';
@@ -107,9 +101,7 @@ export default {
     GdprBanner,
     MobileTopBar,
     OnboardingTour,
-    OutingSessionBanner,
     PullToRefresh,
-    ScreenOnHold,
   },
 
   data() {

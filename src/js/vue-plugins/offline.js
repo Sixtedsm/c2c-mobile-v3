@@ -8,8 +8,8 @@ import uploadFile from '@/js/upload-file';
 import { probeApiAccess } from '@/pwa/api-access';
 import { extractEmbeddedImageIds, extractImageUrlsFromCooked } from '@/pwa/cooked-html-parser';
 import * as store from '@/pwa/offline-store';
+import { requestPersistentStorage } from '@/pwa/persistent-storage';
 import { classifyFailure, isServerUnavailable } from '@/pwa/sync-policy';
-import { requestPersistentStorage } from '@/pwa/trace-store';
 
 // Name of the cross-tab Web Lock guarding the publish pass.
 const SYNC_LOCK_NAME = 'c2c-v3-sync-pending-outings';
