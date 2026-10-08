@@ -78,7 +78,7 @@
                 <span class="action-label">{{ action.label }}</span>
                 <span class="action-desc">{{ action.desc }}</span>
               </span>
-              <fa-icon icon="chevron-right" class="action-chevron" />
+              <fa-icon :icon="action.href ? 'external-link-alt' : 'chevron-right'" class="action-chevron" />
             </component>
           </li>
         </ul>
