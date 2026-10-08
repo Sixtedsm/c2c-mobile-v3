@@ -99,7 +99,11 @@ export function freezeMessage(reason, ambiguous, translate) {
     return t('Un document lié a changé entre-temps. À vérifier avant de republier.');
   }
   if (reason === 'invalid') {
-    return t('La sortie a été refusée telle quelle. Corrigez-la ou abandonnez-la.');
+    // Saying what to press: editing a frozen item keeps it frozen, so
+    // « Modifier » alone never publishes — « Réessayer » does.
+    return t(
+      'Camptocamp a refusé cette sortie (raison ci-dessus). Corrigez-la avec « Modifier », puis appuyez sur « Réessayer ».'
+    );
   }
   if (ambiguous) {
     return t(

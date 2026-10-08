@@ -149,16 +149,26 @@
            OfflineView with an "Itinéraire à renseigner" badge; once
            back online they resolve the association from there and
            the sync auto-publishes. See offline.js queueOuting +
-           attachRoutesToPendingOuting for the machinery. -->
+           attachRoutesToPendingOuting for the machinery.
+           Online, the same way out stays one tap away behind a link: the
+           network coming back does not make a missing itinéraire appear,
+           and the form would otherwise only answer "required field". -->
+      <p v-if="canSaveWithoutRoute && !showIncompleteDraftHelper" class="incomplete-draft-link">
+        <a @click="incompleteDraftOpened = true">
+          {{ $gettext('Itinéraire introuvable ? Enregistrer sans itinéraire') }}
+        </a>
+      </p>
       <div v-if="showIncompleteDraftHelper" class="notification incomplete-draft-notice">
         <p class="incomplete-draft-title">
           <fa-icon icon="triangle-exclamation" />
-          &nbsp;{{ $gettext('Aucun itinéraire disponible hors ligne') }}
+          &nbsp;{{
+            isOffline ? $gettext('Aucun itinéraire disponible hors ligne') : $gettext('Itinéraire introuvable')
+          }}
         </p>
         <p class="incomplete-draft-sub">
           {{
             $gettext(
-              'Notez ci-dessous à quel itinéraire cette sortie correspond, vous ferez l’association depuis « Mes topos » une fois la connexion retrouvée.'
+              'Notez ci-dessous à quel itinéraire cette sortie correspond, vous ferez l’association plus tard depuis « Mes topos ».'
             )
           }}
         </p>
@@ -407,10 +417,12 @@ export default {
       showMoreResultsBanner: false,
       currentDate: this.getCurrentDateString(),
       // "à compléter plus tard" state — free-text description of the
-      // itinéraire when the user is offline and can't associate a
-      // real one. Consumed by saveAsIncompleteDraft() below.
+      // itinéraire when the user can't associate a real one. Consumed by
+      // saveAsIncompleteDraft() below.
       routeNote: '',
       savingIncomplete: false,
+      // Online, the helper only opens through its link.
+      incompleteDraftOpened: false,
       // What the GPS recording was worth, and whether its figures were
       // used. Null when the form was not opened from a session. Read by
       // the notice in the "Details" section — the figures the app fills
@@ -529,13 +541,18 @@ export default {
       return !!(this.$offline && !this.$offline.online);
     },
 
-    // Show the "à compléter plus tard" helper (note + alternative
-    // save button) only when it's actually useful: we're creating a
-    // new outing, the device is offline, and no route has been
-    // associated yet. Once the user picks a route (from the offline
-    // list) the block hides — the normal save flow takes over.
+    // The "à compléter plus tard" way out applies to a new outing with
+    // no route associated yet. Once the user picks a route the normal
+    // save flow takes over.
+    canSaveWithoutRoute() {
+      return this.mode === 'add' && this.document.associations.routes.length === 0;
+    },
+
+    // Offline it is shown straight away: no search can work. Online it
+    // waits behind the "Itinéraire introuvable ?" link — it used to
+    // vanish as soon as the network came back, leaving no way to save.
     showIncompleteDraftHelper() {
-      return this.mode === 'add' && this.isOffline && this.document.associations.routes.length === 0;
+      return this.canSaveWithoutRoute && (this.isOffline || this.incompleteDraftOpened);
     },
   },
 
@@ -820,7 +837,7 @@ export default {
           position: 'bottom-center',
           duration: 5000,
           message: this.$gettext(
-            'Sortie enregistrée localement. Complétez l’itinéraire depuis « Mes topos » une fois en ligne.'
+            'Sortie enregistrée localement. Complétez l’itinéraire depuis « Mes topos » pour la publier.'
           ),
         });
         this.$router.push({ name: 'offline' });
@@ -1052,6 +1069,11 @@ export default {
   font-size: 0.8rem;
   line-height: 1.4;
   margin-top: 0.2rem;
+}
+
+.incomplete-draft-link {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
 }
 
 .incomplete-draft-notice {
