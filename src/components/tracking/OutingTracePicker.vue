@@ -22,14 +22,14 @@
   </div>
 
   <div v-else-if="state === 'list'" class="field trace-picker">
-    <p class="label">{{ $gettext('Trace de la sortie') }}</p>
-    <ul>
+    <p id="trace-picker-label" class="label">{{ $gettext('Trace de la sortie') }}</p>
+    <ul aria-labelledby="trace-picker-label">
       <li v-for="activity in activities" :key="activity.id">
         <button
           type="button"
           class="trace-picker-row"
           :class="{ 'is-picked': activity.id === pickedId }"
-          :disabled="loadingId !== null"
+          :aria-pressed="String(activity.id === pickedId)"
           @click="pick(activity)"
         >
           <fa-icon
@@ -44,9 +44,22 @@
       </li>
     </ul>
     <p v-if="pickedId !== null" class="help">
-      {{ $gettext('Date, distance et dénivelé positif repris de cette activité. Vérifiez-les avant de publier.') }}
+      {{
+        $gettext(
+          'Trace et date reprises de cette activité ; distance et dénivelé positif aussi s’ils sont connus. Vérifiez-les dans « Détails » avant de publier.'
+        )
+      }}
     </p>
   </div>
+
+  <p v-else-if="state === 'empty'" class="trace-picker-connect">
+    <fa-icon icon="route" />
+    {{
+      $gettext(
+        'Aucune activité reçue de votre compte pour l’instant : elle apparaîtra ici après la synchronisation de votre montre.'
+      )
+    }}
+  </p>
 </template>
 
 <script>
@@ -57,14 +70,21 @@ import { distance, elevation } from '@/pwa/units';
 
 // Three lines fit above the date on a phone without pushing the form away.
 const SHOWN_ACTIVITIES = 3;
+const SETTLE_MS = 1000; // new lines push the form under a finger aiming at it
 
 export default {
+  props: {
+    // owned by the form, which knows when its trace was replaced or cleared
+    pickedId: { type: [Number, String], default: null },
+  },
+
   data() {
     return {
-      state: null, // null (nothing to show) | 'connect' | 'list'
+      state: null, // null (nothing to show) | 'connect' | 'list' | 'empty'
       activities: [],
-      pickedId: null,
       loadingId: null,
+      shownAt: 0,
+      loads: 0,
     };
   },
 
@@ -83,19 +103,25 @@ export default {
   methods: {
     load() {
       const userId = this.$user.id;
+      // answers can come back out of order: only the latest load writes
+      const n = ++this.loads;
       return trackingService
         .getStatus(userId)
         .then(({ data }) => {
+          if (n !== this.loads) return;
           if (!Object.values(data || {}).includes('configured')) {
             this.state = 'connect';
             return;
           }
           return trackingService.getActivities(userId, this.$user.lang).then(({ data: list }) => {
-            this.activities = (list || [])
+            if (n !== this.loads) return;
+            const shown = (list || [])
               .slice()
               .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
               .slice(0, SHOWN_ACTIVITIES);
-            this.state = this.activities.length ? 'list' : null;
+            if (String(shown.map((a) => a.id)) !== String(this.activities.map((a) => a.id))) this.shownAt = Date.now();
+            this.activities = shown;
+            this.state = shown.length ? 'list' : 'empty';
           });
         })
         .catch(() => {
@@ -104,13 +130,13 @@ export default {
     },
 
     onVisibilityChange() {
-      if (document.visibilityState === 'visible' && this.pickedId === null) {
+      if (document.visibilityState === 'visible' && this.pickedId === null && this.loadingId === null) {
         this.load();
       }
     },
 
     pick(activity) {
-      if (this.loadingId !== null) return;
+      if (this.loadingId !== null || activity.id === this.pickedId || Date.now() - this.shownAt < SETTLE_MS) return;
       this.loadingId = activity.id;
       trackingService
         .getActivityGeometry(this.$user.id, activity.id)
@@ -118,9 +144,13 @@ export default {
           // The service answers with no body when the tracker sent no
           // track (an indoor session, a manual entry).
           if (!data || !data.coordinates || !data.coordinates.length) {
-            throw new Error('empty geometry');
+            toast({
+              message: this.$gettext('Cette activité n’a pas de trace GPS.'),
+              type: 'is-warning',
+              position: 'center',
+            });
+            return;
           }
-          this.pickedId = activity.id;
           this.$emit('pick', { activity, geometry: data });
         })
         .catch(() => {
@@ -148,7 +178,7 @@ export default {
       const parts = [];
       if (activity.length) {
         const d = distance(activity.length, units);
-        parts.push(`${d.value} ${d.unit}`);
+        parts.push(`${d.value.toLocaleString()} ${d.unit}`);
       }
       if (activity.heightDiffUp) {
         const e = elevation(activity.heightDiffUp, units);
@@ -198,10 +228,6 @@ export default {
   &.is-picked {
     background: $primary-light;
     font-weight: 600;
-  }
-
-  &:disabled {
-    cursor: wait;
   }
 }
 

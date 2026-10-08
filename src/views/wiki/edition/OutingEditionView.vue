@@ -17,9 +17,11 @@
            distance and the dénivelé, and the routes proposed below are
            then the ones around the trace. Hidden once the outing has a
            trace from elsewhere (an imported file, an existing draft); kept
-           after a pick so another line can replace it. -->
+           while its trace is the one on the map, so another line can
+           replace it. -->
       <outing-trace-picker
-        v-if="mode === 'add' && (!document.geometry.geom_detail || trackerPicked)"
+        v-if="mode === 'add' && (!document.geometry.geom_detail || pickedActivityId !== null)"
+        :picked-id="pickedActivityId"
         @pick="useTrackerActivity"
       />
 
@@ -383,13 +385,18 @@ export default {
       savingIncomplete: false,
       // Online, the helper only opens through its link.
       incompleteDraftOpened: false,
-      // The trace on the map came from the tracker picker, which then
-      // stays visible to swap it for another activity.
-      trackerPicked: false,
+      // { id, geom }: the picked activity and the trace it put on the map
+      trackerPick: null,
     };
   },
 
   computed: {
+    // The pick holds only while its trace is still the one on the map.
+    pickedActivityId() {
+      const geom = this.document.geometry.geom_detail;
+      return geom && this.trackerPick?.geom === geom ? this.trackerPick.id : null;
+    },
+
     // The mixin reads the language off the route, which has no lang
     // param on the creation form. Falling back keeps the preview working
     // for a brand-new outing — the case it is most useful in.
@@ -479,7 +486,6 @@ export default {
     // theoretical one; the tracker gives no D−, so that one stays.
     async useTrackerActivity({ activity, geometry }) {
       const doc = this.document;
-      this.trackerPicked = true;
       if (doc.geometry.geom_detail) {
         // Back through null so the geom_detail watcher refits the map and
         // proposes the routes around the new trace, and so the map
@@ -489,6 +495,7 @@ export default {
         await this.$nextTick();
       }
       this.$refs.mapInput.setGeometry(geometry);
+      this.trackerPick = { id: activity.id, geom: doc.geometry.geom_detail };
       // Local day: an alpine start at 1 a.m. is still that day, not the
       // previous one in UTC.
       doc.date_start = this.$dateUtils.toLocalizedString(activity.date, 'YYYY-MM-DD');
