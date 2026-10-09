@@ -49,12 +49,15 @@ export default {
 
   methods: {
     async loadActivities() {
-      if (this.promise) {
-        this.promise.cancel();
-      }
-      this.promise = trackingService.getActivities(this.$user.id, this.$user.lang).then((response) => {
-        this.activities = response.data;
-      });
+      this.promise = trackingService
+        .getActivities(this.$user.id, this.$user.lang)
+        .then((response) => {
+          this.activities = response.data;
+        })
+        // Unreachable service or no activity: « No activity found », not
+        // « Loading... » forever.
+        .catch(() => {})
+        .finally(() => (this.promise = null));
     },
 
     fetch(activityId) {

@@ -117,7 +117,17 @@ export default {
       this.$refs.GpsUploadModal.show();
     },
 
-    setGeometry(geometry) {
+    async setGeometry(geometry) {
+      // A new outing's new trace replaces the old one with all it brought:
+      // back through null, so the form gives back the date and figures of a
+      // picked activity, recenters the map, proposes the routes around the new
+      // trace, and the map takes the outing's point from it (OutingEditionView).
+      const geo = this.document.geometry;
+      if (this.document.type === 'o' && !this.document.document_id && geo.geom_detail) {
+        geo.geom = null;
+        geo.geom_detail = null;
+        await this.$nextTick();
+      }
       this.$refs.map.setDocumentGeometryFromGeoFile(geometry);
     },
 

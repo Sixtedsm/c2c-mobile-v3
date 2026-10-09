@@ -386,7 +386,7 @@ export default {
       // Online, the helper only opens through its link.
       incompleteDraftOpened: false,
       // { id, geom, before, figures }: the picked activity, the trace it put on
-      // the map, and the distance / D+ before and after it filled them in
+      // the map, and the date, distance and D+ before and after it filled them in
       trackerPick: null,
     };
   },
@@ -470,8 +470,9 @@ export default {
           this.updateRoutes();
         });
       }
-      // A cleared trace (« Clear », or another line of the picker) takes back
-      // the figures its activity filled in, unless they were edited since.
+      // A cleared or replaced trace (« Clear », another line of the picker, an
+      // import on the map: MapInputRow goes through null) takes back the date and
+      // figures its activity filled in, unless edited since.
       // A retouch on the map keeps them: the trace is still that outing's.
       const pick = this.trackerPick;
       if (!to && pick) {
@@ -505,21 +506,23 @@ export default {
         doc.geometry.geom_detail = null;
         await this.$nextTick();
       }
-      this.$refs.mapInput.setGeometry(geometry);
+      // Read before the map, which dates a still undated outing from the trace.
+      const snapshot = () => ({
+        date_start: doc.date_start,
+        date_end: doc.date_end,
+        length_total: doc.length_total,
+        height_diff_up: doc.height_diff_up,
+      });
+      const before = snapshot();
+      await this.$refs.mapInput.setGeometry(geometry);
       // Local day: an alpine start at 1 a.m. is still that day, not the
       // previous one in UTC.
       doc.date_start = this.$dateUtils.toLocalizedString(activity.date, 'YYYY-MM-DD');
       doc.date_end = doc.date_start;
       this.showBothDates = false;
-      const before = { length_total: doc.length_total, height_diff_up: doc.height_diff_up };
       if (activity.length) doc.length_total = Math.round(activity.length);
       if (activity.heightDiffUp) doc.height_diff_up = Math.round(activity.heightDiffUp);
-      this.trackerPick = {
-        id: activity.id,
-        geom: doc.geometry.geom_detail,
-        before,
-        figures: { length_total: doc.length_total, height_diff_up: doc.height_diff_up },
-      };
+      this.trackerPick = { id: activity.id, geom: doc.geometry.geom_detail, before, figures: snapshot() };
     },
 
     afterLoad() {
