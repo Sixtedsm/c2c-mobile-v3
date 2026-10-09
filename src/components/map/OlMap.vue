@@ -730,13 +730,14 @@ export default {
         const features = this.tryReadFeaturesFromGeoFile(file, format, { featureProjection: 'EPSG:3857' });
         if (features?.length) {
           // Once the file is read (an unreadable one leaves everything in place),
-          // a new outing's new trace replaces the old one with all it brought:
-          // back through null, so the form gives back the date and figures of a
-          // picked activity, recenters the map, proposes the routes around the
-          // new trace, and the point is taken from it (OutingEditionView).
+          // a new outing's new trace replaces the old one: back through null, so
+          // the form recenters the map, proposes the routes around the new trace
+          // and gives back what a picked activity replaced (OutingEditionView).
+          // The point goes back to the route's, as with « Clear », or is the
+          // new trace's middle without one.
           const edited = this.editedDocument;
           if (edited.type === 'o' && !edited.document_id && edited.geometry.geom_detail) {
-            edited.geometry.geom = null;
+            edited.geometry.geom = edited.associations.routes[0]?.geometry?.geom ?? null;
             edited.geometry.geom_detail = null;
             await this.$nextTick();
           }
