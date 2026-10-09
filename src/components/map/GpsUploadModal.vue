@@ -16,7 +16,7 @@
     </div>
     <tracking-device-activities
       @geojson="setGeometry"
-      v-if="activeTab === 'tracking-devices'"
+      v-if="opened && activeTab === 'tracking-devices'"
     ></tracking-device-activities>
     <gps-file-upload @click="setGeometry" v-if="activeTab === 'file'"></gps-file-upload>
   </modal-window>
@@ -32,11 +32,15 @@ export default {
   data() {
     return {
       activeTab: 'tracking-devices',
+      // The list, and a picture per activity, loads on first opening, not
+      // with every form that has the button.
+      opened: false,
     };
   },
 
   methods: {
     show() {
+      this.opened = true;
       this.$refs.modalWindow.show();
     },
 
