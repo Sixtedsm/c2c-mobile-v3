@@ -151,11 +151,6 @@ export default {
 
         const document = this.$documentUtils.buildDocument(this.documentType, this.lang);
         this.promise = { data: document, loading: 0 };
-        // The document exists from here on, but afterLoad() only runs once
-        // every association lookup below has settled — up to the request
-        // timeout on a weak connection. What must not wait that long (the
-        // recorded GPS trace) hooks in here.
-        this.afterDocumentCreated();
 
         let pending = 0;
         const settleOne = () => {
@@ -311,8 +306,6 @@ export default {
       this.latitude = Math.round(coords[1] * 1000000) / 1000000;
     },
 
-    afterDocumentCreated() {},
-
     afterLoad() {},
 
     beforeSave() {},
@@ -367,7 +360,7 @@ export default {
 
     // Keep a new outing on the phone instead of publishing it, then show
     // the queue. Every path that cannot or should not publish ends here,
-    // so the outing — and the GPS trace inside it — is kept the same way
+    // so the outing — and its trace — is kept the same way
     // whatever the reason.
     keepOutingLocally(message, type = 'is-success') {
       this.saving = true;

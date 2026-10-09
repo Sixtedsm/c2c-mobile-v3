@@ -413,6 +413,13 @@ export default function install(Vue) {
              exceeded…) we still want the app to start; the offline
              state just stays empty. */
         });
+      // Leftovers of the GPS recording removed from the app (10/2026).
+      store.dropRecordedTraces().catch(() => {});
+      try {
+        window.localStorage.removeItem('v3.outingSession');
+      } catch {
+        /* storage blocked: nothing to clean */
+      }
     },
 
     methods: {

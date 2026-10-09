@@ -1,6 +1,8 @@
 /* eslint-disable no-console */
 import { register } from 'register-service-worker';
 
+import router from '@/js/vue-plugins/router';
+
 if (process.env.NODE_ENV === 'production') {
   register(`${process.env.BASE_URL}service-worker.js`, {
     registered(registration) {
@@ -37,9 +39,19 @@ if (process.env.NODE_ENV === 'production') {
       // case where the activation race triggers an immediate second "updated".
       if (sessionStorage.getItem('c2cSwReloadedOnUpdate') === 'true') return;
 
-      sessionStorage.setItem('c2cSwReloadedOnUpdate', 'true');
-      console.log('New app version available — reloading to apply…');
-      window.location.reload();
+      const reload = () => {
+        sessionStorage.setItem('c2cSwReloadedOnUpdate', 'true');
+        console.log('New app version available — reloading to apply…');
+        window.location.reload();
+      };
+      // Never on top of a form: its author may be away syncing a watch (see
+      // OutingTracePicker). Reload on the next page change instead; setTimeout
+      // lets the form be destroyed first, so it does not ask to confirm leaving.
+      const isForm = (route) => /-(add|edit)$/.test(route.name || '');
+      if (!isForm(router.currentRoute)) return reload();
+      router.afterEach((to) => {
+        if (!isForm(to)) setTimeout(reload);
+      });
     },
 
     error(error) {
