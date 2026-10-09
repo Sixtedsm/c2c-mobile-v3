@@ -565,7 +565,6 @@ export default {
           needsRouteAssoc: true,
           routeNote: note,
         });
-        this.saved = true;
         this.modified = false;
         toast({
           type: 'is-success',

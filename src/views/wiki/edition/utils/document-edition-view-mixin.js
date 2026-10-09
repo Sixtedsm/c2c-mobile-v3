@@ -39,11 +39,6 @@ export default {
       fields: null, // keep fields here to set them reactive
       saving: false,
       modified: false,
-      // Set once the document is kept somewhere — published, or queued on
-      // the phone. Not the same as `!modified`, which only says whether
-      // leaving should ask first, and which is also false for the whole
-      // time a new form waits for its associations to load.
-      saved: false,
       // Id of the queued outing this form edits (?draft=<id>), or null.
       draftId: null,
     };
@@ -109,7 +104,6 @@ export default {
     load() {
       this.fields = constants.objectDefinitions[this.documentType].fields;
       this.cleanErrors();
-      this.saved = false;
       this.draftId = null;
       this.latitude = null;
       this.longitude = null;
@@ -367,7 +361,6 @@ export default {
       return this.$offline
         .queueOuting(this.document)
         .then(() => {
-          this.saved = true;
           this.modified = false;
           toast({ message, type, position: 'center', duration: 6000 });
           this.$router.push({ name: 'offline' });
@@ -417,7 +410,6 @@ export default {
           });
           return;
         }
-        this.saved = true;
         this.modified = false;
         toast({
           message: this.$gettext(
@@ -471,13 +463,11 @@ export default {
 
       if (this.mode === 'edit') {
         promise = c2c[this.documentType].save(this.document, comment).then(() => {
-          this.saved = true;
           this.modified = false;
           this.goToDocument(this.document.document_id);
         });
       } else {
         promise = c2c[this.documentType].create(this.document).then((response) => {
-          this.saved = true;
           this.modified = false;
           this.goToDocument(response.data.document_id);
         });

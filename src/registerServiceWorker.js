@@ -45,12 +45,16 @@ if (process.env.NODE_ENV === 'production') {
         window.location.reload();
       };
       // Never on top of a form: its author may be away syncing a watch (see
-      // OutingTracePicker). Reload on the next page change instead; setTimeout
-      // lets the form be destroyed first, so it does not ask to confirm leaving.
+      // OutingTracePicker). Reload on the next page change instead, once the
+      // toast confirming the save (6 s) has been read, and only if the page
+      // shown then is not a form either.
       const isForm = (route) => /-(add|edit)$/.test(route.name || '');
       if (!isForm(router.currentRoute)) return reload();
       router.afterEach((to) => {
-        if (!isForm(to)) setTimeout(reload);
+        if (isForm(to)) return;
+        setTimeout(() => {
+          if (!isForm(router.currentRoute)) reload();
+        }, 6000);
       });
     },
 
