@@ -725,10 +725,21 @@ export default {
       }
     },
 
-    setDocumentGeometryFromGeoFile(file) {
+    async setDocumentGeometryFromGeoFile(file) {
       for (const format of [new ol.format.GPX(), new ol.format.KML(), new ol.format.GeoJSON(), new FIT(), new TCX()]) {
         const features = this.tryReadFeaturesFromGeoFile(file, format, { featureProjection: 'EPSG:3857' });
         if (features?.length) {
+          // Once the file is read (an unreadable one leaves everything in place),
+          // a new outing's new trace replaces the old one with all it brought:
+          // back through null, so the form gives back the date and figures of a
+          // picked activity, recenters the map, proposes the routes around the
+          // new trace, and the point is taken from it (OutingEditionView).
+          const edited = this.editedDocument;
+          if (edited.type === 'o' && !edited.document_id && edited.geometry.geom_detail) {
+            edited.geometry.geom = null;
+            edited.geometry.geom_detail = null;
+            await this.$nextTick();
+          }
           features.map((feature) => {
             if (document.type !== 'o') {
               this.cleanZeroElevationFromGeoFileFeature(feature);
@@ -1502,6 +1513,11 @@ export default {
         // user can't set the outing point directly (he must select the route)
         // So do not clear geometry.geom
         this.editedDocument.geometry.geom = null;
+      } else if (!this.editedDocument.document_id) {
+        // A new outing's point may be the middle of the trace cleared here, and
+        // no later trace or route would move it: back to its route's point, or
+        // to none until a route or a trace gives one.
+        this.editedDocument.geometry.geom = this.editedDocument.associations.routes[0]?.geometry?.geom ?? null;
       }
 
       this.editedDocument.geometry.geom_detail = null;
@@ -1510,6 +1526,12 @@ export default {
     },
 
     resetGeometry() {
+      const edited = this.editedDocument;
+      // A new outing with no trace when the form opened: the same as « Clear »
+      if (edited.type === 'o' && !edited.document_id && !this.initialGeometry?.geom_detail) {
+        this.clearGeometry();
+        return;
+      }
       if (this.editedDocument.type === 'o') {
         // user can't set the outing point directly (he must select the route)
         // So do not reinit geometry.geom to nothing

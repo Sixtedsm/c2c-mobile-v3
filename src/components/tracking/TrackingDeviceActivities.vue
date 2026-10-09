@@ -66,6 +66,16 @@ export default {
         .getActivityGeometry(this.$user.id, activityId)
         .then(
           ({ data }) => {
+            // No body when the tracker sent no track (an indoor session, a
+            // manual entry): say so, and leave the dialog open for another one.
+            if (!data?.coordinates?.length) {
+              toast({
+                message: this.$gettext('Cette activité n’a pas de trace GPS.'),
+                type: 'is-warning',
+                position: 'center',
+              });
+              return;
+            }
             this.$emit('geojson', data);
           },
           () => {
