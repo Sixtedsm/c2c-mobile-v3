@@ -6,7 +6,10 @@ import config from '@/js/config';
 
 function TrackingService() {
   this.baseURL = config.urls.tracking;
-  this.axios = axios.create({ baseURL: this.baseURL, headers: { common: {} } });
+  // As long as the wiki API's (BaseApi): a long trace on a weak network still
+  // comes through, and a dropped connection ends in the callers' error
+  // message rather than a spinner that never stops.
+  this.axios = axios.create({ baseURL: this.baseURL, headers: { common: {} }, timeout: 60 * 1000 });
 }
 
 Object.defineProperty(TrackingService.prototype, 'url', {
