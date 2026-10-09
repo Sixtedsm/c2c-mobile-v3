@@ -471,14 +471,17 @@ export default {
         });
       }
       // A cleared or replaced trace (« Clear », another line of the picker, an
-      // import on the map: MapInputRow goes through null) takes back the date and
-      // figures its activity filled in, unless edited since.
+      // import on the map, which goes through null once the file is read) takes
+      // back the date and figures its activity filled in, unless edited since.
       // A retouch on the map keeps them: the trace is still that outing's.
       const pick = this.trackerPick;
       if (!to && pick) {
         for (const key of Object.keys(pick.before)) {
           if (this.document[key] === pick.figures[key]) this.document[key] = pick.before[key];
         }
+        // Several days come back with their second date shown, or saving
+        // would align it on the first one (handleDates).
+        if (this.document.date_end !== this.document.date_start) this.showBothDates = true;
         this.trackerPick = null;
       }
     },
