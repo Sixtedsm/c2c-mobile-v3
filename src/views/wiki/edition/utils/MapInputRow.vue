@@ -118,8 +118,7 @@ export default {
     },
 
     setGeometry(geometry) {
-      // A promise: the outing form waits for the trace to be on the map.
-      return this.$refs.map.setDocumentGeometryFromGeoFile(geometry);
+      this.$refs.map.setDocumentGeometryFromGeoFile(geometry);
     },
 
     setGeometryPoint() {
