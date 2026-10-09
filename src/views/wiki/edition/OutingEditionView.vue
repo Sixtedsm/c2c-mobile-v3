@@ -436,8 +436,8 @@ export default {
       savingIncomplete: false,
       // Online, the helper only opens through its link.
       incompleteDraftOpened: false,
-      // { id, geom, before, figures }: the picked activity, the trace it put on
-      // the map, and the date, distance and D+ before and after it filled them in
+      // { id, geom, figures }: the picked activity, the trace it put on the
+      // map, and the date, distance and D+ it filled in
       trackerPick: null,
       // What the GPS recording was worth, and whether its figures were
       // used. Null when the form was not opened from a session. Read by
@@ -596,17 +596,19 @@ export default {
         });
       }
       // A cleared or replaced trace (« Clear », another line of the picker, an
-      // import on the map, which goes through null once the file is read) takes
-      // back the date and figures its activity filled in, unless edited since.
-      // A retouch on the map keeps them: the trace is still that outing's.
+      // import on the map, which goes through null once the file is read)
+      // takes away the date and figures its activity filled in, unless edited
+      // since; the associated routes then give theirs again, as when they were
+      // associated. A retouch on the map keeps them: the trace is still that
+      // outing's.
       const pick = this.trackerPick;
       if (!to && pick) {
-        for (const key of Object.keys(pick.before)) {
-          if (this.document[key] === pick.figures[key]) this.document[key] = pick.before[key];
+        for (const [key, value] of Object.entries(pick.figures)) {
+          if (this.document[key] === value) this.document[key] = null;
         }
-        // Several days come back with their second date shown, or saving
-        // would align it on the first one (handleDates).
-        if (this.document.date_end !== this.document.date_start) this.showBothDates = true;
+        for (const route of this.document.associations.routes) {
+          this.$documentUtils.propagateProperties(this.document, route);
+        }
         this.trackerPick = null;
       }
     },
@@ -632,30 +634,26 @@ export default {
       const doc = this.document;
       this.traceSummary = null;
       if (doc.geometry.geom_detail) {
-        // Back through null so the geom_detail watcher refits the map and
-        // proposes the routes around the new trace, and so the map
-        // recomputes the outing's point from it.
+        // Back through null so the geom_detail watcher refits the map,
+        // proposes the routes around the new trace and takes away what the
+        // last pick filled in, and so the outing's point is set again.
         doc.geometry.geom = null;
         doc.geometry.geom_detail = null;
         await this.$nextTick();
       }
-      // Read before the map, which dates a still undated outing from the trace.
-      const snapshot = () => ({
-        date_start: doc.date_start,
-        date_end: doc.date_end,
-        length_total: doc.length_total,
-        height_diff_up: doc.height_diff_up,
-      });
-      const before = snapshot();
-      await this.$refs.mapInput.setGeometry(geometry);
+      // Not awaited: with no trace left, the map puts this one in at once, so
+      // the pick below lands in the same render. Awaiting would render the
+      // trace without its pick first, and rebuild the picker (two requests).
+      this.$refs.mapInput.setGeometry(geometry);
       // Local day: an alpine start at 1 a.m. is still that day, not the
       // previous one in UTC.
-      doc.date_start = this.$dateUtils.toLocalizedString(activity.date, 'YYYY-MM-DD');
-      doc.date_end = doc.date_start;
+      const day = this.$dateUtils.toLocalizedString(activity.date, 'YYYY-MM-DD');
+      const figures = { date_start: day, date_end: day };
+      if (activity.length) figures.length_total = Math.round(activity.length);
+      if (activity.heightDiffUp) figures.height_diff_up = Math.round(activity.heightDiffUp);
+      Object.assign(doc, figures);
       this.showBothDates = false;
-      if (activity.length) doc.length_total = Math.round(activity.length);
-      if (activity.heightDiffUp) doc.height_diff_up = Math.round(activity.heightDiffUp);
-      this.trackerPick = { id: activity.id, geom: doc.geometry.geom_detail, before, figures: snapshot() };
+      this.trackerPick = { id: activity.id, geom: doc.geometry.geom_detail, figures };
     },
 
     async afterLoad() {
