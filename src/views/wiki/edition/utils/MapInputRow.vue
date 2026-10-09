@@ -100,9 +100,6 @@ export default {
   },
 
   mounted() {
-    // A new outing gets its tracker trace from OutingTracePicker at the top of
-    // the form; an existing one keeps camptocamp.org's tracker dialog.
-    if (this.document.type === 'o' && !this.document.document_id) return;
     trackingService.getStatus(this.$user.id).then(
       ({ data }) => {
         if (Object.values(data).includes('configured')) {

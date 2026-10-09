@@ -69,6 +69,7 @@ import trackingService from '@/js/apis/tracking-service';
 import { distance, elevation } from '@/pwa/units';
 
 // Three lines fit above the date on a phone without pushing the form away.
+// Older ones: the map's « Upload a GPS track » dialog lists them all.
 const SHOWN_ACTIVITIES = 3;
 const SETTLE_MS = 1000; // new lines push the form under a finger aiming at it
 
@@ -194,7 +195,7 @@ export default {
 .trace-picker-connect {
   margin-bottom: 1rem;
   font-size: 0.9rem;
-  color: $grey;
+  color: #6b6b6b;
 
   a {
     white-space: nowrap;
@@ -233,7 +234,6 @@ export default {
 
 .trace-picker-day {
   flex: none;
-  color: $grey;
 }
 
 // The name gives way first: the date and the figures are what tell two
@@ -249,5 +249,26 @@ export default {
 .trace-picker-figures {
   flex: none;
   white-space: nowrap;
+}
+</style>
+
+<style lang="scss">
+// Dark theme: the rows take the surfaces of the form's inputs (App.vue).
+html[data-theme='dark'] {
+  .trace-picker-connect {
+    color: #9a9a9a;
+  }
+  .trace-picker ul,
+  .trace-picker li + li {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+  .trace-picker-row {
+    background: #1f1f1f;
+    color: #e5e5e5;
+
+    &.is-picked {
+      background: #1e3a5f;
+    }
+  }
 }
 </style>

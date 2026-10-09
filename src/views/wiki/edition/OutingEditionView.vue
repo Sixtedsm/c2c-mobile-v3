@@ -38,9 +38,9 @@
       <!-- First, before the date: one tap fills the date, the trace, the
            distance and the dénivelé, and the routes proposed below are
            then the ones around the trace. Hidden once the outing has a
-           trace from elsewhere (an imported file, an existing draft); kept
-           while its trace is the one on the map, so another line can
-           replace it. -->
+           trace from elsewhere (an imported file, the map's full list of
+           activities, an existing draft); kept while its trace is the one
+           on the map, so another line can replace it. -->
       <outing-trace-picker
         v-if="mode === 'add' && (!document.geometry.geom_detail || pickedActivityId !== null)"
         :picked-id="pickedActivityId"
@@ -436,7 +436,8 @@ export default {
       savingIncomplete: false,
       // Online, the helper only opens through its link.
       incompleteDraftOpened: false,
-      // { id, geom }: the picked activity and the trace it put on the map
+      // { id, geom, before, figures }: the picked activity, the trace it put on
+      // the map, and the distance / D+ before and after it filled them in
       trackerPick: null,
       // What the GPS recording was worth, and whether its figures were
       // used. Null when the form was not opened from a session. Read by
@@ -594,6 +595,16 @@ export default {
           this.updateRoutes();
         });
       }
+      // A cleared trace (« Clear », or another line of the picker) takes back
+      // the figures its activity filled in, unless they were edited since.
+      // A retouch on the map keeps them: the trace is still that outing's.
+      const pick = this.trackerPick;
+      if (!to && pick) {
+        for (const key of Object.keys(pick.before)) {
+          if (this.document[key] === pick.figures[key]) this.document[key] = pick.before[key];
+        }
+        this.trackerPick = null;
+      }
     },
 
     routeTitle() {
@@ -625,14 +636,20 @@ export default {
         await this.$nextTick();
       }
       this.$refs.mapInput.setGeometry(geometry);
-      this.trackerPick = { id: activity.id, geom: doc.geometry.geom_detail };
       // Local day: an alpine start at 1 a.m. is still that day, not the
       // previous one in UTC.
       doc.date_start = this.$dateUtils.toLocalizedString(activity.date, 'YYYY-MM-DD');
       doc.date_end = doc.date_start;
       this.showBothDates = false;
+      const before = { length_total: doc.length_total, height_diff_up: doc.height_diff_up };
       if (activity.length) doc.length_total = Math.round(activity.length);
       if (activity.heightDiffUp) doc.height_diff_up = Math.round(activity.heightDiffUp);
+      this.trackerPick = {
+        id: activity.id,
+        geom: doc.geometry.geom_detail,
+        before,
+        figures: { length_total: doc.length_total, height_diff_up: doc.height_diff_up },
+      };
     },
 
     async afterLoad() {
