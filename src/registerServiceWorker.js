@@ -45,16 +45,18 @@ if (process.env.NODE_ENV === 'production') {
         window.location.reload();
       };
       // Never on top of a form: its author may be away syncing a watch (see
-      // OutingTracePicker). Reload on the next page change instead, once the
-      // toast confirming the save (6 s) has been read, and only if the page
-      // shown then is not a form either.
+      // OutingTracePicker). Nor on the page reached by leaving it, which shows
+      // the toast confirming the save and offers « Ajouter des images »: wait
+      // for the next change of page after that one. A page of the old version
+      // that fails to load (its chunks are gone from the server) reloads too.
+      // Wiki forms only: anywhere else (forum included) it reloads at once.
       const isForm = (route) => /-(add|edit)$/.test(route.name || '');
       if (!isForm(router.currentRoute)) return reload();
-      router.afterEach((to) => {
-        if (isForm(to)) return;
-        setTimeout(() => {
-          if (!isForm(router.currentRoute)) reload();
-        }, 6000);
+      router.afterEach((to, from) => {
+        if (to.path !== from.path && !isForm(to) && !isForm(from)) reload();
+      });
+      router.onError(() => {
+        if (!isForm(router.currentRoute)) reload();
       });
     },
 
