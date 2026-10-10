@@ -364,6 +364,7 @@ import documentEditionViewMixin from './utils/document-edition-view-mixin';
 
 import OutingTracePicker from '@/components/tracking/OutingTracePicker';
 import c2c from '@/js/apis/c2c';
+import { giveBackTracePick, readTracePick, writeTracePick } from '@/pwa/outing-trace-pick';
 
 export default {
   components: { CotometerWindow, OutingPreviewModal, OutingTracePicker },
@@ -385,9 +386,9 @@ export default {
       savingIncomplete: false,
       // Online, the helper only opens through its link.
       incompleteDraftOpened: false,
-      // { id, geom, day, figures, before }: the picked activity, the trace and
-      // the day it put in, the distance and D+ it filled in, and what was there
-      // before, « Several days? » included
+      // The activity picked in OutingTracePicker: what src/pwa/outing-trace-pick.js
+      // remembers of it (its outing, what it wrote, what was there before), and
+      // `geom`, the trace it put on the map
       trackerPick: null,
     };
   },
@@ -474,29 +475,23 @@ export default {
       // A cleared or replaced trace (« Clear », another line of the picker, an
       // import on the map, which goes through null once the file is read)
       // gives back the date and figures from before its activity was picked,
-      // where not edited since; the associated routes then fill what is still
-      // empty, as when they were associated. A retouch on the map keeps them:
-      // the trace is still that outing's.
+      // where not edited since (src/pwa/outing-trace-pick.js); the associated
+      // routes then fill what is still empty, as when they were associated.
+      // A retouch on the map keeps them: the trace is still that outing's.
       const pick = this.trackerPick;
       if (!to && pick) {
         const doc = this.document;
-        const { before, figures, day } = pick;
-        for (const [key, value] of Object.entries(figures)) {
-          if (doc[key] === value) doc[key] = before[key];
-        }
-        // The date is one answer, both days and « Several days? »: given back
-        // whole while it is still the activity's single day, kept whole once
-        // the user has changed the day or ticked the box.
-        if (!this.showBothDates && doc.date_start === day) {
-          doc.date_start = before.date_start;
-          doc.date_end = before.date_end;
-          this.showBothDates = before.several;
-        }
-        // On a single day the hidden second date follows the first, as on
-        // saving: nothing fills it while typing, and it would read as a second day.
-        this.handleDates();
-        for (const route of doc.associations.routes) {
-          this.$documentUtils.propagateProperties(doc, route);
+        // To its own outing only: this form is reused from one outing to the
+        // next (a draft from « Mes topos », then « + »), with no document at all
+        // while a draft is read from the queue. The pick goes with its outing.
+        if (doc === pick.doc) {
+          this.showBothDates = giveBackTracePick(pick, this.showBothDates);
+          // On a single day the hidden second date follows the first, as on
+          // saving: nothing fills it while typing, and it would read as a second day.
+          this.handleDates();
+          for (const route of doc.associations.routes) {
+            this.$documentUtils.propagateProperties(doc, route);
+          }
         }
         this.trackerPick = null;
       }
@@ -529,21 +524,15 @@ export default {
       // Local day: an alpine start at 1 a.m. is still that day, not the
       // previous one in UTC.
       const day = this.$dateUtils.toLocalizedString(activity.date, 'YYYY-MM-DD');
-      const figures = {};
-      if (activity.length) figures.length_total = Math.round(activity.length);
-      if (activity.heightDiffUp) figures.height_diff_up = Math.round(activity.heightDiffUp);
       // Read before the map, which dates a still undated outing from the trace.
-      // « Several days? » is read with the dates: unticked below, it comes back
-      // as it was, not guessed from two dates that differ.
-      const before = { date_start: doc.date_start, date_end: doc.date_end, several: this.showBothDates };
-      for (const key of Object.keys(figures)) before[key] = doc[key];
+      const pick = readTracePick(doc, activity, day, this.showBothDates);
       // Not awaited: with no trace left, the map puts this one in at once, so
       // the pick below lands in the same render. Awaiting would render the
       // trace without its pick first, and rebuild the picker (two requests).
       this.$refs.mapInput.setGeometry(geometry);
-      Object.assign(doc, figures, { date_start: day, date_end: day });
+      writeTracePick(pick);
       this.showBothDates = false;
-      this.trackerPick = { id: activity.id, geom: doc.geometry.geom_detail, before, figures, day };
+      this.trackerPick = { ...pick, geom: doc.geometry.geom_detail };
     },
 
     afterLoad() {
