@@ -436,8 +436,9 @@ export default {
       savingIncomplete: false,
       // Online, the helper only opens through its link.
       incompleteDraftOpened: false,
-      // { id, geom, before, figures }: the picked activity, the trace it put on
-      // the map, and the date, distance and D+ before and after it filled them in
+      // { id, geom, day, figures, before }: the picked activity, the trace and
+      // the day it put in, the distance and D+ it filled in, and what was there
+      // before, « Several days? » included
       trackerPick: null,
       // What the GPS recording was worth, and whether its figures were
       // used. Null when the form was not opened from a session. Read by
@@ -603,14 +604,24 @@ export default {
       // the trace is still that outing's.
       const pick = this.trackerPick;
       if (!to && pick) {
-        for (const [key, value] of Object.entries(pick.figures)) {
-          if (this.document[key] === value) this.document[key] = pick.before[key];
+        const doc = this.document;
+        const { before, figures, day } = pick;
+        for (const [key, value] of Object.entries(figures)) {
+          if (doc[key] === value) doc[key] = before[key];
         }
-        // Several days come back with their second date shown, or saving
-        // would align it on the first one (handleDates).
-        if (this.document.date_end !== this.document.date_start) this.showBothDates = true;
-        for (const route of this.document.associations.routes) {
-          this.$documentUtils.propagateProperties(this.document, route);
+        // The date is one answer, both days and « Several days? »: given back
+        // whole while it is still the activity's single day, kept whole once
+        // the user has changed the day or ticked the box.
+        if (!this.showBothDates && doc.date_start === day) {
+          doc.date_start = before.date_start;
+          doc.date_end = before.date_end;
+          this.showBothDates = before.several;
+        }
+        // On a single day the hidden second date follows the first, as on
+        // saving: nothing fills it while typing, and it would read as a second day.
+        this.handleDates();
+        for (const route of doc.associations.routes) {
+          this.$documentUtils.propagateProperties(doc, route);
         }
         this.trackerPick = null;
       }
@@ -648,22 +659,27 @@ export default {
       // Local day: an alpine start at 1 a.m. is still that day, not the
       // previous one in UTC.
       const day = this.$dateUtils.toLocalizedString(activity.date, 'YYYY-MM-DD');
-      const figures = { date_start: day, date_end: day };
+      const figures = {};
       if (activity.length) figures.length_total = Math.round(activity.length);
       if (activity.heightDiffUp) figures.height_diff_up = Math.round(activity.heightDiffUp);
       // Read before the map, which dates a still undated outing from the trace.
-      const before = Object.fromEntries(Object.keys(figures).map((key) => [key, doc[key]]));
+      // « Several days? » is read with the dates: unticked below, it comes back
+      // as it was, not guessed from two dates that differ.
+      const before = { date_start: doc.date_start, date_end: doc.date_end, several: this.showBothDates };
+      for (const key of Object.keys(figures)) before[key] = doc[key];
       // Not awaited: with no trace left, the map puts this one in at once, so
       // the pick below lands in the same render. Awaiting would render the
       // trace without its pick first, and rebuild the picker (two requests).
       this.$refs.mapInput.setGeometry(geometry);
-      Object.assign(doc, figures);
+      Object.assign(doc, figures, { date_start: day, date_end: day });
       this.showBothDates = false;
-      this.trackerPick = { id: activity.id, geom: doc.geometry.geom_detail, before, figures };
+      this.trackerPick = { id: activity.id, geom: doc.geometry.geom_detail, before, figures, day };
     },
 
     async afterLoad() {
-      this.showBothDates = this.document.date_start !== this.document.date_end;
+      // An end date still empty is no second day: a new outing dated while its
+      // associations load (typed, or read from an imported file) has only the first.
+      this.showBothDates = Boolean(this.document.date_end) && this.document.date_start !== this.document.date_end;
       // Normally done already by afterDocumentCreated(); a no-op then.
       await this.hydrateTraceOnce();
     },
