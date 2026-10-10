@@ -677,9 +677,13 @@ export default {
     },
 
     async afterLoad() {
-      // An end date still empty is no second day: a new outing dated while its
-      // associations load (typed, or read from an imported file) has only the first.
-      this.showBothDates = Boolean(this.document.date_end) && this.document.date_start !== this.document.date_end;
+      // « Several days? » is read off the dates of an outing that comes with
+      // them: a published one, or a draft from the queue (an end date still
+      // empty is no second day). A new outing is left alone: its associations
+      // may load long after the user, or the trace picker, has set the box.
+      if (this.mode === 'edit' || this.draftId) {
+        this.showBothDates = Boolean(this.document.date_end) && this.document.date_start !== this.document.date_end;
+      }
       // Normally done already by afterDocumentCreated(); a no-op then.
       await this.hydrateTraceOnce();
     },
