@@ -55,7 +55,8 @@ Shell:
 
 Field UX:
 
-- `StartOutingControl.vue` — start/pause/finish sortie + GPS + save-as-draft flow
+- `tracking/OutingTracePicker.vue` — the outing's trace from the user's tracker (see below)
+- `StartOutingControl.vue` — pause/finish a sortie already in progress + save-as-draft flow (no new start, see below)
 - `views/documents/utils/NearMeButton.vue` — geoloc → bbox filter for listings
 
 Views (V3-only):
@@ -101,10 +102,39 @@ runtime `<img>` requests.
 4. Any error (network / auth / 400) leaves the item in the queue with
    `attempts` incremented + `lastError` set. Retried at the next sync.
 
-## Outing lifecycle
+## Outing trace
+
+The app no longer records the GPS trace of a new outing (October 2026):
+a web app cannot keep the GPS alive once the phone puts the tab to sleep,
+and the forum settled on getting the trace from the device that recorded
+it.
 
 ```
-User taps "Démarrer la sortie"
+Route page → "Ajouter ma sortie" → outing form (?r=<route id>)
+   OutingTracePicker, at the top of the form (creation only):
+     tracking-service getStatus(userId)
+       no tracker connected → one line linking to camptocamp.org/trackers
+       some tracker connected → getActivities → the 3 latest, one line each
+       unreachable (CORS, offline, down) → nothing; the map's file import stays
+   Tap a line → getActivityGeometry → MapInputRow.setGeometry (GeoJSON)
+     → date, length_total and height_diff_up from the activity
+```
+
+Connecting a tracker happens on www.camptocamp.org/trackers: each
+vendor's authorisation page only sends back to camptocamp.org. The
+tracking service (`tracking.camptocamp.org`) must also allow the app's
+origin (CORS) for the picker to show anything.
+
+## Outing lifecycle (leftover recording code)
+
+No new outing session can be started. `$outingSession`,
+`StartOutingControl`, `OutingSessionBanner`, `OutingLiveView` and what
+they rely on stay for now, only to finish an outing started on a route
+with a previous version; a following release deletes them. The flow
+below is what such an outing still goes through.
+
+```
+User tapped "Démarrer la sortie" (previous versions — the button is gone)
    → $outingSession.start({type, id, lang}, {track: true|false})
    → sessionActive=true, gpsTracking=track, positions=[]
    → localStorage snapshot on every change
@@ -150,7 +180,8 @@ User taps "Arrêter":
 Route hits `RouteView.vue` which uses:
 
 - `DocumentViewHeader.vue` (V1 + V3 mods) — title + button-bar +
-  **StartOutingControl** injected for `documentType === 'route'`
+  **"Ajouter ma sortie"** for `documentType === 'route'`
+  (**StartOutingControl** instead while an outing is in progress on that route)
 - `MapBox.vue` (V1 + V3 fullscreen overlay for mobile)
 - `ToolBox.vue` (V1 + V3 "Pack sortie du jour" button, confirm-before-delete)
 
@@ -195,12 +226,14 @@ the upstream V1 code is not re-tested here.
 
 What is covered, and why those files: they are the ones where a silent
 failure costs real data. The offline store and its two save modes, the
-sync queue locking, GPS tracking across a screen lock, pausing an outing
+sync queue locking, what a picked tracker activity writes into the
+outing and gives back, GPS tracking across a screen lock, pausing an outing
 and the trace segmentation that feeds the published distance and
 elevation. Each of those has a regression behind it.
 
 Pure helpers (`geo-bbox`, `elapsed-label`,
-`cooked-html-parser`, `markdown-selection`, `trace-segments`) are tested
+`cooked-html-parser`, `markdown-selection`, `outing-trace-pick`,
+`trace-segments`) are tested
 directly; the stateful plugins are mounted on a local Vue instance with
 geolocation and IndexedDB stubbed (`fake-indexeddb`, `happy-dom`).
 
