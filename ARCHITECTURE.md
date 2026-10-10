@@ -171,10 +171,11 @@ the upstream V1 code is not re-tested here.
 
 What is covered, and why those files: they are the ones where a silent
 failure costs real data. The offline store and its two save modes, the
-sync queue locking. Each of those has a regression behind it.
+sync queue locking, what a picked tracker activity writes into the
+outing and gives back. Each of those has a regression behind it.
 
 Pure helpers (`geo-bbox`, `cooked-html-parser`, `markdown-selection`,
-`sync-policy`, `units`) are tested
+`outing-trace-pick`, `sync-policy`, `units`) are tested
 directly; the stateful plugins are mounted on a local Vue instance with
 IndexedDB stubbed (`fake-indexeddb`, `happy-dom`).
 

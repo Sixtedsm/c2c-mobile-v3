@@ -103,8 +103,9 @@ available here. Where a V3 change touches an upstream file, mark it with
 a `// V3` comment so the next upstream sync can see it.
 
 **Anything that can lose or falsify user data needs a test.** Concretely:
-the offline store, the sync queue, the outing trace taken from the
-user's tracker, and anything feeding the fields published to the API. Every regression this
+the offline store, the sync queue, what an activity picked from the
+user's tracker writes into the outing and gives back, and anything
+feeding the fields published to the API. Every regression this
 project has had was in that list — a screen lock silently ending a
 recording, a pause inflating the published distance, a save mode
 promising offline access it did not have. The test should fail against
@@ -127,8 +128,10 @@ consciously deferred — they're not blockers but should land in the
 first C2C-maintained release cycle:
 
 1. **Component tests** — the unit suite covers the plugins and the
-   pure helpers, but no component is mounted. The offline listing and
-   the outing control both carry real logic in their computeds now.
+   pure helpers, but no component is mounted. The offline listing
+   carries real logic in its computeds, and the outing form in what it
+   does around a picked activity (the map, the hidden end date, the
+   associated routes): only the rule itself is tested.
 2. **End-to-end tests** — Cypress against the deployed PWA would catch
    integration regressions (offline save round-trip, tracker trace import,
    forum reply). Unit tests cannot see a broken service-worker route.
