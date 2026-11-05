@@ -28,25 +28,6 @@
       </div>
       <p class="note">{{ $gettext('« Auto » suit le réglage de votre système.') }}</p>
 
-      <!-- GPS frequency (CDC §2.9). Live-reset the GPS watch when the
-           user picks a new value while tracking is running — otherwise
-           the change would only kick in on the next start/stop cycle. -->
-      <h2 class="section-label">{{ $gettext('Fréquence GPS') }}</h2>
-      <div class="option-row">
-        <button
-          v-for="opt in gpsIntervalOptions"
-          :key="opt.value"
-          type="button"
-          class="option-btn"
-          :class="{ 'is-active': $appSettings.state.gpsIntervalS === opt.value }"
-          @click="setGpsInterval(opt.value)"
-        >
-          <span class="gps-interval-value">{{ opt.value }}s</span>
-          <span>{{ opt.label }}</span>
-        </button>
-      </div>
-      <p class="note">{{ $gettext('Un intervalle plus long économise la batterie mais lisse la trace.') }}</p>
-
       <!-- Units (CDC §2.9). Display only: Camptocamp stores metres and
            the app publishes metres whatever is chosen here. -->
       <h2 class="section-label">{{ $gettext('Unités') }}</h2>
@@ -59,7 +40,7 @@
           :class="{ 'is-active': $appSettings.state.units === opt.value }"
           @click="setUnits(opt.value)"
         >
-          <span class="gps-interval-value">{{ opt.short }}</span>
+          <span class="option-short">{{ opt.short }}</span>
           <span>{{ opt.label }}</span>
         </button>
       </div>
@@ -119,29 +100,11 @@ export default {
         { value: 'large', label: this.$gettext('Grand'), demoSize: '1.2rem' },
       ];
     },
-    gpsIntervalOptions() {
-      return [
-        { value: '5', label: this.$gettext('Précis') },
-        { value: '15', label: this.$gettext('Équilibré') },
-        { value: '30', label: this.$gettext('Économe') },
-      ];
-    },
   },
 
   methods: {
     setUnits(value) {
       this.$appSettings.setUnits(value);
-    },
-
-    setGpsInterval(value) {
-      this.$appSettings.setGpsIntervalS(value);
-      // Apply it to a recording already running. This used to toggle
-      // gpsTracking off and on, which runs the session's watcher and
-      // therefore flags a discontinuity — so changing a preference cut
-      // the trace and the exported GPX in two at a point where the user
-      // had not stopped walking. Rebuilding the watch is documented as
-      // not flagging one, which is the meaning wanted here.
-      this.$outingSession?.applyGpsInterval();
     },
 
     replayOnboarding() {
@@ -229,7 +192,7 @@ export default {
   color: #6b6b6b;
 }
 
-.gps-interval-value {
+.option-short {
   font-weight: 700;
   font-size: 1.05rem;
   color: #4a4a4a;

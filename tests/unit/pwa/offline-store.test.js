@@ -62,6 +62,17 @@ describe('offline-store — documents + folders', () => {
     const doc2 = docs.find((d) => d.id === 2);
     expect(doc2.folderId).toBe('f2');
   });
+
+  it('drops the chunks left by the GPS recording, and only those', async () => {
+    const { get, set } = await import('idb-keyval');
+    await set('trace:abc:0', [[6.86, 45.83]]);
+    await store.saveDocument({ type: 'route', id: 1, lang: 'fr', data: {} });
+
+    await store.dropRecordedTraces();
+
+    expect(await get('trace:abc:0')).toBeUndefined();
+    expect(await store.listDocuments()).toHaveLength(1);
+  });
 });
 
 describe('offline-store — pending outings queue', () => {

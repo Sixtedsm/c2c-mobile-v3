@@ -13,10 +13,6 @@ const STORAGE_KEY = 'v3.appSettings';
 const defaults = {
   theme: 'auto',
   textSize: 'normal',
-  // GPS sample interval (CDC §2.9). '5' = one fix every 5 s (default,
-  // trades battery for a precise trace); '15' balanced; '30' battery-
-  // saver for long days where a coarser trace is fine.
-  gpsIntervalS: '5',
   // Shell mode — picks between the V3 mobile shell (BottomNav, top
   // bar, no side menu) and the V1 desktop shell (SideMenu +
   // Navigation, no bottom nav). 'auto' defers to the viewport (mobile
@@ -32,7 +28,6 @@ const defaults = {
 const allowed = {
   theme: ['auto', 'light', 'dark'],
   textSize: ['small', 'normal', 'large'],
-  gpsIntervalS: ['5', '15', '30'],
   shellMode: ['auto', 'mobile', 'desktop'],
   units: ['metric', 'imperial'],
 };
@@ -128,14 +123,6 @@ const api = {
     persist(state);
     apply(state);
   },
-  setGpsIntervalS(value) {
-    const str = String(value);
-    if (!allowed.gpsIntervalS.includes(str)) return;
-    state.gpsIntervalS = str;
-    persist(state);
-    // No visual side-effect: $outingSession reads the value on next
-    // startGpsWatch() call, so no apply() step needed here.
-  },
   setUnits(value) {
     if (!allowed.units.includes(value)) return;
     state.units = value;
@@ -160,9 +147,6 @@ const api = {
   // `state` — and reactive, since `state` is a Vue observable.
   get units() {
     return state.units;
-  },
-  get gpsIntervalMs() {
-    return (Number(state.gpsIntervalS) || 5) * 1000;
   },
 };
 

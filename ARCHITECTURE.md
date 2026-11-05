@@ -30,17 +30,15 @@ src/
 
 ## V3-specific plugins (all live at `vm.$X`)
 
-| Plugin           | Exposes             | Owns                                                                  |
-| ---------------- | ------------------- | --------------------------------------------------------------------- |
-| `offline`        | `vm.$offline`       | Saved docs, folders, day-packs, pending outings, sync loop, PWA badge |
-| `outing-session` | `vm.$outingSession` | Live outing state, GPS watch, trace (IndexedDB), metrics, GPX export  |
-| `app-settings`   | `vm.$appSettings`   | Dark theme + text-size prefs (persisted in localStorage)              |
-| `screen`         | `vm.$screen`        | Responsive breakpoints (V1)                                           |
+| Plugin         | Exposes           | Owns                                                                  |
+| -------------- | ----------------- | --------------------------------------------------------------------- |
+| `offline`      | `vm.$offline`     | Saved docs, folders, day-packs, pending outings, sync loop, PWA badge |
+| `app-settings` | `vm.$appSettings` | Dark theme + text-size prefs (persisted in localStorage)              |
+| `screen`       | `vm.$screen`      | Responsive breakpoints (V1)                                           |
 
 Registration order in `main.js` is deliberate: `localStorage` first
 (other plugins may need it), then app-settings (applies before Vue mounts
-to avoid FOUC), then offline, then outing-session (depends on offline
-via `queueOuting`).
+to avoid FOUC), then offline.
 
 ## V3-specific components
 
@@ -50,13 +48,11 @@ Shell:
 - `BottomNav.vue` — 5-tab bottom nav (Recherche / Récent / Mes topos / Moi / Plus)
 - `PullToRefresh.vue` — native gesture, fires `v3:refresh`, safety-timer-guarded
 - `OnboardingTour.vue` — 4-slide first-launch modal, replayable from AppSettings
-- `OutingSessionBanner.vue` — floating pill when a session is active on another topo
 - `LogoCtc.vue` — inline SVG (theme-aware fill for dark mode)
 
 Field UX:
 
 - `tracking/OutingTracePicker.vue` — the outing's trace from the user's tracker (see below)
-- `StartOutingControl.vue` — pause/finish a sortie already in progress + save-as-draft flow (no new start, see below)
 - `views/documents/utils/NearMeButton.vue` — geoloc → bbox filter for listings
 
 Views (V3-only):
@@ -104,10 +100,10 @@ runtime `<img>` requests.
 
 ## Outing trace
 
-The app no longer records the GPS trace of a new outing (October 2026):
-a web app cannot keep the GPS alive once the phone puts the tab to sleep,
-and the forum settled on getting the trace from the device that recorded
-it.
+The app records no GPS trace. It used to (`$outingSession`, removed in
+October 2026): a web app cannot keep the GPS alive once the phone puts the
+tab to sleep, and the forum settled on getting the trace from the device
+that recorded it.
 
 ```
 Route page → "Ajouter ma sortie" → outing form (?r=<route id>)
@@ -125,63 +121,12 @@ vendor's authorisation page only sends back to camptocamp.org. The
 tracking service (`tracking.camptocamp.org`) must also allow the app's
 origin (CORS) for the picker to show anything.
 
-## Outing lifecycle (leftover recording code)
-
-No new outing session can be started. `$outingSession`,
-`StartOutingControl`, `OutingSessionBanner`, `OutingLiveView` and what
-they rely on stay for now, only to finish an outing started on a route
-with a previous version; a following release deletes them. The flow
-below is what such an outing still goes through.
-
-```
-User tapped "Démarrer la sortie" (previous versions — the button is gone)
-   → $outingSession.start({type, id, lang}, {track: true|false})
-   → sessionActive=true, gpsTracking=track, positions=[]
-   → localStorage snapshot on every change
-
-Tracking:
-   watchPosition(), one point per configured interval (5/15/30 s),
-   uniform in time. Fixes worse than 50 m accuracy are dropped; nothing
-   else is filtered at capture — smoothing, the speed gate and the 14 m
-   step floor all live in src/pwa/trace-metrics.js, and its calibration
-   was fitted on unfiltered traces.
-   Points go to IndexedDB in 200-point chunks (src/pwa/trace-store.js);
-   localStorage keeps only the session metadata, because setItem is
-   synchronous and survives the OS killing the tab.
-   Hard ceiling at 20 000 points: appending stops and says so rather than
-   trimming the head, which would rewrite the published figures.
-
-Tab hidden (phone locked, browser backgrounded):
-   → the watch is deliberately NOT stopped. A "battery guard" used to
-     flip gpsTracking off on every hide, which is what turned a 1 h run
-     into 3 recorded points (2026-09-02).
-   → Android: a silent audio clip keeps the page from being frozen.
-     iOS: the process is suspended whatever we do, so the app offers a
-     black "écran allumé" hold instead. See src/pwa/platform-capabilities.js.
-   → the watchdog rebuilds a watch that stopped delivering, and no longer
-     erases the evidence of the drought while doing it.
-
-App killed and reopened mid-recording:
-   → the trace is read back from IndexedDB, then recording re-arms itself
-     (never against an explicit pause, never before the trace is back —
-     the discontinuity flag needs the existing points to be armed).
-
-User taps "Arrêter":
-   → 3 choices modal:
-     (a) Save as draft → mini form (activity/date/title/description/photos)
-                       → $offline.queueOuting(payload, {photos})
-                       → $outingSession.stop()
-     (b) Export GPX only → download .gpx → $outingSession.stop()
-     (c) Discard → $outingSession.discardTrace() + stop()
-```
-
 ## Route flow (V1, unchanged) + V3 additions
 
 Route hits `RouteView.vue` which uses:
 
 - `DocumentViewHeader.vue` (V1 + V3 mods) — title + button-bar +
   **"Ajouter ma sortie"** for `documentType === 'route'`
-  (**StartOutingControl** instead while an outing is in progress on that route)
 - `MapBox.vue` (V1 + V3 fullscreen overlay for mobile)
 - `ToolBox.vue` (V1 + V3 "Pack sortie du jour" button, confirm-before-delete)
 
@@ -227,15 +172,12 @@ the upstream V1 code is not re-tested here.
 What is covered, and why those files: they are the ones where a silent
 failure costs real data. The offline store and its two save modes, the
 sync queue locking, what a picked tracker activity writes into the
-outing and gives back, GPS tracking across a screen lock, pausing an outing
-and the trace segmentation that feeds the published distance and
-elevation. Each of those has a regression behind it.
+outing and gives back. Each of those has a regression behind it.
 
-Pure helpers (`geo-bbox`, `elapsed-label`,
-`cooked-html-parser`, `markdown-selection`, `outing-trace-pick`,
-`trace-segments`) are tested
+Pure helpers (`geo-bbox`, `cooked-html-parser`, `markdown-selection`,
+`outing-trace-pick`, `sync-policy`, `units`) are tested
 directly; the stateful plugins are mounted on a local Vue instance with
-geolocation and IndexedDB stubbed (`fake-indexeddb`, `happy-dom`).
+IndexedDB stubbed (`fake-indexeddb`, `happy-dom`).
 
 ## What's V3-only vs. what's upstream
 

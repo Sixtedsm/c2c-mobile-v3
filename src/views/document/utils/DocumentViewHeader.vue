@@ -15,20 +15,10 @@
             :document-type="documentType"
             :lang="lang"
           />
-          <!-- The app no longer records outings: the trace comes from the
-               user's tracker (see OutingTracePicker). The recording control
-               stays only to finish an outing already started on THIS route
-               with a previous version — with the session's own topoRef, so
-               it never offers to start a new one (which would drop the
-               trace in progress). Removed with the recording code. -->
-          <start-outing-control
-            v-if="!isPrintingView && !isDraftView && documentType === 'route' && sessionOnThisRoute"
-            :topo-ref="$outingSession.topoRef"
-            :route="document"
-            class="start-outing-header"
-          />
+          <!-- The trace comes from the user's tracker once the outing is
+               written (see OutingTracePicker): the app records nothing. -->
           <add-link
-            v-else-if="!isPrintingView && !isDraftView && documentType === 'route'"
+            v-if="!isPrintingView && !isDraftView && documentType === 'route'"
             document-type="outing"
             :query="{ r: document.document_id }"
             class="add-my-outing"
@@ -89,7 +79,6 @@ import OfflineHeaderButton from './OfflineHeaderButton.vue';
 import ShareButton from './ShareButton.vue';
 import TagsButton from './TagsButton';
 
-import StartOutingControl from '@/components/StartOutingControl.vue';
 import ImagesUploader from '@/components/images-uploader/ImagesUploader';
 import isEditableMixin from '@/js/is-editable-mixin';
 import { requireDocumentProperty } from '@/js/properties-mixins';
@@ -101,7 +90,6 @@ export default {
     OfflineHeaderButton,
     ShareButton,
     GotopButton,
-    StartOutingControl,
     TagsButton,
     DocumentVersionBanner,
   },
@@ -129,18 +117,6 @@ export default {
       // offline plugin doesn't model them — only hide-show, no logic change.
       return ['article', 'book', 'image', 'outing', 'route', 'waypoint', 'xreport'].includes(this.documentType);
     },
-
-    // An outing started with a previous version, on this very route.
-    sessionOnThisRoute() {
-      const session = this.$outingSession;
-      return Boolean(
-        session &&
-          session.sessionActive &&
-          session.topoRef &&
-          session.topoRef.type === 'route' &&
-          String(session.topoRef.id) === String(this.document.document_id)
-      );
-    },
   },
 };
 </script>
@@ -163,16 +139,8 @@ export default {
   color: $black;
 }
 
-// The Start-outing pill is a wider element than the other icon-buttons
-// in the bar — align vertically without inheriting the row's 1.5rem
-// font-size so the pill keeps its intended sizing.
-.start-outing-header {
-  font-size: 0.9rem;
-  vertical-align: middle;
-}
-
-// Where "Démarrer la sortie" was, with the same weight: on a route page,
-// adding one's outing is the main action.
+// On a route page, adding one's outing is the main action: a wider,
+// coloured pill among the icon buttons.
 .button-bar > a.add-my-outing {
   display: inline-flex;
   align-items: center;

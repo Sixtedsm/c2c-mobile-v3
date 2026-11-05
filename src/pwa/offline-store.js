@@ -215,3 +215,10 @@ export async function removePendingOuting(id) {
     queue.filter((item) => item.id !== id)
   );
 }
+
+// Chunks left by the GPS recording, removed from the app in 10/2026.
+// ponytail: one-off cleanup, delete in 2027 once phones have run it.
+export async function dropRecordedTraces() {
+  const stale = (await keys()).filter((key) => typeof key === 'string' && key.startsWith('trace:'));
+  await Promise.all(stale.map((key) => del(key)));
+}

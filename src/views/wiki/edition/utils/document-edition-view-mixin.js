@@ -39,11 +39,6 @@ export default {
       fields: null, // keep fields here to set them reactive
       saving: false,
       modified: false,
-      // Set once the document is kept somewhere — published, or queued on
-      // the phone. Not the same as `!modified`, which only says whether
-      // leaving should ask first, and which is also false for the whole
-      // time a new form waits for its associations to load.
-      saved: false,
       // Id of the queued outing this form edits (?draft=<id>), or null.
       draftId: null,
     };
@@ -109,7 +104,6 @@ export default {
     load() {
       this.fields = constants.objectDefinitions[this.documentType].fields;
       this.cleanErrors();
-      this.saved = false;
       this.draftId = null;
       this.latitude = null;
       this.longitude = null;
@@ -151,11 +145,6 @@ export default {
 
         const document = this.$documentUtils.buildDocument(this.documentType, this.lang);
         this.promise = { data: document, loading: 0 };
-        // The document exists from here on, but afterLoad() only runs once
-        // every association lookup below has settled — up to the request
-        // timeout on a weak connection. What must not wait that long (the
-        // recorded GPS trace) hooks in here.
-        this.afterDocumentCreated();
 
         let pending = 0;
         const settleOne = () => {
@@ -311,8 +300,6 @@ export default {
       this.latitude = Math.round(coords[1] * 1000000) / 1000000;
     },
 
-    afterDocumentCreated() {},
-
     afterLoad() {},
 
     beforeSave() {},
@@ -367,14 +354,13 @@ export default {
 
     // Keep a new outing on the phone instead of publishing it, then show
     // the queue. Every path that cannot or should not publish ends here,
-    // so the outing — and the GPS trace inside it — is kept the same way
+    // so the outing — and its trace — is kept the same way
     // whatever the reason.
     keepOutingLocally(message, type = 'is-success') {
       this.saving = true;
       return this.$offline
         .queueOuting(this.document)
         .then(() => {
-          this.saved = true;
           this.modified = false;
           toast({ message, type, position: 'center', duration: 6000 });
           this.$router.push({ name: 'offline' });
@@ -424,7 +410,6 @@ export default {
           });
           return;
         }
-        this.saved = true;
         this.modified = false;
         toast({
           message: this.$gettext(
@@ -478,13 +463,11 @@ export default {
 
       if (this.mode === 'edit') {
         promise = c2c[this.documentType].save(this.document, comment).then(() => {
-          this.saved = true;
           this.modified = false;
           this.goToDocument(this.document.document_id);
         });
       } else {
         promise = c2c[this.documentType].create(this.document).then((response) => {
-          this.saved = true;
           this.modified = false;
           this.goToDocument(response.data.document_id);
         });

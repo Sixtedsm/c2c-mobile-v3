@@ -125,7 +125,6 @@ import { faSortAmountDownAlt } from '@fortawesome/free-solid-svg-icons/faSortAmo
 import { faSortAmountUp } from '@fortawesome/free-solid-svg-icons/faSortAmountUp';
 import { faSquare } from '@fortawesome/free-solid-svg-icons/faSquare';
 import { faStar } from '@fortawesome/free-solid-svg-icons/faStar';
-import { faStop as faStopV3 } from '@fortawesome/free-solid-svg-icons/faStop';
 import { faSun } from '@fortawesome/free-solid-svg-icons/faSun';
 import { faTachometerAlt } from '@fortawesome/free-solid-svg-icons/faTachometerAlt';
 import { faTag } from '@fortawesome/free-solid-svg-icons/faTag';
@@ -214,13 +213,7 @@ import { faReply as faReplyV3 } from '@fortawesome/free-solid-svg-icons/faReply'
 import { faThumbsUp as faThumbsUpV3 } from '@fortawesome/free-solid-svg-icons/faThumbsUp';
 import { faPaperPlane as faPaperPlaneV3 } from '@fortawesome/free-solid-svg-icons/faPaperPlane';
 import { faPenToSquare as faPenToSquareV3 } from '@fortawesome/free-solid-svg-icons/faPenToSquare';
-// Used by the outing controls and the live-trace page. It was referenced
-// in templates without ever being registered, so every render logged
-// "Could not find one or more icon(s) {prefix: fas, iconName: pause}"
-// and drew nothing.
-import { faPause } from '@fortawesome/free-solid-svg-icons/faPause';
 import { faThumbtack } from '@fortawesome/free-solid-svg-icons/faThumbtack';
-import { faPlay as faPlayV3 } from '@fortawesome/free-solid-svg-icons/faPlay';
 import { faSpinner as faSpinnerV3 } from '@fortawesome/free-solid-svg-icons/faSpinner';
 import { faRightFromBracket as faRightFromBracketV3 } from '@fortawesome/free-solid-svg-icons/faRightFromBracket';
 import { faSliders as faSlidersV3 } from '@fortawesome/free-solid-svg-icons/faSliders';
@@ -252,14 +245,11 @@ export default function install(Vue) {
     faThumbsUpV3,
     faPaperPlaneV3,
     faPenToSquareV3,
-    faPause,
     faThumbtack,
-    faPlayV3,
     faSpinnerV3,
     faRightFromBracketV3,
     faSlidersV3,
     faSnowflakeV3,
-    faStopV3,
     faTriangleExclamationV3,
     faUserGroupV3,
     faXmarkV3,

@@ -21,7 +21,7 @@ vi.mock('@/js/config', () => ({
 
 vi.mock('bulma-toast', () => ({ toast: vi.fn() }));
 
-vi.mock('@/pwa/trace-store', () => ({ requestPersistentStorage: vi.fn(async () => true) }));
+vi.mock('@/pwa/persistent-storage', () => ({ requestPersistentStorage: vi.fn(async () => true) }));
 
 const cookedDoc = {
   document_id: 123,
@@ -40,7 +40,7 @@ vi.mock('@/js/apis/c2c', () => ({
 
 import install from '@/js/vue-plugins/offline';
 import * as store from '@/pwa/offline-store';
-import { requestPersistentStorage } from '@/pwa/trace-store';
+import { requestPersistentStorage } from '@/pwa/persistent-storage';
 
 function mount() {
   const LocalVue = Vue.extend();

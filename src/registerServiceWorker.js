@@ -1,32 +1,7 @@
 /* eslint-disable no-console */
 import { register } from 'register-service-worker';
 
-// Mirror of the outing-session plugin's storage key. Read directly from
-// localStorage rather than through the plugin: this module runs at boot,
-// outside the Vue tree, and must not pull the session singleton (and the
-// geolocation machinery behind it) into the entry chunk just to ask one
-// question.
-const SESSION_STORAGE_KEY = 'v3.outingSession';
-// Mirrors MAX_STALE_MS in src/js/vue-plugins/outing-session.js.
-const MAX_STALE_MS = 48 * 3600 * 1000;
-const SESSION_RECHECK_MS = 30 * 1000;
-
-function outingInProgress() {
-  // Same reading as the session plugin's loadSnapshot(): a blob it would
-  // discard is not an outing in progress. This used to trust any
-  // `sessionActive` and treat an unreadable blob as a recording, so a
-  // phone with a forgotten session deferred every update — and every fix
-  // — for as long as the blob stayed there.
-  try {
-    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) return false;
-    const session = JSON.parse(raw);
-    if (!session?.sessionActive) return false;
-    return !(session.startedAt && Date.now() - session.startedAt > MAX_STALE_MS);
-  } catch {
-    return false;
-  }
-}
+import router from '@/js/vue-plugins/router';
 
 if (process.env.NODE_ENV === 'production') {
   register(`${process.env.BASE_URL}service-worker.js`, {
@@ -64,30 +39,27 @@ if (process.env.NODE_ENV === 'production') {
       // case where the activation race triggers an immediate second "updated".
       if (sessionStorage.getItem('c2cSwReloadedOnUpdate') === 'true') return;
 
-      // …but never on top of an outing in progress. A reload restarts the
-      // session with gpsTracking off by design (the plugin refuses to
-      // silently re-arm the GPS after a restart), so applying an update
-      // mid-outing ends the recording — and the user is on a mountain,
-      // not watching the screen. Gilles guessed exactly this when a build
-      // went out during his outing (mail 2026-09-04); he was right, and it
-      // is a deploy the app should have declined to apply.
-      //
-      // The stale bundle is the lesser problem: lazy chunks can 404 until
-      // the reload happens, and the page is walking, not navigating.
-      const applyUpdate = () => {
-        if (outingInProgress()) return false;
+      const reload = () => {
         sessionStorage.setItem('c2cSwReloadedOnUpdate', 'true');
         console.log('New app version available — reloading to apply…');
         window.location.reload();
-        return true;
       };
-
-      if (applyUpdate()) return;
-
-      console.log('New app version available — deferred, an outing is in progress.');
-      const handle = setInterval(() => {
-        if (applyUpdate()) clearInterval(handle);
-      }, SESSION_RECHECK_MS);
+      // Never on top of a form: its author may be away syncing a watch (see
+      // OutingTracePicker). Nor on the page reached by leaving it, which shows
+      // the toast confirming the save and offers « Ajouter des images »: wait
+      // for the next change of page after that one — of page, by route name:
+      // the outing's page rewrites its own address (its title) once loaded.
+      // A page of the old version that fails to load (its chunks are gone from
+      // the server) reloads too.
+      // Wiki forms only: anywhere else (forum included) it reloads at once.
+      const isForm = (route) => /-(add|edit)$/.test(route.name || '');
+      if (!isForm(router.currentRoute)) return reload();
+      router.afterEach((to, from) => {
+        if (to.name !== from.name && !isForm(to) && !isForm(from)) reload();
+      });
+      router.onError(() => {
+        if (!isForm(router.currentRoute)) reload();
+      });
     },
 
     error(error) {

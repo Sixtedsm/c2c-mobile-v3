@@ -22,9 +22,7 @@ LocalStorageItem.prototype.commit_ = function () {
     // out. The in-memory value stays correct; only its durability is
     // lost, and that is a far smaller failure than the one it caused.
     //
-    // Not silent to a developer, and not fatal to a walker: the outing
-    // session reports storage trouble in the UI on its own (see
-    // src/pwa/trace-store.js), which is the surface where it matters.
+    // Not silent to a developer.
     console.warn('localStorage write failed for ' + this.key, err);
   }
 };
