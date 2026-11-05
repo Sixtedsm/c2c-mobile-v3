@@ -3,7 +3,22 @@
        droite des colonnes, en haut du fil, dès 2 colonnes (≥ 769 px) : dix
        pages chargées d'un coup à l'ouverture, plus rien en bas du fil. -->
   <div class="columns is-multiline">
+    <!-- Premier chargement : des cartes grises de la forme d'une carte du
+         fil, dans chaque colonne. Avant, cette zone restait vide plusieurs
+         secondes en 4G lente (LCP 7,2 s mesuré le 05/11). -->
+    <p v-if="showSkeleton" class="is-sr-only" role="status">{{ $gettext('Loading...') }}</p>
     <div v-for="(column, i) of columns" :key="i" :class="'column ' + cssColumnsClass">
+      <template v-if="showSkeleton">
+        <div v-for="n in 2" :key="'skeleton-' + n" class="card feed-card feed-skeleton" aria-hidden="true">
+          <div class="skeleton-row">
+            <span class="skeleton-block skeleton-icon"></span>
+            <span class="skeleton-block skeleton-title"></span>
+          </div>
+          <span class="skeleton-block skeleton-image"></span>
+          <span class="skeleton-block skeleton-line"></span>
+          <span class="skeleton-block skeleton-line is-short"></span>
+        </div>
+      </template>
       <feed-card v-for="item of column.items" :key="item.id" :item="item" class="feed-card" />
     </div>
     <!-- Sentinelle du défilement infini. Visible dans le viewport (avec
@@ -61,6 +76,9 @@ export default {
   computed: {
     loading() {
       return this.promise ? this.promise.loading : false;
+    },
+    showSkeleton() {
+      return this.loading && this.feed.length === 0;
     },
   },
 
@@ -291,5 +309,74 @@ export default {
 .feed-sentinel {
   flex: 0 0 100%;
   height: 1px;
+}
+
+// Same frame as a feed card (CardContainer): border, white, 200 px gallery.
+.feed-skeleton {
+  border: $card-border;
+  background: white;
+  padding: 0.4rem 0.8rem 0.8rem;
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.4rem 0 0.8rem;
+}
+
+.skeleton-block {
+  display: block;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #ececec 25%, #f6f6f6 37%, #ececec 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+
+.skeleton-icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+.skeleton-title {
+  flex: 1;
+  max-width: 70%;
+  height: 1rem;
+}
+
+.skeleton-image {
+  height: 200px;
+  margin-bottom: 0.8rem;
+}
+
+.skeleton-line {
+  height: 0.75rem;
+  margin-bottom: 0.5rem;
+
+  &.is-short {
+    width: 55%;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block {
+    animation: none;
+  }
+}
+
+html[data-theme='dark'] .skeleton-block {
+  background: linear-gradient(90deg, #3a3a3a 25%, #444 37%, #3a3a3a 63%);
+  background-size: 400% 100%;
 }
 </style>
