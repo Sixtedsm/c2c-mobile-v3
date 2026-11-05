@@ -1,5 +1,8 @@
 <template>
-  <div class="columns">
+  <!-- is-multiline : sans retour à la ligne, la sentinelle se plaçait à
+       droite des colonnes, en haut du fil, dès 2 colonnes (≥ 769 px) : dix
+       pages chargées d'un coup à l'ouverture, plus rien en bas du fil. -->
+  <div class="columns is-multiline">
     <div v-for="(column, i) of columns" :key="i" :class="'column ' + cssColumnsClass">
       <feed-card v-for="item of column.items" :key="item.id" :item="item" class="feed-card" />
     </div>
@@ -146,7 +149,8 @@ export default {
         this.cssColumnsClass = 'is-one-quarter';
         columnCount = 4;
       } else if (availableWidth < 6 * cardLargestWidth) {
-        this.cssColumnsClass = 'is-two-fifths';
+        // is-one-fifth : cinq colonnes de 40 % (is-two-fifths) faisaient 200 %.
+        this.cssColumnsClass = 'is-one-fifth';
         columnCount = 5;
       } else {
         this.cssColumnsClass = 'is-2';
