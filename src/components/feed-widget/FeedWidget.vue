@@ -1,25 +1,30 @@
 <template>
-  <div class="columns" v-infinite-scroll="load" infinite-scroll-disabled="loading" infinite-scroll-distance="500">
+  <div class="columns">
     <div v-for="(column, i) of columns" :key="i" :class="'column ' + cssColumnsClass">
       <feed-card v-for="item of column.items" :key="item.id" :item="item" class="feed-card" />
     </div>
-    <!-- <loading-notification :promise="promise" /> -->
+    <!-- Sentinelle du défilement infini. Visible dans le viewport (avec
+         600 px d'avance) => on charge la suite. Un IntersectionObserver
+         plutôt qu'un écouteur de défilement : voir le commentaire de
+         mounted(). flex-basis 100 % pour qu'elle passe sous les colonnes. -->
+    <div ref="sentinel" class="feed-sentinel" aria-hidden="true"></div>
   </div>
 </template>
 
 <script>
-import infiniteScroll from 'vue-infinite-scroll';
-
 import FeedCard from '@/components/cards/FeedCard';
 import c2c from '@/js/apis/c2c';
 import pullRefreshMixin from '@/js/pull-refresh-mixin';
+
+// Garde-fou : une page dont tous les documents sont filtrés fait
+// repartir un chargement. Sans borne, un fil entièrement vide
+// interrogerait l'API sans fin.
+const MAX_AUTO_LOADS = 10;
 
 export default {
   components: {
     FeedCard,
   },
-
-  directives: { infiniteScroll },
 
   mixins: [pullRefreshMixin],
 
@@ -43,6 +48,10 @@ export default {
       endOfFeed: false,
       columns: null,
       cssColumnsClass: null,
+      // Chargements enchaînés sans geste de l'utilisateur, remis à zéro
+      // dès que la sentinelle réapparaît.
+      autoLoads: 0,
+      observer: null,
     };
   },
 
@@ -59,11 +68,44 @@ export default {
 
   mounted() {
     window.addEventListener('resize', this.initializeColumns);
+
+    // Le défilement infini écoutait l'événement scroll du conteneur. Deux
+    // façons de le tuer, et la page « Récent » les réunissait :
+    //
+    //   - hide-empty-documents filtre les documents vides. Quand une page
+    //     de résultats est filtrée en entier, le contenu ne dépasse pas
+    //     l'écran : plus rien à faire défiler, donc plus aucun événement
+    //     scroll, donc plus jamais de chargement. Le fil restait figé, et
+    //     seul un changement d'onglet le relançait.
+    //   - sur iOS, le défilement par inertie n'émet pas d'événement scroll
+    //     pendant sa course ; le dernier peut être avalé par le limiteur.
+    //
+    // Une sentinelle observée règle les deux : elle ne dépend pas d'un
+    // geste, seulement du fait qu'elle soit visible.
+    if (typeof IntersectionObserver === 'function') {
+      this.observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((e) => e.isIntersecting)) {
+            this.autoLoads = 0;
+            this.load();
+          }
+        },
+        { rootMargin: '600px' }
+      );
+      this.$nextTick(() => {
+        if (this.$refs.sentinel) this.observer.observe(this.$refs.sentinel);
+      });
+    }
+
     this.initialize();
   },
 
   beforeDestroy() {
     window.removeEventListener('resize', this.initializeColumns);
+    if (this.observer) {
+      this.observer.disconnect();
+      this.observer = null;
+    }
   },
 
   methods: {
@@ -167,6 +209,22 @@ export default {
       this.endOfFeed = response.data.feed.length === 0;
 
       this.dispatchToColumns(response.data.feed);
+
+      // L'observateur ne rappelle que sur un changement de visibilité. Si
+      // la sentinelle est toujours à l'écran après ce chargement — page
+      // entièrement filtrée, ou écran haut — il faut redemander, sinon
+      // rien ne se passerait plus jamais. Le compteur borne le cas où
+      // chaque page revient vide après filtrage : on cesse de marteler
+      // l'API, un geste de l'utilisateur relancera.
+      this.$nextTick(() => {
+        if (this.endOfFeed || this._isDestroyed || !this.$refs.sentinel) return;
+        if (this.autoLoads >= MAX_AUTO_LOADS) return;
+        const rect = this.$refs.sentinel.getBoundingClientRect();
+        if (rect.top <= window.innerHeight + 600) {
+          this.autoLoads += 1;
+          this.load();
+        }
+      });
     },
 
     dispatchToColumns(items) {
@@ -224,5 +282,10 @@ export default {
 <style scoped lang="scss">
 .feed-card {
   margin-bottom: 1.5rem;
+}
+
+.feed-sentinel {
+  flex: 0 0 100%;
+  height: 1px;
 }
 </style>
