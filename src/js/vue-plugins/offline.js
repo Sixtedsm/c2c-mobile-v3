@@ -4,6 +4,7 @@ import { toLonLat } from 'ol/proj';
 import c2c from '@/js/apis/c2c';
 import config from '@/js/config';
 import { getImageUrl } from '@/js/image-urls';
+import runPool from '@/js/run-pool';
 import uploadFile from '@/js/upload-file';
 import { probeApiAccess } from '@/pwa/api-access';
 import { extractEmbeddedImageIds, extractImageUrlsFromCooked } from '@/pwa/cooked-html-parser';
@@ -97,28 +98,23 @@ function mergeTallies(a, b) {
   return { attempted: a.attempted + b.attempted, failed: a.failed + b.failed };
 }
 
-async function prefetchImageVariants(imageDoc) {
-  const tally = emptyTally();
+// How many downloads run at once — photos, embedded-image lookups and map
+// tiles alike. One at a time, a 33-photo outing (66 files) took 7.6-9.3 s
+// on a fast connection (2026-11-05), and in the mountains every round trip
+// costs several times more. A handful at once, not all of them: some tile
+// servers throttle a burst of 200 connections aggressively.
+const PARALLEL_REQUESTS = 6;
+
+function imageVariantUrls(imageDoc) {
   if (!imageDoc) {
-    return tally;
+    return [];
   }
-  for (const size of IMAGE_SIZES_TO_PREFETCH) {
-    const url = getImageUrl(imageDoc, size);
-    if (url) {
-      addToTally(tally, await prefetchUrl(url));
-    }
-  }
-  return tally;
+  return IMAGE_SIZES_TO_PREFETCH.map((size) => getImageUrl(imageDoc, size)).filter(Boolean);
 }
 
-async function prefetchSrcsFromCooked(cooked) {
+async function prefetchUrls(urls) {
   const tally = emptyTally();
-  for (const url of extractImageUrlsFromCooked(cooked, config.urls.api)) {
-    // We pull both real src= URLs and reconstructed c2c:url-proxy URLs so the
-    // service worker caches exactly the URLs the browser will request when
-    // rendering the topo offline (including avif/webp <picture> variants).
-    addToTally(tally, await prefetchUrl(url));
-  }
+  await runPool(urls, async (url) => addToTally(tally, await prefetchUrl(url)), PARALLEL_REQUESTS);
   return tally;
 }
 
@@ -239,16 +235,7 @@ async function prefetchTilesForDocument(data) {
     // No geometry, so no tiles were ever owed. Not a partial download.
     return tally;
   }
-  const urls = buildOpenTopoMapTileUrls(bbox);
-  // We fire requests in small parallel batches so the tile servers do not
-  // see a single burst of 200 connections (some throttle aggressively).
-  const BATCH = 6;
-  for (let i = 0; i < urls.length; i += BATCH) {
-    const slice = urls.slice(i, i + BATCH);
-    const results = await Promise.all(slice.map((url) => prefetchUrl(url)));
-    for (const ok of results) addToTally(tally, ok);
-  }
-  return tally;
+  return mergeTallies(tally, await prefetchUrls(buildOpenTopoMapTileUrls(bbox)));
 }
 
 // PWA app badge (#18): mirrors the offline-outing queue length on the
@@ -626,24 +613,24 @@ export default function install(Vue) {
       // Returns { attempted, failed } so the caller can tell the user
       // whether the topo they are about to carry is actually complete.
       async prefetchOfflineAssets(data, lang, folderId) {
-        let tally = emptyTally();
+        const tally = emptyTally();
         // Strategy: cache the EXACT URLs the browser will request when
-        // rendering the topo offline.
-        //
-        // 1) Pull every src= URL out of the cooked HTML and fetch them as-is.
-        //    Whatever pattern the server-side cooker emits (proxy URL, media
-        //    direct, etc.) is what the browser will ask for later, so this
-        //    is the most reliable way to populate the SW image cache.
-        tally = mergeTallies(tally, await prefetchSrcsFromCooked(data?.cooked));
+        // rendering the topo offline. Every URL is listed first, then they
+        // are all fetched PARALLEL_REQUESTS at a time.
+        const urls = [];
 
-        // 2) Gallery images (associations.images): prefetch the size
-        //    variants the gallery template usually requests (MI for the
-        //    grid, SI for the thumbnail strip). These go through getImageUrl
-        //    which constructs the same URL the gallery will build.
+        // 1) Every src= URL in the cooked HTML, as-is. Whatever pattern the
+        //    server-side cooker emits (proxy URL, media direct, avif/webp
+        //    <picture> variants…) is what the browser will ask for later.
+        urls.push(...extractImageUrlsFromCooked(data?.cooked, config.urls.api));
+
+        // 2) Gallery images (associations.images): the size variants the
+        //    gallery template requests (MI for the grid, SI for the strip),
+        //    built by getImageUrl exactly as the gallery builds them.
         const associatedImages = Array.isArray(data?.associations?.images) ? data.associations.images : [];
         for (const image of associatedImages) {
           try {
-            tally = mergeTallies(tally, await prefetchImageVariants(image));
+            urls.push(...imageVariantUrls(image));
           } catch {
             // An unexpected throw is still one asset that did not make it.
             addToTally(tally, false);
@@ -657,12 +644,13 @@ export default function install(Vue) {
         //    embedded by id (so a later code path that calls c2c.image.get…
         //    on them still resolves offline). These sub-documents really are
         //    downloaded, so they keep the offline mode.
-        const embeddedIds = extractEmbeddedImageIds(data?.cooked).map(String);
+        //    Each one is its own IndexedDB key, so concurrent saves cannot
+        //    overwrite one another.
         const associatedIds = new Set(associatedImages.map((img) => String(img.document_id)));
-        for (const imageId of embeddedIds) {
-          if (associatedIds.has(imageId)) {
-            continue;
-          }
+        const embeddedIds = extractEmbeddedImageIds(data?.cooked)
+          .map(String)
+          .filter((imageId) => !associatedIds.has(imageId));
+        const saveEmbeddedImage = async (imageId) => {
           try {
             const imgResponse = await c2c.image.getCooked(imageId, lang);
             await store.saveDocument({
@@ -673,12 +661,15 @@ export default function install(Vue) {
               folderId,
               mode: store.OFFLINE_MODE,
             });
-            tally = mergeTallies(tally, await prefetchImageVariants(imgResponse.data));
+            urls.push(...imageVariantUrls(imgResponse.data));
           } catch {
             addToTally(tally, false);
           }
-        }
-        return tally;
+        };
+        await runPool(embeddedIds, saveEmbeddedImage, PARALLEL_REQUESTS);
+
+        // The cooked HTML and the gallery often point at the same file.
+        return mergeTallies(tally, await prefetchUrls([...new Set(urls)]));
       },
 
       // The topographic base layer around the trace (OpenTopoMap, the C2C
