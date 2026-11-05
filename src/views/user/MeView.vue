@@ -119,6 +119,16 @@
           </router-link>
         </li>
         <li>
+          <router-link :to="{ name: 'app-guide' }" class="action-link">
+            <span class="action-icon"><fa-icon icon="mobile-screen" /></span>
+            <span class="action-text">
+              <span class="action-label">{{ $gettext("Guide de l'application") }}</span>
+              <span class="action-desc">{{ $gettext('Installer, hors ligne, sorties, paramètres') }}</span>
+            </span>
+            <fa-icon icon="chevron-right" class="action-chevron" />
+          </router-link>
+        </li>
+        <li>
           <router-link :to="{ name: 'article', params: { id: 106727 } }" class="action-link">
             <span class="action-icon"><fa-icon icon="envelope" /></span>
             <span class="action-text">

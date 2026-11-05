@@ -16,7 +16,18 @@
           <fa-icon :icon="current.icon" />
         </div>
         <h2 class="onboarding-title">{{ current.title }}</h2>
-        <p class="onboarding-text">{{ current.text }}</p>
+        <p v-if="current.text" class="onboarding-text">{{ current.text }}</p>
+        <app-install-steps v-if="current.install" class="onboarding-install" />
+        <ul v-if="current.list" class="onboarding-list">
+          <li v-for="item in current.list" :key="item.icon">
+            <fa-icon :icon="item.icon" fixed-width class="onboarding-list-icon" />
+            <span>{{ item.text }}</span>
+          </li>
+        </ul>
+        <router-link v-if="current.guide" :to="{ name: 'app-guide' }" class="onboarding-guide" @click.native="finish">
+          <fa-icon icon="book-open" />
+          {{ $gettext("Lire le guide de l'application") }}
+        </router-link>
       </div>
 
       <div class="onboarding-dots" role="tablist">
@@ -54,24 +65,34 @@
 <script>
 // First-launch tour shown once per device. The flag `v3.onboardingDone`
 // lives in localStorage; clearing it (or browser storage) replays the
-// tour. Kept dependency-free on purpose — three slides don't justify a
+// tour. Kept dependency-free on purpose — four slides don't justify a
 // tour library (and matches the "minimize maintenance" preference).
+//
+// Its second slide asks to add the app to the home screen (Sixte,
+// 2026-11-06): that is what makes it an app, and on iPhone what keeps the
+// offline topos — Safari clears the storage of a site that is not on the
+// home screen after seven days without a visit. Skipped once installed.
+import AppInstallSteps from '@/components/AppInstallSteps';
+import install from '@/pwa/install';
 
 const STORAGE_KEY = 'v3.onboardingDone';
 
 export default {
   name: 'OnboardingTour',
 
+  components: { AppInstallSteps },
+
   data() {
     return {
       visible: false,
       step: 0,
+      install,
     };
   },
 
   computed: {
     slides() {
-      return [
+      const slides = [
         {
           icon: 'mountain',
           title: this.$gettext('Bienvenue sur Camptocamp'),
@@ -79,25 +100,52 @@ export default {
             'Topos, sorties, conditions et récits pour la montagne — accessibles depuis votre poche.'
           ),
         },
-        {
-          icon: 'bars',
-          title: this.$gettext('Naviguer'),
-          text: this.$gettext('Cinq onglets en bas : Recherche, Récent, Mes topos, Moi et Plus pour le reste.'),
-        },
-        {
-          icon: 'bookmark',
-          title: this.$gettext('Hors-ligne'),
-          text: this.$gettext('Sur une fiche, touchez le marque-page pour la garder accessible sans réseau.'),
-        },
-        {
-          icon: 'circle-info',
-          title: this.$gettext('À tout moment'),
-          text: this.$gettext('Onglet Moi → Paramètres pour le thème et la taille du texte. Bonne course !'),
-        },
       ];
+      if (!this.install.installed) {
+        slides.push({
+          icon: 'mobile-screen',
+          title: this.$gettext("Installez l'application"),
+          text: this.$gettext(
+            "Ajoutez Camptocamp à l'écran d'accueil : une icône comme une vraie application, tout l'écran, et vos topos hors ligne à l'abri. Sur iPhone, Safari efface les données d'un site non installé après 7 jours sans visite."
+          ),
+          install: true,
+        });
+      }
+      slides.push(
+        {
+          icon: 'list',
+          title: this.$gettext("Ce que l'application vous apporte"),
+          list: [
+            { icon: 'bookmark', text: this.$gettext('Mes topos hors ligne : texte, photos et carte, sans réseau.') },
+            {
+              icon: 'cloud-arrow-up',
+              text: this.$gettext('Vos sorties saisies sans réseau, à publier au retour de la connexion.'),
+            },
+            {
+              icon: 'route',
+              text: this.$gettext(
+                'La trace de votre sortie, depuis un fichier GPX ou votre montre (Strava, Garmin, Suunto…).'
+              ),
+            },
+            { icon: 'clock', text: this.$gettext('Le fil Récent, avec toutes les photos des sorties.') },
+            { icon: 'comments', text: this.$gettext("Le forum, dans l'application.") },
+            { icon: 'moon', text: this.$gettext('Thème sombre et texte plus grand : Moi → Paramètres.') },
+          ],
+        },
+        {
+          icon: 'book-open',
+          title: this.$gettext('Pour aller plus loin'),
+          text: this.$gettext(
+            'Cinq onglets en bas : Recherche, Récent, Mes topos, Moi et Plus. Tout le fonctionnement est expliqué dans le guide. Bonne course !'
+          ),
+          guide: true,
+        }
+      );
+      return slides;
     },
     current() {
-      return this.slides[this.step];
+      // The install slide disappears if the app gets installed meanwhile.
+      return this.slides[Math.min(this.step, this.slides.length - 1)];
     },
   },
 
@@ -221,6 +269,40 @@ export default {
   margin: 0;
 }
 
+.onboarding-install {
+  width: 100%;
+}
+
+.onboarding-list {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+  font-size: 0.88rem;
+  color: #4a4a4a;
+
+  li {
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+    padding: 0.3rem 0;
+  }
+}
+
+.onboarding-list-icon {
+  flex: none;
+  color: #ff9933;
+}
+
+.onboarding-guide {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  color: $color-link;
+}
+
 .onboarding-dots {
   display: flex;
   justify-content: center;
@@ -290,6 +372,9 @@ html[data-theme='dark'] {
   }
   .onboarding-text {
     color: #b5b5b5;
+  }
+  .onboarding-list {
+    color: #e5e5e5;
   }
   .onboarding-skip {
     color: #b5b5b5;

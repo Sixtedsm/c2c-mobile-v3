@@ -208,6 +208,11 @@ import { faCircleCheck as faCircleCheckV3 } from '@fortawesome/free-solid-svg-ic
 import { faClockRotateLeft as faClockRotateLeftV3 } from '@fortawesome/free-solid-svg-icons/faClockRotateLeft';
 import { faFolder as faFolderV3 } from '@fortawesome/free-solid-svg-icons/faFolder';
 import { faMobileScreen as faMobileScreenV3 } from '@fortawesome/free-solid-svg-icons/faMobileScreen';
+// App install and guide (welcome tour, home banner, AppGuideView).
+import { faArrowUpFromBracket as faArrowUpFromBracketV3 } from '@fortawesome/free-solid-svg-icons/faArrowUpFromBracket';
+import { faBookOpen as faBookOpenV3 } from '@fortawesome/free-solid-svg-icons/faBookOpen';
+import { faCloudArrowUp as faCloudArrowUpV3 } from '@fortawesome/free-solid-svg-icons/faCloudArrowUp';
+import { faSquarePlus as faSquarePlusV3 } from '@fortawesome/free-solid-svg-icons/faSquarePlus';
 import { faMountain as faMountainV3 } from '@fortawesome/free-solid-svg-icons/faMountain';
 import { faReply as faReplyV3 } from '@fortawesome/free-solid-svg-icons/faReply';
 import { faThumbsUp as faThumbsUpV3 } from '@fortawesome/free-solid-svg-icons/faThumbsUp';
@@ -226,6 +231,10 @@ import { faXmark as faXmarkV3 } from '@fortawesome/free-solid-svg-icons/faXmark'
 // registered globally
 export default function install(Vue) {
   library.add(
+    faArrowUpFromBracketV3,
+    faBookOpenV3,
+    faCloudArrowUpV3,
+    faSquarePlusV3,
     faBookV3,
     faBookmarkV3,
     faBookmarkRegularV3,

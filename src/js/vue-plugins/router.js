@@ -74,6 +74,7 @@ const OutingsStatsView = lazy(() =>
 );
 const SeracView = lazy(() => import(/* webpackChunkName: "view-secondary" */ '@/views/static-views/SeracView'));
 const TopoguideView = lazy(() => import(/* webpackChunkName: "view-secondary" */ '@/views/static-views/TopoguideView'));
+const AppGuideView = lazy(() => import(/* webpackChunkName: "view-secondary" */ '@/views/static-views/AppGuideView'));
 
 // Auth / account views — gated behind auth most of the time.
 const AccountView = lazy(() => import(/* webpackChunkName: "view-account" */ '@/views/user/AccountView'));
@@ -125,6 +126,7 @@ const routes = [
   { path: '/', name: 'home', component: HomeView },
   { path: '/topoguide', name: 'topoguide', component: TopoguideView },
   { path: '/itinevert', name: 'itinevert', component: ItinevertView },
+  { path: '/guide-application', name: 'app-guide', component: AppGuideView },
   { path: '/serac', name: 'serac', component: SeracView },
   { path: '/whatsnew', name: 'whatsnew', component: WhatsNewView },
   { path: '/associations-history', name: 'associations-history', component: AssociationsHistoryView },

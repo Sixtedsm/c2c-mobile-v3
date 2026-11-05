@@ -6,6 +6,8 @@
         class="column is-12-mobile"
         :class="feed ? 'is-7-tablet is-7-desktop is-8-widescreen is-9-fullhd' : 'is-7 is-8-fullhd'"
       >
+        <!-- Announces the app to visitors of the site (hidden once installed). -->
+        <app-banner />
         <!-- Association and website introduction -->
         <div class="box intro">
           <div class="feed-title has-cursor-pointer">
@@ -94,12 +96,14 @@ import DashboardRoutesList from './utils/DashboardRoutesList';
 import ForumWidget from './utils/ForumWidget';
 import UsefulLinks from './utils/UsefulLinks';
 
+import AppBanner from '@/components/AppBanner';
 import FeedWidget from '@/components/feed-widget/FeedWidget';
 
 export default {
   name: 'HomeView',
 
   components: {
+    AppBanner,
     DfmAdSmall,
     HomeBanner,
     BoardAnnouncementWidget,
