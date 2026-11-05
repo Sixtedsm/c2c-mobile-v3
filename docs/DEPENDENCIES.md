@@ -12,24 +12,23 @@ node tools/licenses.cjs
 **The app itself:** `c2c_ui` 7.37.0 — licensed
 **AGPL-3.0-or-later**, like the upstream `c2c_ui` it is forked from.
 
-Generated 2026-09-02.
+Generated 2026-11-05.
 
 ## What matters
 
-- **41 direct production dependencies**, each listed below with its licence.
+- **35 direct production dependencies**, each listed below with its licence.
 - **35 development dependencies** (build, lint, tests) — none of them ship to the browser.
-- **~1163 packages installed in total** once transitive ones are counted. `npm ls --all` prints the full tree; it is not copied here because a list that long is read by nobody.
+- **~1158 packages installed in total** once transitive ones are counted. `npm ls --all` prints the full tree; it is not copied here because a list that long is read by nobody.
 
 ## Licence breakdown (direct dependencies)
 
-| Licence                         | Count |
-| ------------------------------- | ----- |
-| MIT                             | 66    |
-| (CC-BY-4.0 AND MIT)             | 3     |
-| Apache-2.0                      | 3     |
-| ISC                             | 2     |
-| (CC-BY-4.0 AND OFL-1.1 AND MIT) | 1     |
-| BSD-2-Clause                    | 1     |
+| Licence             | Count |
+| ------------------- | ----- |
+| MIT                 | 61    |
+| (CC-BY-4.0 AND MIT) | 3     |
+| Apache-2.0          | 3     |
+| ISC                 | 2     |
+| BSD-2-Clause        | 1     |
 
 No strong copyleft (GPL/AGPL) among the **direct** dependencies. This
 table does not cover transitive ones: before redistributing, run a
@@ -38,46 +37,43 @@ code, inherited from `c2c_ui`, not from what it consumes.
 
 ## Production dependencies
 
-| Package                               | Installed | Range   | Licence                         |
-| ------------------------------------- | --------- | ------- | ------------------------------- |
-| `@c2corg/fit-parser-extract-geometry` | 1.0.3     | 1.0.3   | MIT                             |
-| `@fortawesome/fontawesome-free`       | 6.7.2     | 6.7.2   | (CC-BY-4.0 AND OFL-1.1 AND MIT) |
-| `@fortawesome/fontawesome-svg-core`   | 6.7.2     | 6.7.2   | MIT                             |
-| `@fortawesome/free-brands-svg-icons`  | 6.7.2     | 6.7.2   | (CC-BY-4.0 AND MIT)             |
-| `@fortawesome/free-regular-svg-icons` | 6.7.2     | 6.7.2   | (CC-BY-4.0 AND MIT)             |
-| `@fortawesome/free-solid-svg-icons`   | 6.7.2     | 6.7.2   | (CC-BY-4.0 AND MIT)             |
-| `@fortawesome/vue-fontawesome`        | 2.0.10    | 2.0.10  | MIT                             |
-| `@turf/boolean-intersects`            | 7.3.0     | 7.3.0   | MIT                             |
-| `@turf/buffer`                        | 7.3.0     | 7.3.0   | MIT                             |
-| `@turf/difference`                    | 7.3.0     | 7.3.0   | MIT                             |
-| `@turf/intersect`                     | 7.3.0     | 7.3.0   | MIT                             |
-| `@turf/simplify`                      | 7.3.0     | 7.3.0   | MIT                             |
-| `ag-grid-community`                   | 28.2.1    | 28.2.1  | MIT                             |
-| `ag-grid-vue`                         | 28.2.1    | 28.2.1  | MIT                             |
-| `axios`                               | 1.13.2    | 1.13.2  | MIT                             |
-| `blueimp-load-image`                  | 5.16.0    | 5.16.0  | MIT                             |
-| `bulma`                               | 0.9.4     | 0.9.4   | MIT                             |
-| `bulma-checkradio`                    | 2.1.3     | 2.1.3   | MIT                             |
-| `bulma-switch`                        | 2.0.4     | 2.0.4   | MIT                             |
-| `bulma-toast`                         | 2.4.4     | 2.4.4   | MIT                             |
-| `core-js`                             | 3.47.0    | 3.47.0  | MIT                             |
-| `d3`                                  | 7.9.0     | 7.9.0   | ISC                             |
-| `dayjs`                               | 1.11.19   | 1.11.19 | MIT                             |
-| `idb-keyval`                          | 6.2.2     | ^6.2.2  | Apache-2.0                      |
-| `ol`                                  | 10.7.0    | 10.7.0  | BSD-2-Clause                    |
-| `register-service-worker`             | 1.7.2     | ^1.7.2  | MIT                             |
-| `swiper`                              | 9.4.1     | 9.4.1   | MIT                             |
-| `uqr`                                 | 0.1.2     | 0.1.2   | MIT                             |
-| `vue`                                 | 2.7.16    | 2.7.16  | MIT                             |
-| `vue-analytics`                       | 5.22.1    | 5.22.1  | MIT                             |
-| `vue-head`                            | 2.2.0     | 2.2.0   | MIT                             |
-| `vue-infinite-scroll`                 | 2.0.2     | 2.0.2   | MIT                             |
-| `vue-multiselect`                     | 2.1.9     | 2.1.9   | MIT                             |
-| `vue-property-decorator`              | 9.1.2     | 9.1.2   | MIT                             |
-| `vue-recaptcha`                       | 1.3.0     | 1.3.0   | MIT                             |
-| `vue-router`                          | 3.6.5     | 3.6.5   | MIT                             |
-| `vue-slider-component`                | 3.2.24    | 3.2.24  | MIT                             |
-| `vuejs-datepicker`                    | 1.6.2     | 1.6.2   | MIT                             |
+| Package                               | Installed | Range   | Licence             |
+| ------------------------------------- | --------- | ------- | ------------------- |
+| `@c2corg/fit-parser-extract-geometry` | 1.0.3     | 1.0.3   | MIT                 |
+| `@fortawesome/fontawesome-svg-core`   | 6.7.2     | 6.7.2   | MIT                 |
+| `@fortawesome/free-brands-svg-icons`  | 6.7.2     | 6.7.2   | (CC-BY-4.0 AND MIT) |
+| `@fortawesome/free-regular-svg-icons` | 6.7.2     | 6.7.2   | (CC-BY-4.0 AND MIT) |
+| `@fortawesome/free-solid-svg-icons`   | 6.7.2     | 6.7.2   | (CC-BY-4.0 AND MIT) |
+| `@fortawesome/vue-fontawesome`        | 2.0.10    | 2.0.10  | MIT                 |
+| `@turf/boolean-intersects`            | 7.3.0     | 7.3.0   | MIT                 |
+| `@turf/buffer`                        | 7.3.0     | 7.3.0   | MIT                 |
+| `@turf/difference`                    | 7.3.0     | 7.3.0   | MIT                 |
+| `@turf/intersect`                     | 7.3.0     | 7.3.0   | MIT                 |
+| `@turf/simplify`                      | 7.3.0     | 7.3.0   | MIT                 |
+| `ag-grid-community`                   | 28.2.1    | 28.2.1  | MIT                 |
+| `ag-grid-vue`                         | 28.2.1    | 28.2.1  | MIT                 |
+| `axios`                               | 1.13.2    | 1.13.2  | MIT                 |
+| `blueimp-load-image`                  | 5.16.0    | 5.16.0  | MIT                 |
+| `bulma`                               | 0.9.4     | 0.9.4   | MIT                 |
+| `bulma-checkradio`                    | 2.1.3     | 2.1.3   | MIT                 |
+| `bulma-switch`                        | 2.0.4     | 2.0.4   | MIT                 |
+| `bulma-toast`                         | 2.4.4     | 2.4.4   | MIT                 |
+| `core-js`                             | 3.47.0    | 3.47.0  | MIT                 |
+| `d3`                                  | 7.9.0     | 7.9.0   | ISC                 |
+| `dayjs`                               | 1.11.19   | 1.11.19 | MIT                 |
+| `idb-keyval`                          | 6.2.2     | ^6.2.2  | Apache-2.0          |
+| `ol`                                  | 10.7.0    | 10.7.0  | BSD-2-Clause        |
+| `register-service-worker`             | 1.7.2     | ^1.7.2  | MIT                 |
+| `swiper`                              | 9.4.1     | 9.4.1   | MIT                 |
+| `uqr`                                 | 0.1.2     | 0.1.2   | MIT                 |
+| `vue`                                 | 2.7.16    | 2.7.16  | MIT                 |
+| `vue-analytics`                       | 5.22.1    | 5.22.1  | MIT                 |
+| `vue-head`                            | 2.2.0     | 2.2.0   | MIT                 |
+| `vue-multiselect`                     | 2.1.9     | 2.1.9   | MIT                 |
+| `vue-recaptcha`                       | 1.3.0     | 1.3.0   | MIT                 |
+| `vue-router`                          | 3.6.5     | 3.6.5   | MIT                 |
+| `vue-slider-component`                | 3.2.24    | 3.2.24  | MIT                 |
+| `vuejs-datepicker`                    | 1.6.2     | 1.6.2   | MIT                 |
 
 ## Development dependencies
 

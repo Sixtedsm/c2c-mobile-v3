@@ -6,7 +6,7 @@
       <association-history-link :user-id="userId" v-translate>Associations history</association-history-link>
     </div>
 
-    <table v-infinite-scroll="load" infinite-scroll-disabled="disableInfiniteSCroll" infinite-scroll-distance="100">
+    <table>
       <tr>
         <th v-translate translate-context="modification date">Modified the</th>
         <th v-translate>contributor</th>
@@ -60,14 +60,13 @@
         </td>
       </tr>
     </table>
+    <div ref="sentinel" class="feed-sentinel" aria-hidden="true"></div>
 
     <loading-notification :promise="promise" />
   </div>
 </template>
 
 <script>
-import infiniteScroll from 'vue-infinite-scroll';
-
 import ColoredIconDocument from './utils/ColoredIconDocument';
 
 import c2c from '@/js/apis/c2c';
@@ -75,8 +74,6 @@ import noRobotsMixin from '@/js/no-robots-mixin';
 
 export default {
   components: { ColoredIconDocument },
-
-  directives: { infiniteScroll },
 
   mixins: [noRobotsMixin],
 
@@ -96,10 +93,6 @@ export default {
       return this.promise ? this.promise.loading : false;
     },
 
-    disableInfiniteSCroll() {
-      return this.loading || this.endOfFeed;
-    },
-
     nextQuery() {
       if (!this.promise.data) {
         return this.$route.query;
@@ -114,6 +107,29 @@ export default {
       handler: 'initialize',
       immediate: true,
     },
+  },
+
+  // Same mechanism as the Récent feed (FeedWidget.vue). The scroll-event
+  // directive used here never fired when the first page did not fill the
+  // screen, nor during iOS momentum scrolling, and the list stopped growing.
+  // A watched sentinel does not depend on a gesture, only on being visible.
+  mounted() {
+    if (typeof IntersectionObserver !== 'function') {
+      return;
+    }
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          this.load();
+        }
+      },
+      { rootMargin: '600px' }
+    );
+    this.observer.observe(this.$refs.sentinel);
+  },
+
+  beforeDestroy() {
+    this.observer?.disconnect();
   },
 
   methods: {
@@ -151,13 +167,24 @@ export default {
 
       this.endOfFeed = this.promise.data.feed.length === 0;
 
-      this.$nextTick(this.onScroll);
+      // The observer only calls back when visibility changes. If the
+      // sentinel is still on screen after this page (tall screen), ask again.
+      this.$nextTick(() => {
+        if (this.endOfFeed || this._isDestroyed || !this.$refs.sentinel) return;
+        if (this.$refs.sentinel.getBoundingClientRect().top <= window.innerHeight + 600) {
+          this.load();
+        }
+      });
     },
   },
 };
 </script>
 
 <style scoped lang="scss">
+.feed-sentinel {
+  height: 1px;
+}
+
 td {
   white-space: nowrap;
 }
