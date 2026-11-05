@@ -413,6 +413,12 @@ export default {
 .join-btn {
   background: #ff9933;
   color: white;
+  // JoinUsLink puts a classless <a> inside this span, so Bulma's link
+  // colour applied to the icon: blue on orange. The button owns the
+  // colour, the anchor inherits it.
+  ::v-deep a {
+    color: inherit;
+  }
   &:hover {
     background: #e6791f;
     color: white;

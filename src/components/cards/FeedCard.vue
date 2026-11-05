@@ -12,7 +12,7 @@
     </card-row>
 
     <card-row v-if="images.length">
-      <gallery :images="images" :more-document="item.more_images ? item.document : null" />
+      <gallery :images="images" :has-more="hasMore" :loading-more="loadingMore" @more="loadRemainingImages" />
     </card-row>
 
     <div class="row">
@@ -81,6 +81,7 @@
 import { cardMixin } from './utils/mixins';
 
 import Gallery from '@/components/gallery/Gallery';
+import c2c from '@/js/apis/c2c';
 import forum from '@/js/apis/forum';
 
 export default {
@@ -105,6 +106,8 @@ export default {
     return {
       actionLine: null,
       images: [],
+      loadingMore: false,
+      allImagesLoaded: false,
       useDefaultAvatarIcon: false,
     };
   },
@@ -115,6 +118,12 @@ export default {
     },
     documentType() {
       return this.$documentUtils.getDocumentType(this.document['type']);
+    },
+    // The feed hands out at most three photos per item and flags the rest
+    // with `more_images`; the full list only exists on the document. Once
+    // fetched there is nothing more to offer, so the slide goes away.
+    hasMore() {
+      return Boolean(this.item.more_images) && !this.allImagesLoaded;
     },
     locale() {
       return this.$documentUtils.getLocaleSmart(this.item.document);
@@ -162,6 +171,42 @@ export default {
     if (this.item.image3) {
       this.images.push(this.item.image3);
     }
+  },
+  methods: {
+    // One request, and only when asked for: fetching every card's photos up
+    // front would mean an extra document download per card on a feed that
+    // scrolls without end. On failure the slide stays, so the tap can be
+    // repeated or the document opened from the title.
+    loadRemainingImages() {
+      if (this.loadingMore) {
+        return;
+      }
+      this.loadingMore = true;
+      c2c[this.documentType]
+        .get(this.document.document_id, this.$language.current)
+        .then(({ data }) => {
+          const images = data?.associations?.images;
+          if (images?.length) {
+            this.images = images;
+            this.allImagesLoaded = true;
+            return;
+          }
+          // The flag promised more photos and the document has none to give.
+          // Rather than leave a slide that does nothing, go to the document.
+          this.openDocument();
+        })
+        .catch(() => {})
+        .finally(() => {
+          this.loadingMore = false;
+        });
+    },
+
+    openDocument() {
+      this.$router.push({
+        name: this.documentType,
+        params: { id: this.document.document_id, lang: this.$language.current },
+      });
+    },
   },
 };
 </script>

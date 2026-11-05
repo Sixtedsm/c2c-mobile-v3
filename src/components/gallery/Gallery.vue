@@ -6,18 +6,24 @@
         size="MI"
         :alt="image.locales[0].title"
         :title="image.locales[0].title"
-        @click="$imageViewer.show(image)"
+        @click.stop.prevent="$imageViewer.show(image)"
         loading="lazy"
       />
     </swiper-slide>
     <!-- Optional last slide, when the caller knows there are more images
          than it was given. Off by default, so every other gallery in the
          app is untouched. -->
-    <swiper-slide v-if="moreDocument" style="height: 200px" class="gallery-more-slide">
-      <document-link :document="moreDocument" class="gallery-more-link">
-        <fa-icon icon="image" class="is-size-3" />
+    <swiper-slide v-if="hasMore" style="height: 200px" class="gallery-more-slide">
+      <div
+        class="gallery-more-link"
+        role="button"
+        tabindex="0"
+        @click.stop.prevent="$emit('more')"
+        @keydown.enter.stop="$emit('more')"
+      >
+        <fa-icon :icon="loadingMore ? 'spinner' : 'image'" :spin="loadingMore" class="is-size-3" />
         <span>{{ $gettext('Voir toutes les photos') }}</span>
-      </document-link>
+      </div>
     </swiper-slide>
   </swiper-container>
 </template>
@@ -25,15 +31,20 @@
 <script>
 export default {
   props: {
-    // The document whose remaining photos are not in `images`. When set,
-    // a final slide leads to it. The C2C feed hands out at most three
-    // images per item (image1/2/3) and flags the rest with `more_images`
-    // — so from a feed card the only way to the others is the document
-    // itself, and it may as well be one swipe away (feedback Sixte,
+    // True when the caller knows there are photos it has not handed over.
+    // A final slide then appears and emits `more` when tapped; the caller
+    // fetches the rest and puts them in `images`, so the strip grows in
+    // place. The C2C feed hands out at most three images per item
+    // (image1/2/3) and flags the rest with `more_images` (feedback Sixte,
     // 2026-09-09).
-    moreDocument: {
-      type: Object,
-      default: null,
+    hasMore: {
+      type: Boolean,
+      default: false,
+    },
+    // Turns the slide's icon into a spinner while the caller fetches.
+    loadingMore: {
+      type: Boolean,
+      default: false,
     },
     images: {
       type: Array,
