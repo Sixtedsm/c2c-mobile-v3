@@ -28,7 +28,18 @@ const result = {
     workboxOptions: {
       swSrc: './src/pwa/service-worker.js',
       swDest: 'service-worker.js',
-      exclude: [/\.map$/, /^manifest.*\.js$/, /\.pdf$/, /robots\.txt$/, /revive-adserver\.html$/],
+      exclude: [
+        /\.map$/,
+        /^manifest.*\.js$/,
+        /\.pdf$/,
+        /robots\.txt$/,
+        /revive-adserver\.html$/,
+        // Decorative Itinévert banners: 2.6 MB, hidden below 769 px, one
+        // shown at random on wider screens. Precaching them would make every
+        // phone download all twelve at install for an image it never shows;
+        // the browser fetches the one it displays.
+        /itinevert-banner-/,
+      ],
     },
     iconPaths: {
       faviconSVG: 'img/icons/safari-pinned-tab.svg',
