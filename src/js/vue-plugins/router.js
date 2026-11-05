@@ -3,18 +3,15 @@ import Router from 'vue-router';
 
 import config from '@/js/config';
 import constants from '@/js/constants';
-// Task 3 (latency): synchronously import only the views the user is
-// likely to hit during the first 30 seconds — Home (Récent), the four
-// big-doc detail views (RouteView/OutingView/WaypointView/XreportView),
-// DocumentsView (used by every listing route), OfflineView (Mes topos),
-// MoreView and MeView (BottomNav). Everything else lazy-loads on demand
-// so the initial JS bundle stops dragging the cold start.
-import DocumentsView from '@/views//documents/DocumentsView';
+// Synchronously imported: the views with no map, reached from the bottom
+// bar — Home (Récent), OfflineView (Mes topos), MoreView, MeView.
+// The listing view and the four big-doc detail views used to be here too,
+// and with them OpenLayers, turf and d3: 37 % of the startup code, parsed on
+// every cold start although Récent draws no map (bundle report, 2026-11-05).
+// They are now lazy (see "Map-drawing views" below) and warmed once the
+// browser is idle (App.vue, warmCriticalChunks), so the first tap on a topo
+// does not wait for them either.
 import MoreView from '@/views/MoreView';
-import OutingView from '@/views/document/OutingView';
-import RouteView from '@/views/document/RouteView';
-import WaypointView from '@/views/document/WaypointView';
-import XreportView from '@/views/document/XreportView';
 import OfflineView from '@/views/offline/OfflineView';
 import HomeView from '@/views/portals/HomeView';
 import NotFoundView from '@/views/static-views/NotFoundView';
@@ -48,6 +45,14 @@ const lazy =
     }
     throw lastErr;
   };
+
+// Map-drawing views. Two chunks: the listing (Recherche) and the document
+// pages; webpack puts the map code they share in a chunk of its own.
+const DocumentsView = lazy(() => import(/* webpackChunkName: "view-documents" */ '@/views/documents/DocumentsView'));
+const OutingView = lazy(() => import(/* webpackChunkName: "view-document" */ '@/views/document/OutingView'));
+const RouteView = lazy(() => import(/* webpackChunkName: "view-document" */ '@/views/document/RouteView'));
+const WaypointView = lazy(() => import(/* webpackChunkName: "view-document" */ '@/views/document/WaypointView'));
+const XreportView = lazy(() => import(/* webpackChunkName: "view-document" */ '@/views/document/XreportView'));
 
 // Rarely-visited or post-login views — lazy chunks so they don't bloat
 // the initial bundle. Grouped into a few named chunks for cache reuse.

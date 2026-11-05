@@ -63,12 +63,12 @@
 
           <!-- the results journey, with their details -->
           <plan-a-trip-results
-            :activeTab="activeTab"
-            :currentData="currentData"
-            :isUpdating="currentData.isUpdating"
-            :noResult="currentData.noResult"
-            :displayedFromAddress="displayedFromAddress"
-            :displayedToAddress="displayedToAddress"
+            :active-tab="activeTab"
+            :current-data="currentData"
+            :is-updating="currentData.isUpdating"
+            :no-result="currentData.noResult"
+            :displayed-from-address="displayedFromAddress"
+            :displayed-to-address="displayedToAddress"
             @selectJourney="setSelectedRouteJourney"
           />
 
@@ -179,6 +179,7 @@ import PlanATripForm from './PlanATripForm.vue';
 import PlanATripResults from './PlanATripResults.vue';
 
 import start from '@/assets/img/boxes/geoloc-2.svg';
+import MapView from '@/components/map/OlMap';
 import { default as c2c } from '@/js/apis/c2c';
 import UserProfileService from '@/js/apis/c2c/UserProfileService';
 import NavitiaService from '@/js/apis/navitia-service';
@@ -189,11 +190,12 @@ import { requireDocumentProperty } from '@/js/properties-mixins';
 
 export default {
   name: 'PlanATripSection',
-  mixins: [requireDocumentProperty],
   components: {
+    MapView,
     PlanATripForm,
     PlanATripResults,
   },
+  mixins: [requireDocumentProperty],
   props: {
     showElevationProfile: {
       type: Boolean,
@@ -356,6 +358,16 @@ export default {
 
     maxNbTransfers() {
       return this.limitTransfers ? this.maxTransfers : undefined;
+    },
+  },
+
+  watch: {
+    'currentData.selectedRouteJourney': {
+      handler() {
+        // Trigger recenter when selectedRouteJourney changes
+        this.recenterMapOnDocuments();
+      },
+      deep: true,
     },
   },
 
@@ -1053,16 +1065,6 @@ export default {
           this.$refs.mapView.recenterOnDocuments();
         }
       });
-    },
-  },
-
-  watch: {
-    'currentData.selectedRouteJourney': {
-      handler() {
-        // Trigger recenter when selectedRouteJourney changes
-        this.recenterMapOnDocuments();
-      },
-      deep: true,
     },
   },
 };

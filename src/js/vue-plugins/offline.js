@@ -1,9 +1,9 @@
 import { toast } from 'bulma-toast';
+import { toLonLat } from 'ol/proj';
 
 import c2c from '@/js/apis/c2c';
 import config from '@/js/config';
 import { getImageUrl } from '@/js/image-urls';
-import ol from '@/js/libs/ol';
 import uploadFile from '@/js/upload-file';
 import { probeApiAccess } from '@/pwa/api-access';
 import { extractEmbeddedImageIds, extractImageUrlsFromCooked } from '@/pwa/cooked-html-parser';
@@ -185,7 +185,7 @@ function getLonLatBboxFromC2cGeom(geomJson) {
   let maxLon = -Infinity;
   let maxLat = -Infinity;
   for (const xy of coords3857) {
-    const [lon, lat] = ol.proj.toLonLat(xy);
+    const [lon, lat] = toLonLat(xy);
     if (lon < minLon) minLon = lon;
     if (lat < minLat) minLat = lat;
     if (lon > maxLon) maxLon = lon;

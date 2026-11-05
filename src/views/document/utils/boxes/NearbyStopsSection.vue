@@ -93,11 +93,13 @@
 </template>
 
 <script>
+import MapView from '@/components/map/OlMap';
 import transportService from '@/js/apis/transport-service';
 import { requireDocumentProperty } from '@/js/properties-mixins';
 
 export default {
   name: 'NearbyStopsSection',
+  components: { MapView },
   mixins: [requireDocumentProperty],
   props: {
     document: {

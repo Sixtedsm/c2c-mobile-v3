@@ -77,6 +77,7 @@
 import ElevationProfile from './ElevationProfile';
 import MapLinks from './MapLinks';
 
+import MapView from '@/components/map/OlMap';
 import ol from '@/js/libs/ol';
 import { requireDocumentProperty } from '@/js/properties-mixins';
 import utils from '@/js/utils';
@@ -85,6 +86,7 @@ const GeoJSON = new ol.format.GeoJSON();
 
 export default {
   components: {
+    MapView,
     ElevationProfile,
     MapLinks,
   },

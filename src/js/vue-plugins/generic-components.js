@@ -23,5 +23,4 @@ export default function install(Vue) {
 
   // other globals components
   Vue.component('DocumentCard', require('@/components/cards/DocumentCard').default);
-  Vue.component('MapView', require('@/components/map/OlMap').default);
 }

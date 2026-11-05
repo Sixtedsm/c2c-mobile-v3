@@ -178,6 +178,7 @@
 import MaskedDocumentVersionInfo from './utils/MaskedDocumentVersionInfo';
 import { diffMatchPatch } from './utils/diff_match_patch_uncompressed';
 
+import MapView from '@/components/map/OlMap';
 import c2c from '@/js/apis/c2c';
 import constants from '@/js/constants';
 import noRobotsMixin from '@/js/no-robots-mixin';
@@ -365,6 +366,7 @@ Rows.prototype.computeEllipsisStates = function () {
 
 export default {
   components: {
+    MapView,
     MaskedDocumentVersionInfo,
   },
 

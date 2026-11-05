@@ -47,6 +47,7 @@
 <script>
 import GpsFileUpload from '@/components/map/GpsFileUpload';
 import GpsUploadModal from '@/components/map/GpsUploadModal';
+import MapView from '@/components/map/OlMap';
 import trackingService from '@/js/apis/tracking-service';
 import ol from '@/js/libs/ol';
 import { requireDocumentProperty } from '@/js/properties-mixins';
@@ -56,7 +57,7 @@ const FORM_PROJ = 'EPSG:4326';
 const DATA_PROJ = 'EPSG:3857';
 
 export default {
-  components: { GpsUploadModal, GpsFileUpload },
+  components: { GpsUploadModal, GpsFileUpload, MapView },
 
   mixins: [requireDocumentProperty],
 

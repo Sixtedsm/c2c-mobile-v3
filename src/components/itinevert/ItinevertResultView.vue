@@ -121,6 +121,7 @@ import DisplayModeSwitch from '../../views/documents/utils/DisplayModeSwitch';
 
 import ItinevertPageSelector from './ItinevertPageSelector.vue';
 
+import MapView from '@/components/map/OlMap';
 import itinevertService, { POLYGON_STYLE } from '@/js/apis/itinevert-service';
 import constants from '@/js/constants';
 import QueryItems from '@/views/documents/utils/QueryItems.vue';
@@ -131,6 +132,7 @@ export default {
   name: 'ItinevertResultView',
 
   components: {
+    MapView,
     QueryItems,
     ItinevertPageSelector,
     DocumentsTable,

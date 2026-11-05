@@ -41,10 +41,10 @@
 
 <script>
 import { toast } from 'bulma-toast';
+import { toLonLat, transform } from 'ol/proj';
 
 import { default as c2c } from '@/js/apis/c2c';
 import photon from '@/js/apis/photon';
-import ol from '@/js/libs/ol';
 
 export default {
   props: {
@@ -181,7 +181,7 @@ export default {
         if (geomData.type !== 'Point' || !geomData.coordinates) return;
 
         const [x, y] = geomData.coordinates;
-        const [lon, lat] = ol.proj.transform([x, y], 'EPSG:3857', 'EPSG:4326');
+        const [lon, lat] = transform([x, y], 'EPSG:3857', 'EPSG:4326');
 
         this.localData.coordinates = [lon, lat];
         await this.reverseGeocode(lon, lat);
@@ -204,7 +204,7 @@ export default {
       this.searchTimeout = setTimeout(async () => {
         try {
           const center = this.mapView?.view?.getCenter();
-          const centerWgs84 = center ? ol.proj.toLonLat(center) : null;
+          const centerWgs84 = center ? toLonLat(center) : null;
           const response = await photon.getPropositions(this.localData.address, this.$language.current, centerWgs84);
           this.localData.addressPropositions = response.data.features.slice(0, 6) || [];
           this.localData.showAddressPropositions = this.localData.addressPropositions?.length > 0;

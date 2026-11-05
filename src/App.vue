@@ -203,6 +203,12 @@ export default {
         // chunk load-error on 2026-09-02 — warming it here removes
         // the transient "not available offline" toast on the first
         // /forum navigation.
+        // view-document / view-documents: the topo pages and Recherche,
+        // taken off the startup bundle with the map code they carry
+        // (router.js). Warming them here keeps the first tap on a topo
+        // as fast as when they were part of the startup bundle.
+        import(/* webpackChunkName: "view-document" */ '@/views/document/RouteView').catch(() => {});
+        import(/* webpackChunkName: "view-documents" */ '@/views/documents/DocumentsView').catch(() => {});
         import(/* webpackChunkName: "wiki-tools" */ '@/views/wiki/edition/OutingEditionView').catch(() => {});
         import(/* webpackChunkName: "view-account" */ '@/views/user/LoginView').catch(() => {});
         import(/* webpackChunkName: "forum" */ '@/views/forum/ForumView').catch(() => {});

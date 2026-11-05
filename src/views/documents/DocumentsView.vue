@@ -201,6 +201,7 @@ import NearMeButton from './utils/NearMeButton';
 import PageSelector from './utils/PageSelector';
 import QueryItems from './utils/QueryItems';
 
+import MapView from '@/components/map/OlMap';
 import c2c from '@/js/apis/c2c';
 import constants from '@/js/constants';
 import pullRefreshMixin from '@/js/pull-refresh-mixin';
@@ -211,6 +212,7 @@ export default {
   name: 'DocumentsView',
 
   components: {
+    MapView,
     QueryItems,
     PageSelector,
     DocumentsTable,
