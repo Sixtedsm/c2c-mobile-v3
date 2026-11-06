@@ -1,5 +1,5 @@
 <template>
-  <swiper-container slides-per-view="auto" space-between="15" class="swiper">
+  <swiper-container ref="swiper" init="false" slides-per-view="auto" space-between="15" class="swiper">
     <swiper-slide style="height: 200px" v-for="image of images" :key="image.document_id">
       <thumbnail
         :img="image"
@@ -29,6 +29,8 @@
 </template>
 
 <script>
+import { FreeMode } from 'swiper';
+
 export default {
   props: {
     // True when the caller knows there are photos it has not handed over.
@@ -60,6 +62,15 @@ export default {
 
   created() {
     this.images.forEach(this.$imageViewer.push);
+  },
+
+  mounted() {
+    // free mode: a strong swipe goes by several photos and slows down by itself, instead of one photo per swipe
+    Object.assign(this.$refs.swiper, {
+      modules: [FreeMode],
+      freeMode: { enabled: true, momentum: true, momentumRatio: 1, sticky: false },
+    });
+    this.$refs.swiper.initialize();
   },
 };
 </script>

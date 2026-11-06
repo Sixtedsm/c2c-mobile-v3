@@ -149,6 +149,17 @@ export default {
     max-width: 700px;
     margin: auto;
   }
+
+  // On a phone, the title near the top and the nine bubbles three by three: all on the first screen
+  @media (max-width: 768px) {
+    padding-top: 12px;
+    padding-bottom: 12px;
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+  }
 }
 
 .title {
