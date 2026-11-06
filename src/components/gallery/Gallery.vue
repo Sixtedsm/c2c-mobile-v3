@@ -1,6 +1,8 @@
 <template>
-  <swiper-container ref="swiper" init="false" slides-per-view="auto" space-between="15" class="swiper">
-    <swiper-slide style="height: 200px" v-for="image of images" :key="image.document_id">
+  <!-- The scrolling of the phone itself, not a JavaScript slider: it follows the finger at once, and how far it goes
+       depends on how fast the swipe was (feedback Sixte, 2026-11-06: the Swiper strip felt slow and not adaptive) -->
+  <div class="gallery-strip">
+    <div v-for="image of images" :key="image.document_id" class="gallery-item">
       <thumbnail
         :img="image"
         size="MI"
@@ -9,11 +11,11 @@
         @click.stop.prevent="$imageViewer.show(image)"
         loading="lazy"
       />
-    </swiper-slide>
+    </div>
     <!-- Optional last slide, when the caller knows there are more images
          than it was given. Off by default, so every other gallery in the
          app is untouched. -->
-    <swiper-slide v-if="hasMore" style="height: 200px" class="gallery-more-slide">
+    <div v-if="hasMore" class="gallery-item gallery-more-slide">
       <div
         class="gallery-more-link"
         role="button"
@@ -24,13 +26,11 @@
         <fa-icon :icon="loadingMore ? 'spinner' : 'image'" :spin="loadingMore" class="is-size-3" />
         <span>{{ $gettext('Voir toutes les photos') }}</span>
       </div>
-    </swiper-slide>
-  </swiper-container>
+    </div>
+  </div>
 </template>
 
 <script>
-import { FreeMode } from 'swiper';
-
 export default {
   props: {
     // True when the caller knows there are photos it has not handed over.
@@ -63,22 +63,22 @@ export default {
   created() {
     this.images.forEach(this.$imageViewer.push);
   },
-
-  mounted() {
-    // free mode: a strong swipe goes by several photos and slows down by itself, instead of one photo per swipe
-    Object.assign(this.$refs.swiper, {
-      modules: [FreeMode],
-      freeMode: { enabled: true, momentum: true, momentumRatio: 1, sticky: false },
-    });
-    this.$refs.swiper.initialize();
-  },
 };
 </script>
 
 <style scoped lang="scss">
-swiper-slide {
+.gallery-strip {
+  display: flex;
+  gap: 15px;
+  overflow-x: auto;
+  // a horizontal swipe stays in the strip: it does not go back in history or move the page
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.gallery-item {
+  flex: 0 0 auto;
   height: 200px;
-  width: auto;
   cursor: pointer;
 
   picture::v-deep img {
