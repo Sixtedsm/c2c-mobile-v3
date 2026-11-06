@@ -56,7 +56,9 @@
           <fa-icon icon="search" />
         </button>
 
-        <join-us-link v-if="!$user.isLogged" class="top-bar-btn join-btn" :aria-label="$gettext('Adhérer')">
+        <!-- Join the association (membership fee on HelloAsso), not create an account: shown to everyone, members
+             renew every year. Same as the site's navigation -->
+        <join-us-link class="top-bar-btn join-btn" :aria-label="$gettext('Adhérer')">
           <icon-join-us />
         </join-us-link>
 
